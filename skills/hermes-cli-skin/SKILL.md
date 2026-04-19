@@ -293,6 +293,19 @@ display:
 - For dense promo images: coarse-crop to the region of interest first
 - Save to `~/.hermes/assets/` or your skin's `assets/` subfolder
 
+**⚠️ Wikimedia image URLs redirect to HTML** — `wget`/`curl` on Wikimedia links
+returns an HTML page, not the raw image. Instead:
+  - Use direct CDN URLs (right-click → Copy image address in browser)
+  - Download manually and copy to `~/.hermes/assets/theme/`
+  - Or generate a synthetic reference with PIL when no clean source is available:
+    ```python
+    from PIL import Image, ImageDraw
+    img = Image.new('RGB', (240, 240), (0, 0, 0))
+    draw = ImageDraw.Draw(img)
+    # draw your shape, then:
+    img.save('/home/neos/.hermes/assets/theme/ref.png')
+    ```
+
 ### Step 2 — Generate Braille art (recommended)
 ```bash
 python3 scripts/img_to_braille.py \
