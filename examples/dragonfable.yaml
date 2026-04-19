@@ -1,0 +1,59 @@
+# ~/.hermes/skins/dragonfable.yaml
+# Doom Knight's Mantle — shadow void, dragon gold, crimson fell
+#
+# Based on DragonFable RPG aesthetic:
+#   - Primary: Dragon Gold (#c9a227)
+#   - Shadow:  Crimson Fell (#8c1a2e)
+#   - Text:    Pale Rune / ivory (#e8dcc8)
+#   - Dim:     Tarnished gold (#5a3a0a)
+
+name: dragonfable
+description: "Doom Knight's Mantle — shadow void, dragon gold, crimson fell"
+
+colors:
+  banner_border:     "#8c1a2e"   # Crimson Fell — outer frame
+  banner_title:      "#c9a227"   # Dragon Gold — main title
+  banner_accent:     "#c9a227"   # Dragon Gold — highlights
+  banner_dim:        "#5a3a0a"   # Tarnished gold — secondary elements
+  banner_text:       "#e8dcc8"   # Pale Rune (ivory) — body text
+  ui_accent:         "#c9a227"   # Dragon Gold
+  ui_label:          "#c9a227"   # Dragon Gold
+  ui_ok:             "#7ab87a"   # Mossy green — success
+  ui_error:          "#e05c5c"   # Fell red — errors
+  ui_warn:           "#d4882a"   # Amber — warnings
+  prompt:            "#e8dcc8"   # Pale Rune — prompt text
+  input_rule:        "#8c1a2e"   # Crimson Fell — input underline
+  response_border:   "#c9a227"   # Dragon Gold — response box
+  session_label:     "#c9a227"   # Dragon Gold
+  session_border:    "#4a1a24"   # Dark crimson — session divider
+
+branding:
+  agent_name:      "Doomherald"
+  welcome:         "The darkness stirs. Doomherald answers your call."
+  goodbye:         "Until the next battle."
+  response_label:  " Doomherald "
+  prompt_symbol:   "> "
+  help_header:     "Commands of the Doom Knight"
+
+tool_prefix: ">"
+
+tool_emojis:
+  terminal:    "sword"
+  web_search:  "crystal"
+  browser:     "crystal"
+  read_file:   "scroll"
+  write_file:  "scroll"
+  memory:      "skull"
+  todo:        "shield"
+  search_files: "magnify"
+
+# ── Banner Art ──────────────────────────────────────────────────────────────
+# Generated with img_to_braille.py --width 30 --height 15 --palette gold
+# Source: dragonfable logo (clean PNG, transparent background)
+#
+# To regenerate from your own image:
+#   python3 ~/.hermes/skills/.../scripts/img_to_braille.py \
+#     --input myimage.png --width 30 --height 15 --palette gold --out-yaml
+#
+# The default Hermes caduceus art (built-in) is used here as a placeholder.
+# Replace banner_hero with output from img_to_braille.py for custom art.
