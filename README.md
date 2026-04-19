@@ -16,19 +16,16 @@ hermes-theme-workshop/
 │   │   └── scripts/
 │   │       ├── img_to_braille.py        ← Braille art generator (recommended)
 │   │       └── image_to_hero.py         ← ASCII ramp generator (classic style)
-│   └── theme-factory/
-│       └── SKILL.md                     ← artifact theming skill (slides/docs/HTML)
 ├── examples/
 │   └── dragonfable.yaml                 ← complete working skin example
 └── assets/
-    └── sample_images/                   ← CC0 reference images to get started
+    └── sample_images/                   ← drop your reference images here
 ```
 
-> **Two separate theming systems exist in Hermes.** This repo covers both:
-> - `hermes-cli-skin` — changes how the **terminal/CLI looks** (colors, prompt, banner art)
-> - `theme-factory` — styles output **artifacts** (HTML pages, slides, docs)
->
-> If you want to change how Hermes *looks when running*, you want `hermes-cli-skin`.
+> **Note:** This repo covers only `hermes-cli-skin` — the system that changes how the
+> **terminal/CLI looks** (colors, prompt, banner art). If you need to style output
+> *artifacts* (slides, HTML, docs), that's `theme-factory`, which lives in
+> [`anthropics/skills`](https://github.com/anthropics/skills) and is out of scope here.
 
 ---
 
@@ -48,6 +45,10 @@ and is not yet in either official repo. **Install it from here.**
 **1b. Install skills from this repo**
 
 ```bash
+# Clone this repo first (if you haven't already)
+git clone https://github.com/your-username/hermes-theme-workshop
+cd hermes-theme-workshop
+
 mkdir -p ~/.hermes/skills/autonomous-ai-agents/hermes-cli-skin/scripts
 
 # Copy the skill definition
@@ -65,15 +66,6 @@ Verify Hermes sees it — in a Hermes session:
 ```
 You should see `hermes-cli-skin` listed.
 
-**1c. Install theme-factory (for artifact styling)**
-
-```bash
-git clone https://github.com/anthropics/skills /tmp/anthropics-skills
-mkdir -p ~/.hermes/skills/
-cp -r /tmp/anthropics-skills/skills/theme-factory ~/.hermes/skills/
-```
-
----
 
 ### Phase 2 — Understand Your Environment
 
@@ -132,7 +124,6 @@ Good sources:
 - Your project/game logo on a transparent background (PNG preferred)
 - High-contrast portraits or mascots
 - CC0 images from [Unsplash](https://unsplash.com), [OpenGameArt](https://opengameart.org), [Pixabay](https://pixabay.com)
-- Sample images in `assets/sample_images/` of this repo
 
 **4b. Generate Braille art (recommended)**
 
@@ -145,7 +136,11 @@ python3 ~/.hermes/skills/autonomous-ai-agents/hermes-cli-skin/scripts/img_to_bra
   --out-preview   # preview first — approve shape before colorizing
 
 # Once happy with shape, generate YAML value:
-python3 ... --out-yaml
+python3 ~/.hermes/skills/autonomous-ai-agents/hermes-cli-skin/scripts/img_to_braille.py \
+  --input ~/.hermes/assets/theme/mylogo.png \
+  --width 30 --height 15 \
+  --palette gold \
+  --out-yaml
 ```
 
 **4c. Or generate ASCII ramp art (classic/retro style)**
@@ -213,8 +208,12 @@ Always rebuild the full YAML from a template string and overwrite the file.
 /skin myskin
 
 # Make permanent
-echo "display:" >> ~/.hermes/config.yaml
-echo "  skin: myskin" >> ~/.hermes/config.yaml
+# Edit ~/.hermes/config.yaml and add (or update) these lines:
+#
+#   display:
+#     skin: myskin
+#
+# Don't use >> append — running it twice creates duplicate keys that break config parsing.
 ```
 
 **Check for common issues:**
@@ -248,7 +247,7 @@ Keep old builder script versions (v1, v2, ...) in `/tmp/` while iterating — ea
 Here's the full prompt chain that reliably produces good results:
 
 **Step 1 — Install skills**
-> *"Install the hermes-cli-skin skill from ~/Documents/SideProjects/hermes-theme-workshop/skills/hermes-cli-skin/ into ~/.hermes/skills/autonomous-ai-agents/hermes-cli-skin/"*
+> *"Install the hermes-cli-skin skill from `<path-to-cloned-repo>/skills/hermes-cli-skin/` into `~/.hermes/skills/autonomous-ai-agents/hermes-cli-skin/`"*
 
 **Step 2 — Load and orient**
 > *"Load the hermes-cli-skin skill and tell me what it recommends for generating banner art."*
@@ -279,7 +278,6 @@ If you build a great skin or discover new pitfalls, PRs are welcome:
 ## Sources
 
 - `hermes-cli-skin` skill: developed through real-world Hermes sessions (this repo)
-- `theme-factory` skill: [`anthropics/skills`](https://github.com/anthropics/skills)
 - Hermes core + built-in skins: [`NousResearch/hermes-agent`](https://github.com/NousResearch/hermes-agent)
 - Braille Unicode encoding reference: [Braille Patterns (Wikipedia)](https://en.wikipedia.org/wiki/Braille_Patterns)
 - ASCII art ramps: [Paul Bourke's character ramp](http://paulbourke.net/dataformats/asciiart/)
