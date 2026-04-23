@@ -236,7 +236,7 @@ certainly not installed. Always specify an installed theme explicitly.
 {
   "theme_name": "void-dragon",
   "applied_at": "2026-04-22T21:00:00",
-  "backup_dir": "~/.cache/hermes-ricer/backups/20260422_210000",
+  "backup_dir": "/home/neos/.cache/hermes-ricer/backups/20260422_210000",
   "previous_state": {
     "active_colorscheme": "BreezeDark",
     "look_and_feel": "org.kde.breeze.desktop",

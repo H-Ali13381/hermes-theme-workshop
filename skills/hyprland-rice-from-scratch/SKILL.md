@@ -196,6 +196,60 @@ Good:
 - `rounding = 0` on input-field for sharp edges
 - `fail_text` for custom ACCESS DENIED message
 
+## Workspace-to-Monitor Pinning
+
+Always explicitly assign workspaces to monitors. Without this, Hyprland assigns them
+arbitrarily and the "wrong" monitor ends up as workspace 1.
+
+Pattern: assign 1 as default on primary, 2 as default on secondary, then spread the rest:
+
+    workspace = 1, monitor:DP-1, default:true
+    workspace = 2, monitor:HDMI-A-1, default:true
+    workspace = 3, monitor:DP-1
+    workspace = 4, monitor:DP-1
+    workspace = 5, monitor:DP-1
+    workspace = 6, monitor:HDMI-A-1
+    workspace = 7, monitor:HDMI-A-1
+    workspace = 8, monitor:HDMI-A-1
+    workspace = 9, monitor:HDMI-A-1
+    workspace = 10, monitor:HDMI-A-1
+
+PITFALL: `hyprctl keyword workspace` live-patching does NOT move already-spawned
+workspaces. A full `hyprctl dispatch exit` + re-login is required for workspace
+assignments to take effect properly.
+
+PITFALL: After any monitor reassignment (live or via restart), waybar loses its
+output binding and goes blank. Always `pkill waybar && waybar &` after touching
+monitor or workspace config.
+
+## KDE / Plasmashell Conflict
+
+When launching Hyprland from SDDM on a system that also has KDE installed, plasmashell
+may start in the background and squat on the `org.freedesktop.Notifications` DBus name.
+This silently blocks dunst — notify-send succeeds but nothing appears.
+
+Diagnosis:
+    dbus-send --session --print-reply --dest=org.freedesktop.DBus \
+      /org/freedesktop/DBus org.freedesktop.DBus.GetNameOwner \
+      string:org.freedesktop.Notifications
+    # Then check which PID owns that name — if it's not dunst, plasmashell is squatting.
+
+Fix in autostart (hyprland.conf):
+    exec-once = pkill plasmashell; dunst
+
+Also: killing plasmashell mid-session can cause monitors to go dark (DPMS off).
+Fix with: `hyprctl dispatch dpms on <monitor-name>`
+
+## Monitor Layout
+
+Always explicitly define BOTH monitors in hyprland.conf. Without it, Hyprland
+auto-places the second monitor and ordering can be wrong:
+
+    monitor = DP-1,    1920x1080@120, 0x0,    1   # left / primary
+    monitor = HDMI-A-1, 1920x1080@60, 1920x0, 1   # right / secondary
+
+Use `hyprctl monitors` to confirm actual names and positions.
+
 ## Activation
 
 Log out of KDE. At SDDM login, select "Hyprland" session. Log in. KDE session remains available for fallback.
@@ -247,6 +301,47 @@ If you already have hyprpaper in exec-once, replace it with the above two lines.
 If waybar doesn't appear: run `waybar` from kitty and read the error output. Common cause:
   CSS syntax error. Check for `@keyframes` blocks using `@define-color` variables or
   `alpha()` — GTK CSS rejects those inside keyframes. Replace with raw `rgba()` values.
+
+### Dunst notifications silent (DBus name taken by Plasma)
+
+If dunst starts but notifications never appear, plasmashell is squatting on
+`org.freedesktop.Notifications`. Dunst logs: "Cannot acquire 'org.freedesktop.Notifications':
+Name is acquired by 'Plasma' with PID XXXX"
+
+This happens when SDDM launches a lingering plasma DBus session alongside Hyprland.
+
+Fix — kill plasmashell first, then start dunst. In hyprland.conf autostart:
+
+    exec-once = pkill plasmashell; dunst
+
+Verify dunst owns the name after starting:
+
+    dbus-send --session --print-reply --dest=org.freedesktop.DBus \
+      /org/freedesktop/DBus org.freedesktop.DBus.GetNameOwner \
+      string:org.freedesktop.Notifications
+
+The returned PID should match dunst. If it matches plasmashell, kill it and restart dunst.
+
+### Rofi power-menu mode does not exist
+
+`rofi -show power-menu` requires the `rofi-power-menu` plugin — NOT in Arch repos.
+Clicking a waybar power button wired to it gives: "Mode power menu is not found"
+
+Use a plain bash script with rofi dmenu instead. Create ~/.config/rofi/power-menu.sh:
+
+    #!/bin/bash
+    options="  Lock\n  Logout\n  Reboot\n  Shutdown"
+    chosen=$(echo -e "$options" | rofi -dmenu -p "POWER" -theme ~/.config/rofi/<theme>.rasi)
+    case "$chosen" in
+        "  Lock")     hyprlock ;;
+        "  Logout")   hyprctl dispatch exit ;;
+        "  Reboot")   systemctl reboot ;;
+        "  Shutdown") systemctl poweroff ;;
+    esac
+
+chmod +x the script, then wire in waybar config.jsonc:
+
+    "on-click": "bash ~/.config/rofi/power-menu.sh"
 
 If no wallpaper: don't use hyprpaper v0.8.3 — it silently fails. Use awww instead:
   `awww-daemon &` then `awww img /path/to/wallpaper.png`
