@@ -354,10 +354,76 @@ If dunst notifications don't appear: check if plasmashell is running (`pgrep pla
 
 If a monitor goes dark after killing plasmashell: it may have killed the DPMS state.
   Restore with: `hyprctl dispatch dpms on HDMI-A-1` (or whichever monitor went dark)
-  Then re-enable: `hyprctl keyword monitor HDMI-A-1,1920x1080@60,1920x0,1`
-
+If waybar doesn't appear: `waybar &` from a kitty terminal
+If no wallpaper: check `hyprpaper.conf` paths, run `hyprctl hyprpaper listloaded`
 If apps look wrong (no Qt theme): set `env = QT_QPA_PLATFORMTHEME,qt6ct` in hyprland.conf
 Monitor issues: `hyprctl monitors` to see what Hyprland detected
+
+### Monitor goes dark after killing a process
+
+Killing plasmashell (or other processes) can accidentally DPMS-off a monitor.
+Recover with:
+
+    hyprctl dispatch dpms on DP-1
+    hyprctl dispatch dpms on HDMI-A-1
+
+If the monitor is still not rendering (Hyprland thinks it's active but screen is dark),
+re-declare it live:
+
+    hyprctl keyword monitor HDMI-A-1,1920x1080@60,1920x0,1
+    hyprctl dispatch dpms on HDMI-A-1
+
+### Dunst notifications not appearing (plasmashell DBus conflict)
+
+If dunst starts but notifications never show, plasmashell may be holding
+`org.freedesktop.Notifications`. Diagnose:
+
+    dbus-send --session --print-reply --dest=org.freedesktop.DBus \
+      /org/freedesktop/DBus org.freedesktop.DBus.GetNameOwner \
+      string:org.freedesktop.Notifications
+
+If the owner PID is NOT dunst, kill plasmashell first:
+
+    pkill plasmashell
+    pkill dunst
+    dunst &
+
+Add to hyprland.conf autostart to prevent recurrence on every login:
+
+    exec-once = pkill plasmashell; dunst
+
+### Waybar power button — rofi-power-menu not found
+
+`rofi -show power-menu` requires an external plugin that is NOT in Arch repos.
+Replace with a simple inline script at `~/.config/rofi/power-menu.sh`:
+
+```bash
+#!/bin/bash
+options="  Lock\n  Logout\n  Reboot\n  Shutdown"
+chosen=$(echo -e "$options" | rofi -dmenu -p "POWER" -theme ~/.config/rofi/void-dragon.rasi)
+case "$chosen" in
+    "  Lock")     hyprlock ;;
+    "  Logout")   hyprctl dispatch exit ;;
+    "  Reboot")   systemctl reboot ;;
+    "  Shutdown") systemctl poweroff ;;
+esac
+```
+
+Then in `config.jsonc`:
+
+    "on-click": "bash ~/.config/rofi/power-menu.sh"
+
+### Workspace-to-monitor pinning
+
+To assign workspaces to specific monitors so workspace 1 always opens on a specific screen:
+
+    workspace = 1, monitor:DP-1, default:true
+    workspace = 2, monitor:HDMI-A-1, default:true
+    workspace = 3, monitor:DP-1
+    ...
+
+Requires a full Hyprland restart (`hyprctl dispatch exit`) to take effect for existing
+workspaces. Live `hyprctl keyword workspace` only affects newly created workspaces.
 
 ### Waybar CSS pitfalls (GTK CSS parser is strict)
 
