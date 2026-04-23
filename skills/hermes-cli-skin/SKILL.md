@@ -303,7 +303,7 @@ returns an HTML page, not the raw image. Instead:
     img = Image.new('RGB', (240, 240), (0, 0, 0))
     draw = ImageDraw.Draw(img)
     # draw your shape, then:
-    img.save('/home/neos/.hermes/assets/theme/ref.png')
+    img.save('~/.hermes/assets/theme/ref.png')
     ```
 
 ### Step 2 — Generate Braille art (recommended)
