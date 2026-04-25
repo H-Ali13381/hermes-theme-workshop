@@ -270,7 +270,7 @@ Then trigger the skill from a Hermes session:
 ### Built-in Presets
 
 | Name | Description |
-|---|---|
+|------|-------------|
 | `catppuccin-mocha` | Soothing pastel dark |
 | `nord` | Arctic blue |
 | `gruvbox-dark` | Retro groove warm |
@@ -280,6 +280,19 @@ Then trigger the skill from a Hermes session:
 | `solarized-dark` | Low-contrast warm |
 | `doom-knight` | Gothic gold and crimson |
 | `void-dragon` | Void sky, cyan blade, gold filigree |
+
+### Example — Marathon 2025 Themes
+
+Three themes generated live during a full desktop ricing session (Hyprland, April 2026).
+Each has a matching animated wallpaper (`assets/wallpapers/marathon/seedance2/`).
+
+![Marathon 2025 Themes](skills/linux-ricing/assets/previews/marathon2025-themes.png)
+
+| Theme | Palette character | Wallpaper |
+|-------|-------------------|-----------|
+| **Chrysalis** | Deep purple, violet haze, cosmic transformation | `chrysalis.mp4` |
+| **Cortex** | Dark teal, blue-green neural tones, dark steel | `cortex.mp4` |
+| **Extraction** | Steel blue, slate grey, cold white highlights | `extraction.mp4` |
 
 ### Sub-Skills (Deep Reference)
 
