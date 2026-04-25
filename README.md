@@ -17,26 +17,34 @@ hermes-theme-workshop/
 │   │   └── scripts/
 │   │       ├── img_to_braille.py        ← Braille art generator (recommended)
 │   │       └── image_to_hero.py         ← ASCII ramp generator (classic style)
-│   ├── hermes-ricer/                    ← Deterministic KDE theming engine
+│   ├── linux-ricing/                    ← AI-native desktop design system (v3, consolidated)
+│   │   ├── SKILL.md                     ← Entry point — 8-step workflow, full index
+│   │   ├── QUICKSTART.md                ← Zero-to-themed-desktop in 5 minutes
+│   │   ├── shared/                      ← Cross-env docs (design system, wallpaper, apps...)
+│   │   ├── KDE/                         ← KDE Plasma specific docs
+│   │   ├── Hyprland/                    ← Hyprland specific docs
+│   │   ├── scripts/                     ← ricer.py, session_manager.py, palette_extractor.py...
+│   │   ├── templates/                   ← Jinja2 config templates for all apps
+│   │   ├── assets/                      ← Palette SVGs, cursor/kvantum catalog
+│   │   └── tests/                       ← Test suite
+│   ├── hermes-ricer/                    ← Legacy: Deterministic KDE theming engine
 │   │   ├── SKILL.md
 │   │   ├── scripts/
-│   │   │   ├── desktop_state_audit.py   ← Read-only baseline capture
-│   │   │   ├── deterministic_ricing_session.py  ← Safe apply/rollback
-│   │   │   ├── ricer.py                 ← Materialization engine
-│   │   │   └── setup.sh                 ← Dependency install
-│   │   └── templates/                   ← Design system templates
-│   ├── hyprland-rice-from-scratch/      ← Full Hyprland tiling WM setup
-│   ├── ricer-apps/                      ← App-level materializers (kitty, rofi, waybar...)
-│   ├── ricer-catalog-capture/           ← Screenshot catalog for ricing options
-│   ├── ricer-gtk/                       ← GTK theming layer
-│   ├── ricer-kde/                       ← KDE Plasma deep-dive (Kvantum, panel SVG)
-│   ├── ricer-rollback/                  ← Rollback architecture + deterministic sessions
-│   └── ricer-wallpaper/                 ← Wallpaper generation and palette extraction
+│   │   └── templates/
+│   ├── hyprland-rice-from-scratch/      ← Legacy: Full Hyprland tiling WM setup
+│   ├── ricer-apps/                      ← Legacy: App-level materializers
+│   ├── ricer-catalog-capture/           ← Legacy: Screenshot catalog
+│   ├── ricer-gtk/                       ← Legacy: GTK theming layer
+│   ├── ricer-kde/                       ← Legacy: KDE Plasma deep-dive
+│   ├── ricer-rollback/                  ← Legacy: Rollback architecture
+│   └── ricer-wallpaper/                 ← Legacy: Wallpaper generation
 ├── examples/
 │   └── dragonfable.yaml                 ← Complete CLI skin example
 └── assets/
     └── sample_images/                   ← drop your reference images here
 ```
+
+> **Note:** `linux-ricing` (v3) is the current consolidated skill. The `hermes-ricer` split-skill suite is kept for reference but is no longer actively maintained.
 
 ---
 
@@ -48,7 +56,7 @@ They are independent — pick one or both.
 | System | What it changes | Skill |
 |---|---|---|
 | **CLI Skinning** | How Hermes *looks in the terminal* — colors, banners, prompt | `hermes-cli-skin` |
-| **Desktop Ricing** | Your actual Linux desktop — KDE Plasma, Hyprland, GTK, wallpapers | `hermes-ricer` + sub-skills |
+| **Desktop Ricing** | Your actual Linux desktop — KDE Plasma, Hyprland, GTK, wallpapers | `linux-ricing` (v3) |
 
 If you only want a cool terminal banner, read **Part 1**.
 If you want to transform your entire desktop, read **Part 2**.
@@ -221,24 +229,32 @@ Always rebuild the full YAML from a template string and overwrite the file.
 
 # Part 2 — Desktop Ricing (KDE, Hyprland, GTK)
 
-### Quick Start
+### Quick Start (linux-ricing v3)
 
 ```bash
-# 1. Install dependencies
-bash ~/.hermes/skills/hermes-ricer/scripts/setup.sh
+# 1. Clone this repo and install the skill
+git clone https://github.com/H-Ali13381/hermes-theme-workshop
+SKILL_SRC=hermes-theme-workshop/skills/linux-ricing
+SKILL_DST=~/.hermes/skills/creative/linux-ricing
 
-# 2. Capture your current desktop state (READ-ONLY, always safe)
-python3 ~/.hermes/skills/hermes-ricer/scripts/desktop_state_audit.py
+mkdir -p "$SKILL_DST"
+rsync -a "$SKILL_SRC/" "$SKILL_DST/"
 
-# 3. Dry-run a preset (no changes made)
+# 2. Run setup (installs jinja2, pillow, symlinks ricer into ~/.local/bin)
+bash "$SKILL_DST/scripts/setup.sh"
+
+# 3. Dry-run a preset
 ricer preset void-dragon --dry-run
 
 # 4. Apply
-python3 ~/.hermes/skills/hermes-ricer/scripts/deterministic_ricing_session.py --preset void-dragon
+ricer preset void-dragon
 
 # 5. Undo if needed
-python3 ~/.hermes/skills/hermes-ricer/scripts/deterministic_ricing_session.py --rollback
+ricer undo
 ```
+
+Then trigger the skill from a Hermes session:
+> *"Load the linux-ricing skill and rice my desktop."*
 
 ### What Gets Themed
 

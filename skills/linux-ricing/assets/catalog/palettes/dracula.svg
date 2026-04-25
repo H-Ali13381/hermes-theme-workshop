@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="900" height="320" viewBox="0 0 900 320">
+<defs>
+<style>
+.title{font:700 40px "DejaVu Sans",sans-serif; fill:#e7eefc;}
+.sub{font:400 22px "DejaVu Sans",sans-serif; fill:#9fb0c9;}
+.cardtitle{font:700 24px "DejaVu Sans",sans-serif; fill:#e7eefc;}
+.body{font:400 20px "DejaVu Sans",sans-serif; fill:#e7eefc;}
+.small{font:400 16px "DejaVu Sans",sans-serif; fill:#9fb0c9;}
+</style>
+</defs>
+<rect width="100%" height="100%" fill="#0b1020"/>
+<rect x="24" y="24" width="1552" height="952" rx="24" fill="#121a2b" stroke="#2b3a57" stroke-width="2"/>
+<text x="60" y="80" class="title">Dracula</text>
+<text x="60" y="120" class="sub">Representative palette swatch</text>
+<rect x="70" y="140" width="100" height="90" rx="18" fill="#282a36" stroke="#000"/>
+<text x="70" y="255" class="small">#282a36</text>
+<rect x="198" y="140" width="100" height="90" rx="18" fill="#f8f8f2" stroke="#000"/>
+<text x="198" y="255" class="small">#f8f8f2</text>
+<rect x="326" y="140" width="100" height="90" rx="18" fill="#bd93f9" stroke="#000"/>
+<text x="326" y="255" class="small">#bd93f9</text>
+<rect x="454" y="140" width="100" height="90" rx="18" fill="#ff79c6" stroke="#000"/>
+<text x="454" y="255" class="small">#ff79c6</text>
+<rect x="582" y="140" width="100" height="90" rx="18" fill="#ffb86c" stroke="#000"/>
+<text x="582" y="255" class="small">#ffb86c</text>
+<rect x="710" y="140" width="100" height="90" rx="18" fill="#44475a" stroke="#000"/>
+<text x="710" y="255" class="small">#44475a</text>
+</svg>

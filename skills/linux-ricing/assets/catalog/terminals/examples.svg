@@ -1,0 +1,63 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="1000" viewBox="0 0 1600 1000">
+<defs>
+<style>
+.title{font:700 40px "DejaVu Sans",sans-serif; fill:#e7eefc;}
+.sub{font:400 22px "DejaVu Sans",sans-serif; fill:#9fb0c9;}
+.cardtitle{font:700 24px "DejaVu Sans",sans-serif; fill:#e7eefc;}
+.body{font:400 20px "DejaVu Sans",sans-serif; fill:#e7eefc;}
+.small{font:400 16px "DejaVu Sans",sans-serif; fill:#9fb0c9;}
+</style>
+</defs>
+<rect width="100%" height="100%" fill="#0b1020"/>
+<rect x="24" y="24" width="1552" height="952" rx="24" fill="#121a2b" stroke="#2b3a57" stroke-width="2"/>
+<text x="60" y="80" class="title">Terminal examples</text>
+<text x="60" y="120" class="sub">Terminal choice mainly affects config style, features, and native integration</text>
+<rect x="60" y="180" width="700" height="280" rx="22" fill="#172033" stroke="#2b3a57" stroke-width="2"/>
+<text x="84" y="220" class="cardtitle">kitty</text>
+<text x="84" y="248" class="small">feature-rich default</text>
+<rect x="88" y="272" width="644" height="156" rx="18" fill="#0f1422" stroke="#7ad4f0" stroke-width="2"/>
+<circle cx="106" cy="294" r="6" fill="#ff5f57"/>
+<circle cx="126" cy="294" r="6" fill="#febc2e"/>
+<circle cx="146" cy="294" r="6" fill="#28c840"/>
+<text x="114" y="320" class="body" fill="#7ad4f0">$ fastfetch</text>
+<text x="114" y="344" class="body" fill="#e7eefc">OS: Arch Linux</text>
+<text x="114" y="368" class="body" fill="#e7eefc">Shell: bash</text>
+<text x="114" y="392" class="body" fill="#e7eefc">Theme: void-dragon</text>
+<text x="114" y="416" class="body" fill="#7ad4f0">Accent: #7ad4f0</text>
+<rect x="800" y="180" width="700" height="280" rx="22" fill="#172033" stroke="#2b3a57" stroke-width="2"/>
+<text x="824" y="220" class="cardtitle">Konsole</text>
+<text x="824" y="248" class="small">best KDE integration</text>
+<rect x="828" y="272" width="644" height="156" rx="18" fill="#0f1422" stroke="#d4a012" stroke-width="2"/>
+<circle cx="846" cy="294" r="6" fill="#ff5f57"/>
+<circle cx="866" cy="294" r="6" fill="#febc2e"/>
+<circle cx="886" cy="294" r="6" fill="#28c840"/>
+<text x="854" y="320" class="body" fill="#d4a012">$ fastfetch</text>
+<text x="854" y="344" class="body" fill="#e7eefc">OS: Arch Linux</text>
+<text x="854" y="368" class="body" fill="#e7eefc">Shell: bash</text>
+<text x="854" y="392" class="body" fill="#e7eefc">Theme: void-dragon</text>
+<text x="854" y="416" class="body" fill="#d4a012">Accent: #d4a012</text>
+<rect x="60" y="530" width="700" height="280" rx="22" fill="#172033" stroke="#2b3a57" stroke-width="2"/>
+<text x="84" y="570" class="cardtitle">Alacritty</text>
+<text x="84" y="598" class="small">speed / minimalism</text>
+<rect x="88" y="622" width="644" height="156" rx="18" fill="#0f1422" stroke="#7aa2f7" stroke-width="2"/>
+<circle cx="106" cy="644" r="6" fill="#ff5f57"/>
+<circle cx="126" cy="644" r="6" fill="#febc2e"/>
+<circle cx="146" cy="644" r="6" fill="#28c840"/>
+<text x="114" y="670" class="body" fill="#7aa2f7">$ fastfetch</text>
+<text x="114" y="694" class="body" fill="#e7eefc">OS: Arch Linux</text>
+<text x="114" y="718" class="body" fill="#e7eefc">Shell: bash</text>
+<text x="114" y="742" class="body" fill="#e7eefc">Theme: void-dragon</text>
+<text x="114" y="766" class="body" fill="#7aa2f7">Accent: #7aa2f7</text>
+<rect x="800" y="530" width="700" height="280" rx="22" fill="#172033" stroke="#2b3a57" stroke-width="2"/>
+<text x="824" y="570" class="cardtitle">WezTerm</text>
+<text x="824" y="598" class="small">Lua + multiplexing</text>
+<rect x="828" y="622" width="644" height="156" rx="18" fill="#0f1422" stroke="#bb9af7" stroke-width="2"/>
+<circle cx="846" cy="644" r="6" fill="#ff5f57"/>
+<circle cx="866" cy="644" r="6" fill="#febc2e"/>
+<circle cx="886" cy="644" r="6" fill="#28c840"/>
+<text x="854" y="670" class="body" fill="#bb9af7">$ fastfetch</text>
+<text x="854" y="694" class="body" fill="#e7eefc">OS: Arch Linux</text>
+<text x="854" y="718" class="body" fill="#e7eefc">Shell: bash</text>
+<text x="854" y="742" class="body" fill="#e7eefc">Theme: void-dragon</text>
+<text x="854" y="766" class="body" fill="#bb9af7">Accent: #bb9af7</text>
+</svg>
