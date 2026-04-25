@@ -4,47 +4,98 @@
 engines, and everything in between. Extracted from iterative real-world usage on
 Arch Linux / KDE Plasma / Hyprland.
 
+![Marathon 2025 Themes](skills/linux-ricing/assets/previews/marathon2025-themes.png)
+
+> *Three themes (Chrysalis, Cortex, Extraction) generated live in a single Hyprland
+> ricing session — see [Part 2](#part-2--desktop-ricing-kde-hyprland-gtk).*
+
 ---
 
 ## What's Here
 
 ```
 hermes-theme-workshop/
-├── README.md                            ← this file (the recipe)
-├── skills/
-│   ├── hermes-cli-skin/                 ← Terminal/CLI skinning (colors, banner art)
-│   │   ├── SKILL.md
-│   │   └── scripts/
-│   │       ├── img_to_braille.py        ← Braille art generator (recommended)
-│   │       └── image_to_hero.py         ← ASCII ramp generator (classic style)
-│   ├── linux-ricing/                    ← AI-native desktop design system (v3, consolidated)
-│   │   ├── SKILL.md                     ← Entry point — 8-step workflow, full index
-│   │   ├── QUICKSTART.md                ← Zero-to-themed-desktop in 5 minutes
-│   │   ├── shared/                      ← Cross-env docs (design system, wallpaper, apps...)
-│   │   ├── KDE/                         ← KDE Plasma specific docs
-│   │   ├── Hyprland/                    ← Hyprland specific docs
-│   │   ├── scripts/                     ← ricer.py, session_manager.py, palette_extractor.py...
-│   │   ├── templates/                   ← Jinja2 config templates for all apps
-│   │   ├── assets/                      ← Palette SVGs, cursor/kvantum catalog
-│   │   └── tests/                       ← Test suite
-│   ├── hermes-ricer/                    ← Legacy: Deterministic KDE theming engine
-│   │   ├── SKILL.md
-│   │   ├── scripts/
-│   │   └── templates/
-│   ├── hyprland-rice-from-scratch/      ← Legacy: Full Hyprland tiling WM setup
-│   ├── ricer-apps/                      ← Legacy: App-level materializers
-│   ├── ricer-catalog-capture/           ← Legacy: Screenshot catalog
-│   ├── ricer-gtk/                       ← Legacy: GTK theming layer
-│   ├── ricer-kde/                       ← Legacy: KDE Plasma deep-dive
-│   ├── ricer-rollback/                  ← Legacy: Rollback architecture
-│   └── ricer-wallpaper/                 ← Legacy: Wallpaper generation
+├── README.md                                   ← this file (the recipe)
+├── LICENSE
+├── .gitignore
+├── assets/
+│   └── sample_images/                          ← drop your reference images here
 ├── examples/
-│   └── dragonfable.yaml                 ← Complete CLI skin example
-└── assets/
-    └── sample_images/                   ← drop your reference images here
+│   └── dragonfable.yaml                        ← complete CLI skin example
+└── skills/
+    ├── linux-ricing/                           ★ FEATURED — AI-native desktop design system (v3)
+    │   ├── SKILL.md                            ← entry point, 8-step workflow, full index
+    │   ├── QUICKSTART.md                       ← zero-to-themed-desktop in 5 minutes
+    │   ├── manifest.json                       ← skill manifest
+    │   ├── shared/                             ← cross-env docs (design system, wallpaper, apps...)
+    │   │   ├── braille-art.md
+    │   │   ├── catalog-capture.md
+    │   │   ├── design-system.md
+    │   │   ├── dunst.md / fastfetch.md / gtk.md / hermes-skin.md
+    │   │   ├── mako.md / palette-extraction.md / picom.md / polybar.md
+    │   │   ├── rofi.md / rollback.md / shell-prompt.md / swaync.md
+    │   │   ├── templates.md / terminal.md / wallpaper-generation.md
+    │   │   ├── waybar.md / widgets.md / wofi.md
+    │   ├── KDE/                                ← KDE Plasma specific docs
+    │   │   ├── colorscheme.md / cursor.md / konsole.md / kvantum.md
+    │   │   ├── plasma-panel.md / setup.md / splash-screen.md
+    │   │   └── wallpaper.md / widgets.md
+    │   ├── Hyprland/                           ← Hyprland specific docs
+    │   │   ├── borders-animations.md / dunst.md / fastfetch.md
+    │   │   ├── hyprlock.md / rofi.md / setup.md / wallpaper.md
+    │   │   └── waybar.md / widgets.md
+    │   ├── scripts/
+    │   │   ├── ricer.py                        ← main CLI entry
+    │   │   ├── session_manager.py
+    │   │   ├── palette_extractor.py
+    │   │   ├── desktop_state_audit.py
+    │   │   ├── deterministic_ricing_session.py
+    │   │   ├── capture_theme_references.py
+    │   │   ├── reference_capture_window.py
+    │   │   ├── generate_panel_svg.py
+    │   │   └── setup.sh
+    │   ├── templates/                          ← Jinja2 config templates
+    │   │   ├── alacritty/ dunst/ gtk/ hyprland/ kde/ kitty/
+    │   │   └── mako/ picom/ polybar/ rofi/ swaync/ waybar/ wofi/
+    │   ├── assets/
+    │   │   ├── catalog/                        ← curated bars, cursors, kvantum, launchers,
+    │   │   │                                     notifications, palettes, terminals, themes
+    │   │   ├── previews/
+    │   │   │   ├── marathon2025-themes.png     ← preview shown above
+    │   │   │   ├── bottom_strip.png / toolbar_*.png
+    │   │   ├── wallpapers/marathon/seedance2/  ← chrysalis.mp4 / cortex.mp4 / extraction.mp4
+    │   │   ├── references/                     ← style references
+    │   │   └── palettes/
+    │   ├── references/
+    │   │   └── color-extractor-architecture.md
+    │   └── tests/
+    │       ├── test_bug_reproducers.py
+    │       ├── test_capture_theme_references.py
+    │       └── test_palette_extractor.py
+    ├── hermes-cli-skin/                        ← terminal/CLI skinning (colors, banner art)
+    │   ├── SKILL.md
+    │   └── scripts/
+    │       ├── img_to_braille.py               ← braille art generator (recommended)
+    │       └── image_to_hero.py                ← ASCII ramp generator (classic style)
+    ├── hermes-ricer/                           ← legacy: deterministic KDE theming engine
+    │   ├── SKILL.md
+    │   ├── scripts/                            ← ricer.py, desktop_state_audit.py,
+    │   │                                          deterministic_ricing_session.py, setup.sh
+    │   ├── templates/
+    │   └── assets/
+    ├── hyprland-rice-from-scratch/             ← legacy: full Hyprland tiling WM setup
+    │   └── SKILL.md
+    ├── ricer-apps/SKILL.md                     ← legacy: app-level materializers
+    ├── ricer-catalog-capture/SKILL.md          ← legacy: screenshot catalog
+    ├── ricer-gtk/SKILL.md                      ← legacy: GTK theming layer
+    ├── ricer-kde/SKILL.md                      ← legacy: KDE Plasma deep-dive
+    ├── ricer-rollback/SKILL.md                 ← legacy: rollback architecture
+    └── ricer-wallpaper/SKILL.md                ← legacy: wallpaper generation
 ```
 
-> **Note:** `linux-ricing` (v3) is the current consolidated skill. The `hermes-ricer` split-skill suite is kept for reference but is no longer actively maintained.
+> **`linux-ricing` (v3) is the current consolidated skill** and the recommended
+> entry point for desktop ricing. The `hermes-ricer` split-skill suite is kept
+> for reference but is no longer actively maintained.
 
 ---
 
@@ -56,7 +107,7 @@ They are independent — pick one or both.
 | System | What it changes | Skill |
 |---|---|---|
 | **CLI Skinning** | How Hermes *looks in the terminal* — colors, banners, prompt | `hermes-cli-skin` |
-| **Desktop Ricing** | Your actual Linux desktop — KDE Plasma, Hyprland, GTK, wallpapers | `linux-ricing` (v3) |
+| **Desktop Ricing** | Your actual Linux desktop — KDE Plasma, Hyprland, GTK, wallpapers | `linux-ricing` (v3) ★ |
 
 If you only want a cool terminal banner, read **Part 1**.
 If you want to transform your entire desktop, read **Part 2**.
@@ -229,7 +280,11 @@ Always rebuild the full YAML from a template string and overwrite the file.
 
 # Part 2 — Desktop Ricing (KDE, Hyprland, GTK)
 
-### Quick Start (linux-ricing v3)
+> ★ The featured skill in this repo is **`linux-ricing` (v3)** — a single
+> consolidated AI-native desktop design system covering KDE Plasma, Hyprland,
+> and shared layers (GTK, terminals, wallpaper, palette extraction).
+
+### Quick Start (`linux-ricing` v3)
 
 ```bash
 # 1. Clone this repo and install the skill
@@ -256,6 +311,8 @@ ricer undo
 Then trigger the skill from a Hermes session:
 > *"Load the linux-ricing skill and rice my desktop."*
 
+For the fast path, see `skills/linux-ricing/QUICKSTART.md`.
+
 ### What Gets Themed
 
 | Layer | Controls | Tool |
@@ -264,8 +321,10 @@ Then trigger the skill from a Hermes session:
 | **Kvantum** | Buttons, scrollbars, dropdowns, checkboxes | `kvantum.kvconfig` |
 | **Plasma theme** | Panel background, tooltips, dialogs | `plasma-apply-desktoptheme` |
 | **Cursor** | Mouse cursor theme | `plasma-apply-cursortheme` |
-| **Konsole** | Terminal colors and profiles | `.profile` + `.colorscheme` |
+| **Konsole / Terminal** | Terminal colors and profiles | `.profile` + `.colorscheme` |
 | **Wallpaper** | Per-monitor wallpaper and fill mode | `plasma-apply-wallpaperimage` |
+| **Hyprland** | Borders, animations, hyprlock, waybar, rofi, dunst, fastfetch | templates under `Hyprland/` |
+| **Cross-env** | GTK, polybar, picom, mako, swaync, wofi, shell prompt | templates under `shared/` |
 
 ### Built-in Presets
 
@@ -284,7 +343,8 @@ Then trigger the skill from a Hermes session:
 ### Example — Marathon 2025 Themes
 
 Three themes generated live during a full desktop ricing session (Hyprland, April 2026).
-Each has a matching animated wallpaper (`assets/wallpapers/marathon/seedance2/`).
+Each has a matching animated wallpaper at
+`skills/linux-ricing/assets/wallpapers/marathon/seedance2/`.
 
 ![Marathon 2025 Themes](skills/linux-ricing/assets/previews/marathon2025-themes.png)
 
@@ -294,28 +354,57 @@ Each has a matching animated wallpaper (`assets/wallpapers/marathon/seedance2/`)
 | **Cortex** | Dark teal, blue-green neural tones, dark steel | `cortex.mp4` |
 | **Extraction** | Steel blue, slate grey, cold white highlights | `extraction.mp4` |
 
-### Sub-Skills (Deep Reference)
+### Inside `linux-ricing` (deep reference)
 
-Load these alongside `hermes-ricer` when you need platform-specific detail:
+Everything is in one skill — load `linux-ricing/SKILL.md` and pull in the
+file you need:
 
-- `ricer-kde` — Kvantum widget styles, panel SVG rules, Qt renderer limitations, live reload safety
-- `ricer-gtk` — GTK theme integration with KDE
-- `ricer-apps` — Kitty, Rofi, Waybar, and other app-level configs
-- `ricer-wallpaper` — Wallpaper generation and palette extraction
-- `ricer-rollback` — Rollback architecture and the 3-layer backup system
-- `ricer-catalog-capture` — Screenshot catalog workflow for ricing options
-- `hyprland-rice-from-scratch` — Full Hyprland tiling WM setup guide
+- `SKILL.md` — entry point, 8-step workflow, master index
+- `QUICKSTART.md` — zero-to-themed-desktop in 5 minutes
+- `KDE/` — Kvantum widget styles, panel SVG rules, Qt renderer limitations,
+  colorscheme, cursor, konsole, splash screen, wallpaper, widgets
+- `Hyprland/` — borders/animations, hyprlock, waybar, rofi, dunst, fastfetch,
+  wallpaper, widgets, full setup
+- `shared/` — design system, palette extraction, wallpaper generation, GTK,
+  terminal, shell prompt, polybar, picom, mako, swaync, wofi, rollback,
+  catalog capture, braille art, templates
+- `scripts/` — `ricer.py` (CLI), `session_manager.py`, `palette_extractor.py`,
+  `desktop_state_audit.py`, `deterministic_ricing_session.py`,
+  `capture_theme_references.py`, `reference_capture_window.py`,
+  `generate_panel_svg.py`, `setup.sh`
+- `templates/` — Jinja2 config templates for alacritty, dunst, gtk, hyprland,
+  kde, kitty, mako, picom, polybar, rofi, swaync, waybar, wofi
+- `assets/catalog/` — curated bars, cursors, kvantum themes, launchers,
+  notifications, palettes, terminals, themes (each with `examples.svg` +
+  per-item `metadata.json` / `preview.png`)
+- `references/color-extractor-architecture.md` — palette extractor design notes
+- `tests/` — pytest suite for palette extractor, capture pipeline, bug reproducers
+
+### Legacy Skills (kept for reference)
+
+These predate `linux-ricing` and are not actively maintained. Use only if you
+need the older split-skill flow:
+
+- `hermes-ricer` — legacy deterministic KDE theming engine
+- `hyprland-rice-from-scratch` — legacy full Hyprland tiling WM setup
+- `ricer-kde` — legacy KDE Plasma deep-dive
+- `ricer-gtk` — legacy GTK theming layer
+- `ricer-apps` — legacy app-level materializers (Kitty, Rofi, Waybar)
+- `ricer-wallpaper` — legacy wallpaper generation
+- `ricer-rollback` — legacy rollback architecture and 3-layer backup system
+- `ricer-catalog-capture` — legacy screenshot catalog workflow
 
 ### Safety Model
 
-The ricer suite is built on one rule: **every change must be reversible, audited, and reproducible.**
+The ricer engine is built on one rule: **every change must be reversible,
+audited, and reproducible.**
 
 ```
 Capture baseline → Dry-run → Review diff → Apply → Verify → Rollback if needed
 ```
 
 Three backup layers protect you:
-1. **Git** — tracks the scripts themselves (`~/.hermes/skills/hermes-ricer/`)
+1. **Git** — tracks the scripts themselves (`~/.hermes/skills/creative/linux-ricing/`)
 2. **Pre-flight backups** — timestamped copies of all affected configs before every apply
 3. **Immutable baselines** — complete desktop state snapshots from `desktop_state_audit.py`
 
@@ -331,9 +420,11 @@ Three backup layers protect you:
 
 ### Desktop Ricing
 
-> *"Load hermes-ricer and run a dry-run of the void-dragon preset. Show me what would change."*
+> *"Load linux-ricing and run a dry-run of the void-dragon preset. Show me what would change."*
 
 > *"Capture my current KDE desktop state, then apply the doom-knight preset with a custom wallpaper."*
+
+> *"Use linux-ricing to generate three Marathon-style themes from these reference images and wire up animated wallpapers."*
 
 ---
 
@@ -341,7 +432,7 @@ Three backup layers protect you:
 
 PRs welcome:
 - Add your skin YAML to `examples/`
-- Add new presets to `hermes-ricer/templates/`
+- Add new presets to `skills/linux-ricing/templates/` (and update the preset table)
 - Update any `SKILL.md` with new pitfalls you discover
 - Add sample images to `assets/sample_images/` (CC0 only)
 
@@ -349,8 +440,9 @@ PRs welcome:
 
 ## Sources
 
+- `linux-ricing` skill (v3): consolidated from real-world KDE/Hyprland ricing sessions (this repo)
 - `hermes-cli-skin` skill: developed through real-world Hermes sessions (this repo)
-- `hermes-ricer` suite: developed through real-world KDE/Hyprland ricing sessions (this repo)
+- `hermes-ricer` and split-skill suite: legacy iterations (this repo)
 - Hermes core + built-in skins: [NousResearch/hermes-agent](https://github.com/NousResearch/hermes-agent)
 - Braille Unicode encoding reference: [Braille Patterns (Wikipedia)](https://en.wikipedia.org/wiki/Braille_Patterns)
 - ASCII art ramps: [Paul Bourke's character ramp](http://paulbourke.net/dataformats/asciiart/)
