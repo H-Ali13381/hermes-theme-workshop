@@ -1,0 +1,34 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="1000" viewBox="0 0 1600 1000">
+<defs>
+<style>
+.title{font:700 40px "DejaVu Sans",sans-serif; fill:#e7eefc;}
+.sub{font:400 22px "DejaVu Sans",sans-serif; fill:#9fb0c9;}
+.cardtitle{font:700 24px "DejaVu Sans",sans-serif; fill:#e7eefc;}
+.body{font:400 20px "DejaVu Sans",sans-serif; fill:#e7eefc;}
+.small{font:400 16px "DejaVu Sans",sans-serif; fill:#9fb0c9;}
+</style>
+</defs>
+<rect width="100%" height="100%" fill="#0b1020"/>
+<rect x="24" y="24" width="1552" height="952" rx="24" fill="#121a2b" stroke="#2b3a57" stroke-width="2"/>
+<text x="60" y="80" class="title">Desktop layer examples</text>
+<text x="60" y="120" class="sub">These layers stack together; users usually choose one option in each layer</text>
+<rect x="120" y="180" width="1200" height="560" rx="26" fill="#12182a" stroke="#d4a012" stroke-width="2"/>
+<text x="146" y="222" class="cardtitle" fill="#d4a012">Wallpaper</text>
+<text x="146" y="248" class="small">largest mood anchor</text>
+<rect x="190" y="250" width="1060" height="420" rx="26" fill="#12182a" stroke="#7aa2f7" stroke-width="2"/>
+<text x="216" y="292" class="cardtitle" fill="#7aa2f7">Plasma theme</text>
+<text x="216" y="318" class="small">panel / taskbar SVG</text>
+<rect x="260" y="320" width="920" height="280" rx="26" fill="#12182a" stroke="#7ad4f0" stroke-width="2"/>
+<text x="286" y="362" class="cardtitle" fill="#7ad4f0">Kvantum</text>
+<text x="286" y="388" class="small">Qt widgets</text>
+<rect x="330" y="390" width="780" height="140" rx="26" fill="#12182a" stroke="#a6e3a1" stroke-width="2"/>
+<text x="356" y="432" class="cardtitle" fill="#a6e3a1">GTK theme</text>
+<text x="356" y="458" class="small">non-Qt app chrome</text>
+<rect x="400" y="460" width="640" height="0" rx="26" fill="#12182a" stroke="#c4a7e7" stroke-width="2"/>
+<text x="426" y="502" class="cardtitle" fill="#c4a7e7">Cursor</text>
+<text x="426" y="528" class="small">pointer accent</text>
+<rect x="470" y="530" width="500" height="-140" rx="26" fill="#12182a" stroke="#f38ba8" stroke-width="2"/>
+<text x="496" y="572" class="cardtitle" fill="#f38ba8">Terminal colors</text>
+<text x="496" y="598" class="small">daily coding surface</text>
+<text x="150" y="840" class="sub">Highest visual impact: wallpaper → Kvantum → panel → terminal → cursor</text>
+</svg>
