@@ -21,9 +21,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-SCRIPT_PATH = Path(
-    "/home/neos/.hermes/skills/creative/linux-ricing/scripts/palette_extractor.py"
-)
+SCRIPT_PATH = Path(__file__).parent.parent / "scripts" / "palette_extractor.py"
 
 
 def load_module():

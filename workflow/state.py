@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import operator
-from typing import Annotated, Optional
+from typing import Annotated
 from typing_extensions import TypedDict
 
 from langchain_core.messages import BaseMessage
@@ -11,7 +11,6 @@ from langgraph.graph.message import add_messages
 class RiceSessionState(TypedDict, total=False):
     # Session identity
     session_dir: str        # ~/.config/rice-sessions/<slug>/
-    thread_id: str          # Matches SqliteSaver thread_id
 
     # Progress
     current_step: int       # 1–8
@@ -32,7 +31,6 @@ class RiceSessionState(TypedDict, total=False):
     packages: list[str]
 
     # Step 6 — element loop
-    current_element: str
     element_queue: list[str]                           # plain list, overwritten each step
     impl_log: Annotated[list[dict], operator.add]      # append-only completed records
 

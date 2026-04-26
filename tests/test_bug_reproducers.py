@@ -31,12 +31,9 @@ from pathlib import Path
 HOME = Path.home()
 APPLETSRC = HOME / ".config" / "plasma-org.kde.plasma.desktop-appletsrc"
 RICER = shutil.which("ricer") or str(HOME / ".local" / "bin" / "ricer")
-AUDIT_PY = Path(
-    "/home/neos/.hermes/skills/creative/linux-ricing/scripts/desktop_state_audit.py"
-)
-RICER_PY = Path(
-    "/home/neos/.hermes/skills/creative/linux-ricing/scripts/ricer.py"
-)
+_SCRIPTS = Path(__file__).parent.parent / "scripts"
+AUDIT_PY = _SCRIPTS / "desktop_state_audit.py"
+RICER_PY = _SCRIPTS / "ricer.py"
 
 
 def read_current_wallpaper() -> str | None:
@@ -159,9 +156,9 @@ class LiveBugReproducers(unittest.TestCase):
         for every detected KDE themable layer — including plasma_theme and
         cursor — not silently skip them.
 
-        Currently FAILS: extractor output omits plasma_theme/cursor_theme;
-        materialize_plasma_theme:1474 and materialize_cursor:1528 early-return
-        empty (TODO.md P1).
+        Regression test: previously materialize_plasma_theme and
+        materialize_cursor early-returned empty lists, silently omitting KDE
+        theming from the manifest. Both materializers now emit entries correctly.
         """
         r = run([RICER, "apply", "--wallpaper", self.wp_test, "--extract",
                  "--dry-run", "--name", "p1-cover-repro"], timeout=30)
@@ -284,9 +281,10 @@ class LiveBugReproducers(unittest.TestCase):
         """INVARIANT: `ricer status`, `ricer extract`, `ricer apply --dry-run`
         must emit only valid output on stdout (no Python warnings).
 
-        Currently FAILS: ricer.py:193 `datetime.utcnow()` is deprecated in
-        Python 3.12+ and the DeprecationWarning leaks to stdout, breaking
-        pipelines like `ricer extract | jq`.
+        Regression test: previously `datetime.utcnow()` in ricer.py emitted a
+        DeprecationWarning on Python 3.12+ that leaked to stdout and broke
+        pipelines like `ricer extract | jq`. Fixed by using
+        `datetime.now(timezone.utc)` throughout.
         """
         r = run([RICER, "status"], timeout=15)
         self.assertEqual(r.returncode, 0, f"status failed: {r.stderr}")

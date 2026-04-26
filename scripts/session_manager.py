@@ -40,7 +40,6 @@ Session tracking: ~/.config/rice-sessions/.current → symlink to active session
 """
 
 import json
-import os
 import re
 import sys
 from datetime import datetime
@@ -76,7 +75,7 @@ def ensure_sessions_root():
 
 
 def get_current_session() -> Path:
-    if not CURRENT_LINK.exists() and not CURRENT_LINK.is_symlink():
+    if not CURRENT_LINK.is_symlink():
         print("ERROR: No active session. Run `init` first.", file=sys.stderr)
         sys.exit(1)
     target = CURRENT_LINK.resolve()
@@ -201,8 +200,10 @@ def cmd_append_step(step_id: str, kvpairs: list[str]):
                 content,
             )
             if bullets:
+                # Match content up to the next section header (lookahead) or end of string.
+                # Group 3 is a zero-width lookahead — m.group(3) is always "".
                 updated = re.sub(
-                    r"(## Step 6 — Implement ✓\n)(.*?)(\n## |\Z)",
+                    r"(## Step 6 — Implement ✓\n)(.*?)((?=\n## )|\Z)",
                     lambda m: m.group(1) + m.group(2) + bullets + m.group(3),
                     updated,
                     flags=re.DOTALL,
@@ -213,9 +214,28 @@ def cmd_append_step(step_id: str, kvpairs: list[str]):
             with md.open("a") as f:
                 f.write(f"\n## Step 6 — Implement ✓\n{bullets}")
     else:
-        section = f"\n## Step {step_id} — {step_name} ✓\n{bullets}"
-        with md.open("a") as f:
-            f.write(section)
+        content = md.read_text()
+        header_pattern = f"## Step {step_id} — {step_name}"
+        if header_pattern in content:
+            # Section already exists — mark ✓ and append any new bullets in-place
+            # rather than creating a duplicate header.
+            updated = re.sub(
+                rf"## Step {re.escape(step_id)} — {re.escape(step_name)}\b[^\n]*",
+                f"## Step {step_id} — {step_name} ✓",
+                content,
+            )
+            if bullets:
+                updated = re.sub(
+                    rf"(## Step {re.escape(step_id)} — {re.escape(step_name)} ✓\n)(.*?)((?=\n## )|\Z)",
+                    lambda m: m.group(1) + m.group(2) + bullets + m.group(3),
+                    updated,
+                    flags=re.DOTALL,
+                )
+            md.write_text(updated)
+        else:
+            section = f"\n## Step {step_id} — {step_name} ✓\n{bullets}"
+            with md.open("a") as f:
+                f.write(section)
 
     # Update status header
     update_status_line(session_dir, f"IN PROGRESS — Step {step_id} complete")
@@ -227,12 +247,13 @@ def cmd_append_item(text: str):
     session_dir = get_current_session()
     md = session_md(session_dir)
     content = md.read_text()
-    item_line = f"- [ ] {text}\n"
+    item_line = f"- {text}\n"
 
     if "## Step 6 — Implement" in content:
-        # Insert before the next ## section or at end of file
+        # Append item at the end of the Step 6 block, before the next ## header (if any)
+        # or at end-of-string. Group 3 is a zero-width lookahead — m.group(3) is always "".
         updated = re.sub(
-            r"(## Step 6 — Implement[^\n]*\n)(.*?)(\n## |\Z)",
+            r"(## Step 6 — Implement[^\n]*\n)(.*?)((?=\n## )|\Z)",
             lambda m: m.group(1) + m.group(2) + item_line + m.group(3),
             content,
             flags=re.DOTALL,

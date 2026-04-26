@@ -374,8 +374,10 @@ def _validate_palette(p: dict[str, str]) -> dict[str, str]:
             if mix_target.lower() == hex_val.lower():
                 mix_target = "#808080"
             adjusted = _blend_hex(hex_val, mix_target, 0.4)
-            while adjusted.lower() in seen:
+            escape = 0
+            while adjusted.lower() in seen and escape < 8:
                 adjusted = _blend_hex(adjusted, "#808080", 0.2)
+                escape += 1
         out[slot] = adjusted.lower()
         seen[adjusted.lower()] = slot
 
@@ -406,7 +408,7 @@ def _infer_mood_tags(palette: dict[str, str]) -> list[str]:
     elif ph < 180:
         tags.append("cool")
     elif ph < 270:
-        tags.append("cool")
+        tags.append("blue")
     else:
         tags.append("violet")
 

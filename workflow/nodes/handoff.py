@@ -2,14 +2,13 @@
 from __future__ import annotations
 
 import json
-import subprocess
-import sys
 from pathlib import Path
 
 from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_anthropic import ChatAnthropic
 
-from ..config import MODEL, SCRIPTS_DIR
+from ..config import MODEL
+from ..session import mark_complete
 from ..state import RiceSessionState
 
 SYSTEM_PROMPT = """\
@@ -73,7 +72,7 @@ def handoff_node(state: RiceSessionState) -> dict:
         print(f"  handoff.html → {html_path}")
 
         # Mark session complete
-        _complete_session(session_dir)
+        mark_complete(session_dir)
 
     print("\nSession complete!\n")
     return {"current_step": 8}
@@ -118,12 +117,4 @@ def _md_to_html(md: str, design: dict) -> str:
 </html>"""
 
 
-def _complete_session(session_dir: str) -> None:
-    try:
-        subprocess.run(
-            [sys.executable, str(SCRIPTS_DIR / "session_manager.py"),
-             "complete", "--session-dir", session_dir],
-            capture_output=True, timeout=5,
-        )
-    except Exception:
-        pass
+

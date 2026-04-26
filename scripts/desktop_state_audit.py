@@ -7,7 +7,8 @@ Corporate-grade baseline capture for KDE Plasma (and generic fallback)
 
 PURPOSE:
     Capture the COMPLETE current state of the desktop environment before any
-    ricing operation. This script is READ-ONLY. It never writes anything.
+    ricing operation. READ-ONLY with respect to the live desktop — never touches
+    ~/.config or running processes. Writes only to ~/.cache/linux-ricing/baselines/.
 
 OUTPUT:
     1. JSON manifest: ~/.cache/linux-ricing/baselines/<timestamp>_baseline.json
@@ -47,6 +48,12 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
+_SCRIPT_DIR = Path(__file__).resolve().parent
+if str(_SCRIPT_DIR) not in sys.path:
+    sys.path.insert(0, str(_SCRIPT_DIR))
+
+from desktop_utils import discover_desktop  # noqa: E402
+
 HOME = Path.home()
 CACHE_DIR = HOME / ".cache" / "linux-ricing"
 BASELINES_DIR = CACHE_DIR / "baselines"
@@ -62,7 +69,7 @@ def run_cmd(cmd: list[str], timeout: int = 5) -> tuple[int, str, str]:
             cmd, capture_output=True, text=True, timeout=timeout
         )
         return result.returncode, result.stdout.strip(), result.stderr.strip()
-    except Exception as e:
+    except (OSError, subprocess.SubprocessError, TimeoutError) as e:
         return -1, "", str(e)
 
 
@@ -132,34 +139,6 @@ def copy_to_baseline(src: Path, dest_dir: Path, label: str) -> str | None:
 # DISCOVERY
 # =============================================================================
 
-def discover_desktop() -> dict[str, Any]:
-    desktop = os.environ.get("XDG_CURRENT_DESKTOP", "").lower()
-    wayland_display = os.environ.get("WAYLAND_DISPLAY", "")
-    display = os.environ.get("DISPLAY", "")
-    session_type = "x11" if display else "unknown"
-    if wayland_display:
-        session_type = "wayland"
-
-    wm = "unknown"
-    _, procs, _ = run_cmd(["ps", "aux"], timeout=3)
-    proc_lower = procs.lower()
-    if "plasmashell" in proc_lower or "kwin" in proc_lower:
-        wm = "kde"
-    elif "hyprland" in proc_lower:
-        wm = "hyprland"
-    elif "sway" in proc_lower:
-        wm = "sway"
-    elif "i3" in proc_lower:
-        wm = "i3"
-
-    if wm == "unknown" and ("kde" in desktop or "plasma" in desktop):
-        wm = "kde"
-
-    return {
-        "wm": wm,
-        "session_type": session_type,
-        "desktop_env": desktop,
-    }
 
 # =============================================================================
 # KDE STATE CAPTURE
@@ -556,7 +535,7 @@ def run_full_audit(output_path: str | None = None) -> dict[str, Any]:
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Hermes Ricer — Desktop State Audit (READ-ONLY)"
+        description="Hermes Ricer — Desktop State Audit (reads desktop state, writes to ~/.cache only)"
     )
     parser.add_argument(
         "--output",

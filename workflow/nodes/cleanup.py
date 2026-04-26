@@ -40,10 +40,10 @@ def cleanup_node(state: RiceSessionState) -> dict:
     elements = {r.get("element", "").split(":")[0] for r in impl_log}
 
     if "bar" in elements:
-        _reload_waybar(reloaded, errors)
+        _reload_waybar(reloaded)
 
     if "notifications" in elements:
-        _reload_dunst(reloaded, errors)
+        _reload_dunst(reloaded)
 
     if "window_decorations" in elements and "hypr" in wm:
         _reload_hyprland(reloaded, errors)
@@ -70,7 +70,7 @@ def _validate_file(path: Path) -> tuple[bool, str]:
     return True, ""
 
 
-def _reload_waybar(reloaded: list, errors: list) -> None:
+def _reload_waybar(reloaded: list) -> None:
     r = subprocess.run(["pkill", "-SIGUSR2", "waybar"], capture_output=True)
     if r.returncode == 0:
         reloaded.append("waybar")
@@ -80,7 +80,7 @@ def _reload_waybar(reloaded: list, errors: list) -> None:
         reloaded.append("waybar(restart)")
 
 
-def _reload_dunst(reloaded: list, errors: list) -> None:
+def _reload_dunst(reloaded: list) -> None:
     subprocess.run(["pkill", "dunst"], capture_output=True)
     subprocess.Popen(["dunst"])
     reloaded.append("dunst")

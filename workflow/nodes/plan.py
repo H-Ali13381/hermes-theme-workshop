@@ -4,11 +4,12 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
+from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_anthropic import ChatAnthropic
 from langgraph.types import interrupt
 
 from ..config import MODEL
+from ..session import append_step
 from ..state import RiceSessionState
 
 SYSTEM_PROMPT = """\
@@ -71,17 +72,15 @@ def plan_node(state: RiceSessionState) -> dict:
     decision_str = str(decision).lower().strip()
 
     if decision_str == "approve":
-        # Update session.md
-        _append_step_to_session(session_dir, 4, str(html_path))
+        append_step(session_dir, 4, str(html_path))
         return {
             "plan_html_path": str(html_path),
             "current_step": 4,
         }
 
     if decision_str == "regenerate":
-        # Delete and retry
         html_path.unlink(missing_ok=True)
-        return {}  # Graph will re-enter plan_node via conditional edge
+        return {"plan_html_path": ""}
 
     # User wants changes — add feedback to messages and retry
     html_path.unlink(missing_ok=True)
@@ -117,13 +116,4 @@ def _extract_html(content: str) -> str:
     return content
 
 
-def _append_step_to_session(session_dir: str, step: int, note: str) -> None:
-    import sys, subprocess
-    from ..config import SCRIPTS_DIR
-    if not session_dir:
-        return
-    subprocess.run(
-        [sys.executable, str(SCRIPTS_DIR / "session_manager.py"),
-         "append-step", str(step), note, "--session-dir", session_dir],
-        capture_output=True,
-    )
+

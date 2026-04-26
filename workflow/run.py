@@ -19,7 +19,7 @@ from pathlib import Path
 
 # Ensure SKILL_DIR is importable
 SKILL_DIR = Path(__file__).parent.parent
-sys.path.insert(0, str(SKILL_DIR.parent.parent.parent))  # up to .hermes if needed
+sys.path.insert(0, str(SKILL_DIR))
 
 from langgraph.checkpoint.sqlite import SqliteSaver
 from langgraph.types import Command
@@ -57,7 +57,6 @@ def main() -> None:
             config = {"configurable": {"thread_id": thread_id}}
             initial: RiceSessionState = {
                 "session_dir": str(session_dir),
-                "thread_id": thread_id,
                 "current_step": 0,
                 "messages": [],
                 "element_queue": [],

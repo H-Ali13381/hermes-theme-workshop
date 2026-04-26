@@ -51,40 +51,39 @@ After generation:
 
 ## Image-to-Palette Workflow
 
-To extract a design system palette from any screenshot or artwork:
+Extract a full 10-key design system palette from any image (wallpaper, artwork, screenshot).
 
-### Step 1: Use delegate_task with vision toolset
+### Automated extraction (preferred)
 
-Use `delegate_task` with toolsets `["vision", "file"]` — NOT browser vision.
-Browser screenshot tool returns blank images for local files.
+Use the `ricer extract` CLI — backed by `scripts/palette_extractor.py` (Pillow-based, no extra deps):
 
-### Step 2: Run 4 targeted vision passes
+    # Extract palette to stdout (JSON)
+    ricer extract --image /path/to/image.png
 
-Prompt the subagent with one region at a time:
-1. Background / environment colors
-2. Character/subject primary colors (armor, skin, material)
-3. Accent / glow / energy colors
-4. Decorative elements (frame, trim, filigree)
+    # Extract and write to a file
+    ricer extract --image /path/to/image.png --out ~/my-theme.json --name my-theme
 
-### Step 3: Synthesize into the 10-key design system
+    # Extract palette from wallpaper AND apply it in one step
+    ricer apply --wallpaper /path/to/image.png --extract
 
-Keys: `background, foreground, primary, secondary, accent, surface, muted, danger, success, warning`
+    # Dry-run: preview all changes without writing anything
+    ricer apply --wallpaper /path/to/image.png --extract --dry-run
 
-### Step 4: Add as a preset
+The extractor pipeline: alpha-composite → thumbnail → quantize (MAXCOVERAGE, fallback MEDIANCUT) →
+classify into 6 ricemood buckets → assign 10 semantic slots with fallback cascades → validate contrast
++ uniqueness → infer mood tags. Deterministic: same image always produces identical output.
 
-Add the palette to the `PRESETS` dict in `ricer.py` and apply with:
+### Manual extraction (fallback when Pillow is unavailable)
 
-    ricer preset <name>
+If `ricer extract` fails (Pillow not installed), use a vision subagent as a fallback:
 
-### Example subagent prompt
+    delegate_task(toolsets=["vision", "file"])
 
-> "Analyze /path/to/image.png. Run 4 vision passes targeting:
-> (1) background sky/environment, (2) main subject armor/body,
-> (3) weapon/energy glow, (4) decorative borders/frame.
-> Give approximate hex codes for each region. Then synthesize a
-> 10-key design system palette (background, foreground, primary,
-> secondary, accent, surface, muted, danger, success, warning)
-> that captures the overall aesthetic."
+Prompt the subagent to analyze the image in 4 passes (background/environment, subject colors,
+accent/glow, decorative elements) and synthesize a 10-key palette:
+`background, foreground, primary, secondary, accent, surface, muted, danger, success, warning`
+
+Then paste the resulting JSON into `ricer apply --design <path>`.
 
 ---
 
@@ -212,13 +211,10 @@ Always use `status_url` and `response_url` from the job response — do not cons
 
 Store style reference images for reuse:
 
-    ~/.hermes/skills/creative/hermes-ricer/assets/
+    ~/.hermes/skills/creative/linux-ricing/assets/
 
-Available assets:
-- `df_style_ref_hud.png` — DragonFable HUD style reference
-- `df_style_ref_scroll.png` — DragonFable scroll UI style reference
-- `toolbar_crop.png` / `toolbar_crop_fullres.png` — toolbar screenshots for style transfer
-- `toolbar_parchment_mockup.png` — completed parchment-style panel mockup
+Store reference images used for style transfer here. Check `assets/references/` for any
+images already captured for the current theme.
 
 ---
 

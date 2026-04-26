@@ -12,6 +12,7 @@ from langchain_anthropic import ChatAnthropic
 from langgraph.types import interrupt
 
 from ..config import MODEL, SCRIPTS_DIR, SCORE_PASS_THRESHOLD
+from ..session import append_item
 from ..state import RiceSessionState
 
 SPEC_SYSTEM = """\
@@ -44,7 +45,7 @@ def implement_node(state: RiceSessionState) -> dict:
 
     if not queue:
         print("[Step 6] All elements implemented.\n")
-        return {"current_step": 6}
+        return {"element_queue": [], "current_step": 6}
 
     element = queue[0]
     remaining = queue[1:]
@@ -56,7 +57,7 @@ def implement_node(state: RiceSessionState) -> dict:
     # 1 — Write spec (LLM)
     spec = _write_spec(element, design)
     print(f"  Spec: {json.dumps(spec)}")
-    _log_spec(session_dir, element, spec)
+    append_item(session_dir, f"{element} spec: {json.dumps(spec)}")
 
     # 2 — Apply via ricer.py
     apply_result = _apply_element(element, design, session_dir)
@@ -71,10 +72,9 @@ def implement_node(state: RiceSessionState) -> dict:
             "reason": apply_result.get("error", "apply failed"),
             "scorecard": None,
         }
-        _log_item(session_dir, element, record)
+        append_item(session_dir, f"{element}: SKIP — {record['reason']}")
         return {
             "element_queue": remaining,
-            "current_element": element,
             "impl_log": [record],
             "errors": [f"{element}: {apply_result.get('error', 'apply failed')}"],
         }
@@ -115,7 +115,6 @@ def implement_node(state: RiceSessionState) -> dict:
             # Return element to front of queue for re-processing
             return {
                 "element_queue": [element] + remaining,
-                "current_element": element,
             }
         else:
             verdict = f"accepted-deviation (score {total}/10)"
@@ -126,12 +125,11 @@ def implement_node(state: RiceSessionState) -> dict:
         "scorecard": scorecard,
         "verdict": verdict,
     }
-    _log_item(session_dir, element, record)
+    append_item(session_dir, f"{element}: {verdict} score={record['scorecard']['total']}/10")
     print(f"  → {verdict}\n")
 
     return {
         "element_queue": remaining,
-        "current_element": element,
         "impl_log": [record],
     }
 
@@ -280,29 +278,4 @@ def _format_scorecard(sc: dict) -> str:
     return " ".join(f"{k}={v}" for k, v in sc.items() if k != "total")
 
 
-# ── session logging ────────────────────────────────────────────────────────────
 
-def _log_spec(session_dir: str, element: str, spec: dict) -> None:
-    if not session_dir:
-        return
-    try:
-        subprocess.run(
-            [sys.executable, str(SCRIPTS_DIR / "session_manager.py"),
-             "append-item", element, json.dumps(spec), "--session-dir", session_dir],
-            capture_output=True, timeout=5,
-        )
-    except Exception:
-        pass
-
-
-def _log_item(session_dir: str, element: str, record: dict) -> None:
-    if not session_dir:
-        return
-    try:
-        subprocess.run(
-            [sys.executable, str(SCRIPTS_DIR / "session_manager.py"),
-             "append-item", element, json.dumps(record), "--session-dir", session_dir],
-            capture_output=True, timeout=5,
-        )
-    except Exception:
-        pass

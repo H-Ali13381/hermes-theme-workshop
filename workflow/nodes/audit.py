@@ -3,10 +3,9 @@ from __future__ import annotations
 
 import json
 import subprocess
-import sys
 from pathlib import Path
 
-from ..config import SCRIPTS_DIR, SESSIONS_DIR
+from ..config import SCRIPTS_DIR
 from ..state import RiceSessionState
 
 # ── helpers ──────────────────────────────────────────────────────────────────
@@ -125,17 +124,6 @@ def audit_node(state: RiceSessionState) -> dict:
     import os
     fal_available = bool(os.environ.get("FAL_KEY", "").strip())
 
-    # Run desktop_state_audit to get current theme names
-    current_theme = {}
-    audit_script = SCRIPTS_DIR / "desktop_state_audit.py"
-    if audit_script.exists():
-        rc, out = _run([sys.executable, str(audit_script), "--json-summary"], timeout=15)
-        if rc == 0 and out:
-            try:
-                current_theme = json.loads(out)
-            except Exception:
-                pass
-
     profile = {
         "wm": wm,
         "chassis": chassis,
@@ -145,7 +133,6 @@ def audit_node(state: RiceSessionState) -> dict:
         "apps": apps,
         "fal_available": fal_available,
         "current_wallpaper": current_wallpaper,
-        "current_theme": current_theme,
     }
 
     # Derive recommended element queue based on installed apps + WM
@@ -198,9 +185,9 @@ def _build_element_queue(wm: str, apps: dict) -> list[str]:
         queue.append("window_decorations:kde")
         queue.append("lock_screen:kde")
 
-    # Universal
-    queue.append("gtk_theme")
-    queue.append("wallpaper")
+    # Universal — names must match APP_MATERIALIZERS keys in ricer.py
+    queue.append("gtk")
+    # wallpaper is handled by ricer apply --wallpaper, not as an --only app key
 
     if apps.get("fastfetch") or apps.get("neofetch"):
         queue.append("fastfetch")

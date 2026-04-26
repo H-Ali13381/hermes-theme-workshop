@@ -29,7 +29,7 @@ from pathlib import Path
 from typing import Iterable
 
 HOME = Path.home()
-SKILL_DIR = HOME / ".hermes" / "skills" / "creative" / "linux-ricing"
+SKILL_DIR = Path(__file__).resolve().parent.parent  # scripts/ -> skill root
 CATALOG_DIR = SKILL_DIR / "assets" / "catalog"
 CACHE_DIR = HOME / ".cache" / "linux-ricing" / "capture_theme_references"
 REFERENCE_WINDOW_SCRIPT = SKILL_DIR / "scripts" / "reference_capture_window.py"
@@ -89,7 +89,7 @@ REFERENCE_DESKTOP_SHORTCUTS = {
         "Name": "Home",
         "Icon": "user-home",
         "Type": "Link",
-        "URL": "file:///home/neos",
+        "URL": f"file://{HOME}",
     },
     "Trash.desktop": {
         "Name": "Trash",
@@ -404,9 +404,8 @@ def apply_capture_baseline() -> None:
     set_widget_style(KDE_CAPTURE_BASELINE["widget_style"])
 
     kvantum_config = HOME / ".config" / "Kvantum" / "kvantum.kvconfig"
-    if kvantum_config.exists():
-        kvantum_config.parent.mkdir(parents=True, exist_ok=True)
-        kvantum_config.write_text("[General]\ntheme=KvArcDark\n", encoding="utf-8")
+    kvantum_config.parent.mkdir(parents=True, exist_ok=True)
+    kvantum_config.write_text("[General]\ntheme=KvArcDark\n", encoding="utf-8")
 
     post_apply_wait()
 
@@ -530,10 +529,10 @@ def close_reference_window(proc: subprocess.Popen | None) -> None:
     try:
         proc.terminate()
         proc.wait(timeout=5)
-    except Exception:
+    except (OSError, TimeoutError):
         try:
             proc.kill()
-        except Exception:
+        except OSError:
             pass
 
 

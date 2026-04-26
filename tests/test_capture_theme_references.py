@@ -2,8 +2,9 @@ import importlib.util
 import unittest
 from pathlib import Path
 
-SCRIPT_PATH = Path('/home/neos/.hermes/skills/creative/linux-ricing/scripts/capture_theme_references.py')
-REFERENCE_WINDOW_SCRIPT = Path('/home/neos/.hermes/skills/creative/linux-ricing/scripts/reference_capture_window.py')
+_SCRIPTS = Path(__file__).parent.parent / "scripts"
+SCRIPT_PATH = _SCRIPTS / "capture_theme_references.py"
+REFERENCE_WINDOW_SCRIPT = _SCRIPTS / "reference_capture_window.py"
 
 
 def load_module():
@@ -31,7 +32,7 @@ class CaptureThemeReferencesTests(unittest.TestCase):
         path = mod.catalog_preview_path('kvantum', 'catppuccin-mocha-teal')
         self.assertEqual(
             path,
-            Path('/home/neos/.hermes/skills/creative/linux-ricing/assets/catalog/kvantum/catppuccin-mocha-teal/preview.png'),
+            mod.CATALOG_DIR / "kvantum" / "catppuccin-mocha-teal" / "preview.png",
         )
 
     def test_cursor_catalog_path_is_category_option_preview(self):
@@ -39,7 +40,7 @@ class CaptureThemeReferencesTests(unittest.TestCase):
         path = mod.catalog_preview_path('cursors', 'catppuccin-macchiato-teal-cursors')
         self.assertEqual(
             path,
-            Path('/home/neos/.hermes/skills/creative/linux-ricing/assets/catalog/cursors/catppuccin-macchiato-teal-cursors/preview.png'),
+            mod.CATALOG_DIR / "cursors" / "catppuccin-macchiato-teal-cursors" / "preview.png",
         )
 
     def test_option_slug_keeps_expected_theme_name(self):
@@ -111,7 +112,7 @@ class CaptureThemeReferencesTests(unittest.TestCase):
     def test_desktop_shortcut_path_points_to_desktop(self):
         mod = load_module()
         path = mod.desktop_shortcut_path('Firefox.desktop')
-        self.assertEqual(path, Path('/home/neos/Desktop/Firefox.desktop'))
+        self.assertEqual(path, Path.home() / "Desktop" / "Firefox.desktop")
 
     def test_desktop_shortcut_text_has_desktop_entry_header(self):
         mod = load_module()
@@ -125,7 +126,7 @@ class CaptureThemeReferencesTests(unittest.TestCase):
         mod = load_module()
         text = mod.desktop_shortcut_text('Home.desktop', mod.REFERENCE_DESKTOP_SHORTCUTS['Home.desktop'])
         self.assertIn('Type=Link', text)
-        self.assertIn('URL=file:///home/neos', text)
+        self.assertIn(f'URL=file://{Path.home()}', text)
 
     def test_trash_shortcut_uses_trash_url(self):
         mod = load_module()

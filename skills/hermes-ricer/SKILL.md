@@ -19,11 +19,11 @@ Load the appropriate subskill(s) alongside this one:
 
 | Task | Load |
 |------|------|
-| KDE colorscheme, Kvantum, cursor, Plasma theme, panel SVG | `ricer/ricer-kde` |
-| GTK apps (Firefox, Nautilus, GIMP) theming | `ricer/ricer-gtk` |
-| Terminal (kitty, Konsole), bar (waybar), launcher (rofi), notifications (dunst) | `ricer/ricer-apps` |
-| Wallpaper generation, style transfer, image-to-palette extraction | `ricer/ricer-wallpaper` |
-| Backup setup, session protocol, undo, presets, void-dragon palette | `ricer/ricer-rollback` |
+| KDE colorscheme, Kvantum, cursor, Plasma theme, panel SVG | `ricer-kde` |
+| GTK apps (Firefox, Nautilus, GIMP) theming | `ricer-gtk` |
+| Terminal (kitty, Konsole), bar (waybar), launcher (rofi), notifications (dunst) | `ricer-apps` |
+| Wallpaper generation, style transfer, image-to-palette extraction | `ricer-wallpaper` |
+| Backup setup, session protocol, undo, presets, void-dragon palette | `ricer-rollback` |
 
 For a full desktop ricing session, load all five subskills.
 
@@ -49,7 +49,7 @@ Applications:
 - Bar: waybar, polybar
 - Launcher: rofi, wofi
 - Notifications: dunst, mako, swaync
-- Wallpaper: swww, hyprpaper, feh, nitrogen, plasma-apply-wallpaperimage
+- Wallpaper: awww/swww, mpvpaper, feh, nitrogen, plasma-apply-wallpaperimage (hyprpaper v0.8.3 silently fails — use awww)
 - Compositor FX: picom, Hyprland built-in
 - GTK/Qt: direct settings.ini writes (kde-gtk-config not required)
 
@@ -70,7 +70,7 @@ Input (prompt / image / preset)
     |
 [Activation Layer] — signal/reload apps (KWin reconfigure, etc.)
     |
-Rollback manifest saved to ~/.cache/hermes-ricer/current/manifest.json
+Rollback manifest saved to ~/.cache/linux-ricing/current/manifest.json
 ```
 
 ---
@@ -92,10 +92,10 @@ Rollback manifest saved to ~/.cache/hermes-ricer/current/manifest.json
 
 Run once after install or after pulling updates:
 
-    bash ~/.hermes/skills/creative/hermes-ricer/scripts/setup.sh
+    bash ~/.hermes/skills/creative/linux-ricing/scripts/setup.sh
 
 This: installs jinja2 + pillow (non-fatal if pip fails), chmod +x ricer.py,
-creates `~/.cache/hermes-ricer/{backups,current/history}`, symlinks
+creates `~/.cache/linux-ricing/{backups,current/history}`, symlinks
 `ricer` into `~/.local/bin`.
 
 Verify with: `ricer status` — should show WM/DE and detected apps.
@@ -106,19 +106,19 @@ Verify with: `ricer status` — should show WM/DE and detected apps.
 
 | Purpose | Path |
 |---------|------|
-| Skill root | `~/.hermes/skills/creative/hermes-ricer/` |
-| Python driver | `~/.hermes/skills/creative/hermes-ricer/scripts/ricer.py` |
-| Deterministic session | `~/.hermes/skills/creative/hermes-ricer/scripts/deterministic_ricing_session.py` |
-| Desktop state audit | `~/.hermes/skills/creative/hermes-ricer/scripts/desktop_state_audit.py` |
-| Setup script | `~/.hermes/skills/creative/hermes-ricer/scripts/setup.sh` |
-| Templates | `~/.hermes/skills/creative/hermes-ricer/templates/<app>/` |
-| Active theme | `~/.cache/hermes-ricer/current/` |
-| Active manifest | `~/.cache/hermes-ricer/current/manifest.json` |
-| Manifest history | `~/.cache/hermes-ricer/current/history/` |
-| Session logs | `~/.cache/hermes-ricer/session_logs/` |
-| Backups | `~/.cache/hermes-ricer/backups/<timestamp>/` |
-| Baselines | `~/.cache/hermes-ricer/baselines/<timestamp>_baseline.json` |
-| Assets | `~/.hermes/skills/creative/hermes-ricer/assets/` |
+| Skill root | `~/.hermes/skills/creative/linux-ricing/` |
+| Python driver | `~/.hermes/skills/creative/linux-ricing/scripts/ricer.py` |
+| Deterministic session | `~/.hermes/skills/creative/linux-ricing/scripts/deterministic_ricing_session.py` |
+| Desktop state audit | `~/.hermes/skills/creative/linux-ricing/scripts/desktop_state_audit.py` |
+| Setup script | `~/.hermes/skills/creative/linux-ricing/scripts/setup.sh` |
+| Templates | `~/.hermes/skills/creative/linux-ricing/templates/<app>/` |
+| Active theme | `~/.cache/linux-ricing/current/` |
+| Active manifest | `~/.cache/linux-ricing/current/manifest.json` |
+| Manifest history | `~/.cache/linux-ricing/current/history/` |
+| Session logs | `~/.config/rice-sessions/` |
+| Backups | `~/.cache/linux-ricing/backups/<timestamp>/` |
+| Baselines | `~/.cache/linux-ricing/baselines/<timestamp>_baseline.json` |
+| Assets | `~/.hermes/skills/creative/linux-ricing/assets/` |
 | Symlink | `~/.local/bin/ricer` -> ricer.py |
 
 ---
@@ -143,6 +143,7 @@ Verify with: `ricer status` — should show WM/DE and detected apps.
   },
   "kvantum_theme": "catppuccin-mocha-teal",
   "cursor_theme": "catppuccin-macchiato-teal-cursors",
+  "icon_theme": "Papirus-Dark",
   "gtk_theme": "Adwaita-dark",
   "mood_tags": ["dark", "dragon", "cyan"]
 }
@@ -171,7 +172,7 @@ Verify with: `ricer status` — should show WM/DE and detected apps.
 - Backups are created before every change.
 - `--dry-run` previews all changes without writing anything.
 - `simulate-undo` shows exactly what rollback would do before you commit.
-- See `ricer/ricer-rollback` for the full 3-layer backup architecture.
+- See `ricer-rollback` for the full 4-layer backup architecture.
 
 ---
 

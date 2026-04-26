@@ -57,7 +57,7 @@ EXIT CODES:
 
 import argparse
 import json
-import os
+import re
 import subprocess
 import sys
 import textwrap
@@ -93,7 +93,7 @@ def run(cmd: list[str], timeout: int = 30) -> tuple[int, str, str]:
         if result.stderr:
             log(f"STDERR: {result.stderr.strip()[:200]}")
         return result.returncode, result.stdout.strip(), result.stderr.strip()
-    except Exception as e:
+    except (OSError, subprocess.SubprocessError, TimeoutError) as e:
         log(f"EXCEPTION: {e}")
         return -1, "", str(e)
 
@@ -130,8 +130,8 @@ def phase_minus1_backup_prompt() -> bool:
         ║  Before applying themes, ensure you have a backup of your configs:       ║
         ║                                                                      ║
         ║  OPTION A — GitHub (recommended):                                       ║
-        ║    • Already set up: ~/.dotfiles → github.com/H-Ali13381/home-pc-backup  ║
-        ║    • Run: dotfiles add -u && dotfiles commit -m "pre-ricer snapshot"    ║
+        ║    • Push to your dotfiles repo (if set up):                            ║
+        ║      git -C ~/.dotfiles add -u && git -C ~/.dotfiles commit -m "pre-ricer snapshot"  ║
         ║                                                                      ║
         ║  OPTION B — Full system backup:                                         ║
         ║    • Timeshift, rsync, or your preferred backup solution             ║
@@ -307,7 +307,6 @@ def phase4_apply(design: dict, wallpaper: str | None, force: bool = False) -> di
     # Handle wallpaper separately if provided.
     # Snapshot current wallpaper from appletsrc BEFORE applying so undo can restore it.
     if wallpaper:
-        import re, shutil, datetime as _dt
         appletsrc = HOME / ".config" / "plasma-org.kde.plasma.desktop-appletsrc"
         prev_wallpaper = None
         if appletsrc.exists():

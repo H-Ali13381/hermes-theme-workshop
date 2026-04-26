@@ -7,13 +7,12 @@ Python driver for config discovery, materialization, and rollback.
 import argparse
 import colorsys
 import json
-import os
 import re
 import shutil
 import subprocess
 import sys
 import time
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -34,7 +33,7 @@ HOME = Path.home()
 CACHE_DIR = HOME / ".cache" / "linux-ricing"
 BACKUP_DIR = CACHE_DIR / "backups"
 CURRENT_DIR = CACHE_DIR / "current"
-SKILL_DIR = HOME / ".hermes" / "skills" / "creative" / "linux-ricing"
+SKILL_DIR = _SCRIPT_DIR.parent  # scripts/ -> skill root
 TEMPLATES_DIR = SKILL_DIR / "templates"
 
 # ---------------------------------------------------------------------------
@@ -61,6 +60,10 @@ DEFAULT_DESIGN_SYSTEM = {
         "success": "#a6e3a1",
         "warning": "#f9e2af",
     },
+    "kvantum_theme": "catppuccin-mocha-blue",
+    "cursor_theme": "catppuccin-macchiato-blue-cursors",
+    "icon_theme": "Papirus-Dark",
+    "gtk_theme": "Adwaita-dark",
     "mood_tags": ["dark", "blue", "subtle"],
     "typography": {"monospace": "JetBrainsMono Nerd Font", "ui_font": "Inter"},
 }
@@ -76,7 +79,7 @@ def run_cmd(cmd: list[str], timeout: int = 5) -> tuple[int, str, str]:
             cmd, capture_output=True, text=True, timeout=timeout
         )
         return result.returncode, result.stdout.strip(), result.stderr.strip()
-    except Exception as e:
+    except (OSError, subprocess.SubprocessError, TimeoutError) as e:
         return -1, "", str(e)
 
 
@@ -84,44 +87,15 @@ def cmd_exists(name: str) -> bool:
     return shutil.which(name) is not None
 
 
-def discover_desktop() -> dict[str, Any]:
-    """Detect what DE/WM/compositor is running."""
-    desktop = os.environ.get("XDG_CURRENT_DESKTOP", "").lower()
-    wayland_display = os.environ.get("WAYLAND_DISPLAY", "")
-    display = os.environ.get("DISPLAY", "")
+def _get_kwrite() -> str | None:
+    if cmd_exists("kwriteconfig6"):
+        return "kwriteconfig6"
+    if cmd_exists("kwriteconfig5"):
+        return "kwriteconfig5"
+    return None
 
-    wm = "unknown"
-    session_type = "x11" if display else "unknown"
-    if wayland_display:
-        session_type = "wayland"
 
-    _, procs, _ = run_cmd(["ps", "aux"], timeout=3)
-    proc_lower = procs.lower()
-
-    if "plasmashell" in proc_lower or "kwin" in proc_lower:
-        wm = "kde"
-    elif "hyprland" in proc_lower:
-        wm = "hyprland"
-    elif "sway" in proc_lower:
-        wm = "sway"
-    elif "i3" in proc_lower:
-        wm = "i3"
-    elif "bspwm" in proc_lower:
-        wm = "bspwm"
-    elif "awesome" in proc_lower:
-        wm = "awesome"
-    elif "qtile" in proc_lower:
-        wm = "qtile"
-
-    if wm == "unknown":
-        if "kde" in desktop or "plasma" in desktop:
-            wm = "kde"
-
-    return {
-        "wm": wm,
-        "session_type": session_type,
-        "desktop_env": desktop,
-    }
+from desktop_utils import discover_desktop  # noqa: E402
 
 
 def discover_apps() -> dict[str, Any]:
@@ -135,9 +109,7 @@ def discover_apps() -> dict[str, Any]:
             "tools": {
                 "apply_colorscheme": cmd_exists("plasma-apply-colorscheme"),
                 "apply_wallpaper": cmd_exists("plasma-apply-wallpaperimage"),
-                "kwriteconfig": "kwriteconfig6" if cmd_exists("kwriteconfig6") else (
-                    "kwriteconfig5" if cmd_exists("kwriteconfig5") else None
-                ),
+                "kwriteconfig": _get_kwrite(),
                 "kreadconfig": "kreadconfig6" if cmd_exists("kreadconfig6") else (
                     "kreadconfig5" if cmd_exists("kreadconfig5") else None
                 ),
@@ -196,7 +168,7 @@ def discover() -> dict[str, Any]:
     return {
         "desktop": discover_desktop(),
         "apps": discover_apps(),
-        "timestamp": datetime.utcnow().isoformat(),
+        "timestamp": datetime.now(timezone.utc).isoformat(),
     }
 
 
@@ -329,17 +301,6 @@ def backup_file(src: Path, backup_ts: str, label: str) -> str | None:
     return str(dest)
 
 
-def backup_dir_tree(src: Path, backup_ts: str, label: str) -> str | None:
-    """Copy an entire directory to backup. Returns backup path or None."""
-    if not src.exists():
-        return None
-    dest = BACKUP_DIR / backup_ts / label
-    if dest.exists():
-        shutil.rmtree(dest)
-    shutil.copytree(src, dest)
-    return str(dest)
-
-
 # ---------------------------------------------------------------------------
 # COLOR UTILITIES
 # ---------------------------------------------------------------------------
@@ -401,26 +362,21 @@ def adjust_lightness(hex_color: str, factor: float) -> str:
     return rgb_tuple_to_hex(int(nr * 255), int(ng * 255), int(nb * 255))
 
 
-def blend_hex(hex_a: str, hex_b: str, t: float = 0.5) -> str:
-    """Linear RGB blend between two hex colors. t=0 -> a, t=1 -> b."""
-    ra, ga, ba = hex_to_rgb_tuple(hex_a)
-    rb, gb, bb = hex_to_rgb_tuple(hex_b)
-    return rgb_tuple_to_hex(
-        int(ra + (rb - ra) * t),
-        int(ga + (gb - ga) * t),
-        int(ba + (bb - ba) * t),
-    )
-
-
 # ---------------------------------------------------------------------------
 # TEMPLATE ENGINE
 # ---------------------------------------------------------------------------
 
 def simple_render(template_str: str, context: dict) -> str:
-    """Minimal template renderer when Jinja2 is unavailable."""
+    """Minimal template renderer when Jinja2 is unavailable.
+
+    Supports the same ``{{key}}`` double-brace syntax used by Jinja2 so that
+    templates work identically regardless of whether Jinja2 is installed.
+    Using single-brace ``{key}`` would match *inside* ``{{key}}``, leaving
+    stray braces in the output (e.g. ``{#1e1e2e}`` instead of ``#1e1e2e``).
+    """
     result = template_str
     for key, value in context.items():
-        result = result.replace(f"{{{key}}}", str(value))
+        result = result.replace(f"{{{{{key}}}}}", str(value))
     return result
 
 
@@ -827,7 +783,7 @@ Parent=FALLBACK/
 
     # Activate as default profile in konsolerc.
     # The key is DefaultProfile under [Desktop Entry] — verified against konsolerc format.
-    kwrite = "kwriteconfig6" if cmd_exists("kwriteconfig6") else ("kwriteconfig5" if cmd_exists("kwriteconfig5") else None)
+    kwrite = _get_kwrite()
     if kwrite:
         run_cmd([kwrite, "--file", "konsolerc", "--group", "Desktop Entry",
                  "--key", "DefaultProfile", f"{profile_name}.profile"])
@@ -909,6 +865,7 @@ window#waybar {{
         "path": str(style_path),
         "backup": style_backup,
         "config_backup": config_backup,
+        "config_path": str(config_path),
     })
 
     # Inject @import into the main style.css so hermes theme is loaded.
@@ -1241,26 +1198,24 @@ def materialize_hyprlock(design: dict, backup_ts: str, dry_run: bool = False) ->
     theme_name = design.get("name", "linux-ricing")
 
     # Derive rgba tuples (r,g,b) for reuse with different alphas
-    def _hex_rgb(hex_color: str) -> tuple:
-        h = hex_color.lstrip("#")
-        return int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16)
+    p_r, p_g, p_b = hex_to_rgb_tuple(palette["primary"])
+    fg_r, fg_g, fg_b = hex_to_rgb_tuple(palette["foreground"])
+    surf_r, surf_g, surf_b = hex_to_rgb_tuple(palette["surface"])
+    danger_r, danger_g, danger_b = hex_to_rgb_tuple(palette["danger"])
+    succ_r, succ_g, succ_b = hex_to_rgb_tuple(palette["success"])
+    warn_r, warn_g, warn_b = hex_to_rgb_tuple(palette["warning"])
 
-    p_r, p_g, p_b = _hex_rgb(palette["primary"])
-    a_r, a_g, a_b = _hex_rgb(palette["accent"])
-    fg_r, fg_g, fg_b = _hex_rgb(palette["foreground"])
-    surf_r, surf_g, surf_b = _hex_rgb(palette["surface"])
-    danger_r, danger_g, danger_b = _hex_rgb(palette["danger"])
-    succ_r, succ_g, succ_b = _hex_rgb(palette["success"])
-    warn_r, warn_g, warn_b = _hex_rgb(palette["warning"])
+    def _r(r, g, b, a): return f"{r:02x}{g:02x}{b:02x}{int(a * 255):02x}"
 
-    def _r(r, g, b, a): return f"{r},{g},{b},{int(a*255)}"
-
-    p_rgba   = _r(p_r, p_g, p_b, 0.95)
-    fg_rgba  = _r(fg_r, fg_g, fg_b, 0.85)
-    surf_rgba= _r(surf_r, surf_g, surf_b, 0.88)
+    p_rgba      = _r(p_r, p_g, p_b, 0.95)
+    fg_rgba     = _r(fg_r, fg_g, fg_b, 0.85)
+    surf_rgba   = _r(surf_r, surf_g, surf_b, 0.88)
     danger_rgba = _r(danger_r, danger_g, danger_b, 1.0)
-    succ_rgba = _r(succ_r, succ_g, succ_b, 1.0)
-    warn_rgba = _r(warn_r, warn_g, warn_b, 1.0)
+    succ_rgba   = _r(succ_r, succ_g, succ_b, 1.0)
+    warn_rgba   = _r(warn_r, warn_g, warn_b, 1.0)
+    p_shadow35  = _r(p_r, p_g, p_b, 0.35)
+    black65     = _r(0, 0, 0, 0.65)
+    p_shadow25  = _r(p_r, p_g, p_b, 0.25)
 
     # Extract wallpaper path from existing config if present
     existing_wallpaper = None
@@ -1272,11 +1227,8 @@ def materialize_hyprlock(design: dict, backup_ts: str, dry_run: bool = False) ->
 
     # Default wallpaper fallback — try to detect from active wallpaper daemon
     if not existing_wallpaper:
-        # Try awww last-set wallpaper
-        rc, out, _ = run_cmd(["awww", "--get", "last-image"], timeout=5)
-        if rc == 0 and out:
-            existing_wallpaper = out.strip()
-        else:
+        existing_wallpaper, _ = _snapshot_current_wallpaper(desktop)
+        if not existing_wallpaper:
             existing_wallpaper = ""
 
     # PAM placeholder text — adapts to theme mood
@@ -1322,7 +1274,7 @@ label {{
     valign = center
     shadow_passes = 3
     shadow_size = 8
-    shadow_color = rgba({p_r},{p_g},{p_b},0.35)
+    shadow_color = rgba({p_shadow35})
 }}
 
 # Date — muted foreground, smaller
@@ -1337,7 +1289,7 @@ label {{
     valign = center
     shadow_passes = 1
     shadow_size = 3
-    shadow_color = rgba(0,0,0,0.65)
+    shadow_color = rgba({black65})
 }}
 
 # Input field
@@ -1364,7 +1316,7 @@ input-field {{
     rounding = 0
     shadow_passes = 2
     shadow_size = 5
-    shadow_color = rgba({p_r},{p_g},{p_b},0.25)
+    shadow_color = rgba({p_shadow25})
 }}
 """
 
@@ -1404,7 +1356,6 @@ def materialize_kvantum(design: dict, backup_ts: str, dry_run: bool = False) -> 
     changes = []
     kvantum_dir = HOME / ".config" / "Kvantum"
     kvantum_config = kvantum_dir / "kvantum.kvconfig"
-    kdeglobals = HOME / ".config" / "kdeglobals"
 
     # Determine Kvantum theme from design or fallback
     kvantum_theme = design.get("kvantum_theme")
@@ -1450,7 +1401,7 @@ def materialize_kvantum(design: dict, backup_ts: str, dry_run: bool = False) -> 
     # Set widgetStyle in kdeglobals.
     # CRITICAL: value must be "kvantum" (exact Qt6 plugin name from libkvantum.so).
     # "kvantum-dark" is NOT a valid Qt6 style name and will silently fall back to Breeze.
-    kwrite = "kwriteconfig6" if cmd_exists("kwriteconfig6") else ("kwriteconfig5" if cmd_exists("kwriteconfig5") else None)
+    kwrite = _get_kwrite()
     if kwrite:
         run_cmd([kwrite, "--file", "kdeglobals", "--group", "KDE", "--key", "widgetStyle", "kvantum"])
 
@@ -1507,7 +1458,7 @@ def materialize_plasma_theme(design: dict, backup_ts: str, dry_run: bool = False
     plasmarc_backup = backup_file(plasmarc, backup_ts, "plasma/plasmarc")
 
     # Apply
-    kwrite = "kwriteconfig6" if cmd_exists("kwriteconfig6") else ("kwriteconfig5" if cmd_exists("kwriteconfig5") else None)
+    kwrite = _get_kwrite()
     if kwrite:
         run_cmd([kwrite, "--file", "plasmarc", "--group", "Theme", "--key", "name", plasma_theme])
 
@@ -1561,7 +1512,7 @@ def materialize_cursor(design: dict, backup_ts: str, dry_run: bool = False) -> l
     cursor_backup = backup_file(kcminputrc, backup_ts, "cursor/kcminputrc")
 
     # Apply
-    kwrite = "kwriteconfig6" if cmd_exists("kwriteconfig6") else ("kwriteconfig5" if cmd_exists("kwriteconfig5") else None)
+    kwrite = _get_kwrite()
     if kwrite:
         run_cmd([kwrite, "--file", "kcminputrc", "--group", "Mouse", "--key", "cursorTheme", cursor_theme])
 
@@ -1603,11 +1554,15 @@ def _snapshot_current_wallpaper(desktop: dict) -> tuple[str | None, str | None]:
                 return path, "plasma-apply-wallpaperimage"
         return None, "plasma-apply-wallpaperimage"
 
-    # awww (preferred Hyprland daemon) — has a --get for last-image
+    # awww (swww v0.12+ rename) — same query interface as swww.
+    # Output format: "DP-1: 1920x1080, scale: 1, currently displaying: image: /path/to.png"
+    # Note: `awww --get last-image` does NOT exist; `awww query` is the correct command.
     if cmd_exists("awww"):
-        rc, out, _ = run_cmd(["awww", "--get", "last-image"], timeout=5)
-        if rc == 0 and out.strip():
-            return out.strip(), "awww img"
+        rc, out, _ = run_cmd(["awww", "query"], timeout=5)
+        if rc == 0 and out:
+            m = re.search(r"image:\s*(\S.*)$", out.splitlines()[0] if out.splitlines() else "")
+            if m:
+                return m.group(1).strip(), "awww img"
         return None, "awww img"
 
     # hyprpaper — read its config file
@@ -1676,7 +1631,10 @@ def materialize_wallpaper(
     elif cmd_exists("awww"):
         # awww (swww v0.12+ rename) — preferred Hyprland wallpaper daemon.
         # Ensure daemon is running first, then set image.
-        # After setting wallpaper, fix HDMI-A-1 monitor (known dpms bug on this system).
+        # Note: if a specific monitor goes dark after switching wallpaper (known
+        # Hyprland DPMS bug), run manually:
+        #   hyprctl keyword monitor <NAME>,<WxH>@<Hz>,<POS>,1
+        #   hyprctl dispatch dpms on <NAME>
         if dry_run:
             changes.append({"app": "wallpaper", "action": "dry-run", "path": wallpaper_path,
                             "method": "awww img",
@@ -1689,9 +1647,6 @@ def materialize_wallpaper(
                                  start_new_session=True)
                 time.sleep(2)
             run_cmd(["awww", "img", wallpaper_path])
-            # Fix HDMI-A-1 monitor going dark on display change (known Hyprland dpms bug)
-            run_cmd(["hyprctl", "keyword", "monitor", "HDMI-A-1,1920x1080@60,1920x0,1"], timeout=5)
-            run_cmd(["hyprctl", "dispatch", "dpms", "on", "HDMI-A-1"], timeout=5)
             changes.append({"app": "wallpaper", "action": "set", "path": wallpaper_path,
                             "method": "awww img",
                             "previous_wallpaper": prev_wallpaper})
@@ -1716,7 +1671,7 @@ def materialize_wallpaper(
                 try:
                     for mon in json.loads(out):
                         monitors.append(mon.get("name", ""))
-                except Exception:
+                except (json.JSONDecodeError, ValueError):
                     pass
         if not monitors:
             monitors = [""]  # empty = all monitors
@@ -1795,26 +1750,33 @@ def materialize_alacritty(design: dict, backup_ts: str, dry_run: bool = False) -
     context = {**palette, "name": design.get("name", "theme")}
 
     if template_path.exists():
-        # Template has static bright slots; replace with hue-rotated variants
-        content = render_template(template_path, context)
-        # Patch the bright section with computed values
+        # Patch the [colors.bright] section BEFORE rendering so the {{key}}
+        # placeholders are still present. Jinja2 (and simple_render) consume
+        # them during render_template(), so patching after rendering would find
+        # nothing to replace and silently produce un-adjusted bright colors.
         bright_map = {
-            "{{muted}}":                         adjust_lightness(palette["muted"], 1.4),
-            "{{danger}}":                        adjust_lightness(rotate_hue(palette["danger"], 15), 1.3),
-            "{{success}}":                       adjust_lightness(rotate_hue(palette["success"], 10), 1.3),
-            "{{warning}}":                       adjust_lightness(palette["warning"], 1.3),
-            "{{primary}}":                       adjust_lightness(rotate_hue(palette["primary"], -10), 1.3),
-            "{{secondary}}":                     adjust_lightness(rotate_hue(palette["secondary"], 20), 1.3),
-            "{{accent}}":                        adjust_lightness(rotate_hue(palette["accent"], 15), 1.3),
-            "{{foreground}}":                    adjust_lightness(palette["foreground"], 1.25),
+            "{{muted}}":     adjust_lightness(palette["muted"], 1.4),
+            "{{danger}}":    adjust_lightness(rotate_hue(palette["danger"], 15), 1.3),
+            "{{success}}":   adjust_lightness(rotate_hue(palette["success"], 10), 1.3),
+            "{{warning}}":   adjust_lightness(palette["warning"], 1.3),
+            "{{primary}}":   adjust_lightness(rotate_hue(palette["primary"], -10), 1.3),
+            "{{secondary}}": adjust_lightness(rotate_hue(palette["secondary"], 20), 1.3),
+            "{{accent}}":    adjust_lightness(rotate_hue(palette["accent"], 15), 1.3),
+            "{{foreground}}": adjust_lightness(palette["foreground"], 1.25),
         }
-        # Only patch the [colors.bright] section
-        bright_start = content.find("[colors.bright]")
+        template_str = template_path.read_text(encoding="utf-8")
+        bright_start = template_str.find("[colors.bright]")
         if bright_start != -1:
-            bright_section = content[bright_start:]
+            bright_section = template_str[bright_start:]
             for k, v in bright_map.items():
                 bright_section = bright_section.replace(k, v, 1)
-            content = content[:bright_start] + bright_section
+            template_str = template_str[:bright_start] + bright_section
+        # Now render the pre-patched template through Jinja2 / simple_render
+        if jinja2:
+            env = jinja2.Environment()
+            content = env.from_string(template_str).render(**context)
+        else:
+            content = simple_render(template_str, context)
     else:
         content = f"""# Generated by linux-ricing — {design.get('name', 'theme')}
 [colors.primary]
@@ -1908,6 +1870,10 @@ def materialize_picom(design: dict, backup_ts: str, dry_run: bool = False) -> li
     fragment_path = picom_dir / "hermes-picom.conf"
     template_path = TEMPLATES_DIR / "picom" / "hermes-picom.conf.template"
     changes = []
+
+    if not template_path.exists():
+        print(f"[picom] template not found, skipping: {template_path}", file=sys.stderr)
+        return changes
 
     shadow_color = adjust_lightness(palette["primary"], 0.25)
     context = {**palette, "name": design.get("name", "theme"), "shadow_color": shadow_color}
@@ -2050,6 +2016,10 @@ def materialize_mako(design: dict, backup_ts: str, dry_run: bool = False) -> lis
     template_path = TEMPLATES_DIR / "mako" / "config.template"
     changes = []
 
+    if not template_path.exists():
+        print(f"[mako] template not found, skipping: {template_path}", file=sys.stderr)
+        return changes
+
     mood_tags = design.get("mood_tags", [])
     corner_radius = 0 if any(t in mood_tags for t in ["gothic", "game", "angular", "sharp"]) else 8
     context = {**palette, "name": design.get("name", "theme"), "corner_radius": corner_radius}
@@ -2089,6 +2059,10 @@ def materialize_wofi(design: dict, backup_ts: str, dry_run: bool = False) -> lis
     style_path = wofi_dir / "style.css"
     template_path = TEMPLATES_DIR / "wofi" / "style.css.template"
     changes = []
+
+    if not template_path.exists():
+        print(f"[wofi] template not found, skipping: {template_path}", file=sys.stderr)
+        return changes
 
     mood_tags = design.get("mood_tags", [])
     radius = "0px" if any(t in mood_tags for t in ["gothic", "game", "angular", "sharp"]) else "8px"
@@ -2200,6 +2174,10 @@ def materialize_polybar(design: dict, backup_ts: str, dry_run: bool = False) -> 
     template_path = TEMPLATES_DIR / "polybar" / "hermes-colors.ini.template"
     changes = []
 
+    if not template_path.exists():
+        print(f"[polybar] template not found, skipping: {template_path}", file=sys.stderr)
+        return changes
+
     context = {**palette, "name": design.get("name", "theme")}
     colors_content = render_template(template_path, context)
 
@@ -2262,6 +2240,10 @@ def materialize_swaync(design: dict, backup_ts: str, dry_run: bool = False) -> l
     style_path = swaync_dir / "style.css"
     template_path = TEMPLATES_DIR / "swaync" / "style.css.template"
     changes = []
+
+    if not template_path.exists():
+        print(f"[swaync] template not found, skipping: {template_path}", file=sys.stderr)
+        return changes
 
     mood_tags = design.get("mood_tags", [])
     radius = "0px" if any(t in mood_tags for t in ["gothic", "game", "angular", "sharp"]) else "8px"
@@ -2334,7 +2316,7 @@ def materialize(
         apps = discover_apps()
 
     # ONE shared timestamp for ALL materializers — no race condition
-    backup_ts = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
+    backup_ts = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
     all_changes = []
 
     for app_name, mat_fn in APP_MATERIALIZERS.items():
@@ -2441,14 +2423,8 @@ def undo() -> dict:
 
         # ---- Restore backed-up files ----
         for backup_key in ["backup", "backup_profile", "backup_colors", "backup_konsolerc",
-                            "config_backup", "theme_backup", "main_backup", "kdeglobals_backup"]:
+                            "config_backup", "kdeglobals_backup"]:
             bp = change.get(backup_key)
-            dest_key = {
-                "backup": "path",
-                "backup_profile": "profile_path",
-                "backup_colors": "color_scheme_path",
-                "config_backup": None,   # waybar config
-            }.get(backup_key, None)
 
             if bp and Path(bp).exists():
                 # Determine destination
@@ -2461,7 +2437,7 @@ def undo() -> dict:
                 elif backup_key == "backup_konsolerc":
                     dest = HOME / ".config" / "konsolerc"
                 elif backup_key == "config_backup":
-                    dest = HOME / ".config" / "waybar" / "config"
+                    dest = Path(change["config_path"]) if "config_path" in change else HOME / ".config" / "waybar" / "config"
                 elif backup_key == "kdeglobals_backup":
                     dest = HOME / ".config" / "kdeglobals"
                 else:
@@ -2470,7 +2446,7 @@ def undo() -> dict:
                 try:
                     shutil.copy2(bp, dest)
                     restored.append({"app": app, "restored": str(dest), "from": bp})
-                except Exception as e:
+                except (OSError, shutil.Error) as e:
                     failed.append({"app": app, "path": str(dest), "error": str(e)})
 
             elif bp and not Path(bp).exists():
@@ -2480,11 +2456,11 @@ def undo() -> dict:
                     try:
                         Path(dest_path).unlink()
                         restored.append({"app": app, "deleted": dest_path, "note": "no backup existed — file was new, deleted"})
-                    except Exception as e:
+                    except OSError as e:
                         failed.append({"app": app, "path": dest_path, "error": str(e)})
 
-        # ---- Remove injected include/theme lines ----
-        if action in ("inject_include", "inject_theme") and change.get("injected"):
+        # ---- Remove injected include/theme/import lines ----
+        if action in ("inject_include", "inject_theme", "inject_import") and change.get("injected"):
             path = change.get("path")
             marker = change.get("marker")
             if path and marker:
@@ -2510,7 +2486,7 @@ def undo() -> dict:
         if app == "kvantum" and action == "write":
             prev_kv = change.get("previous_kvantum_theme")
             prev_ws = change.get("previous_widget_style")
-            kwrite = "kwriteconfig6" if cmd_exists("kwriteconfig6") else ("kwriteconfig5" if cmd_exists("kwriteconfig5") else None)
+            kwrite = _get_kwrite()
 
             if prev_kv:
                 kvantum_config = HOME / ".config" / "Kvantum" / "kvantum.kvconfig"
@@ -2533,7 +2509,7 @@ def undo() -> dict:
         # ---- Plasma Theme: restore previous ----
         if app == "plasma_theme" and action == "write":
             prev = change.get("previous_theme")
-            kwrite = "kwriteconfig6" if cmd_exists("kwriteconfig6") else ("kwriteconfig5" if cmd_exists("kwriteconfig5") else None)
+            kwrite = _get_kwrite()
             if prev and kwrite:
                 run_cmd([kwrite, "--file", "plasmarc", "--group", "Theme", "--key", "name", prev])
             if prev and cmd_exists("plasma-apply-desktoptheme"):
@@ -2548,7 +2524,7 @@ def undo() -> dict:
         # ---- Cursor: restore previous ----
         if app == "cursor" and action == "write":
             prev = change.get("previous_cursor")
-            kwrite = "kwriteconfig6" if cmd_exists("kwriteconfig6") else ("kwriteconfig5" if cmd_exists("kwriteconfig5") else None)
+            kwrite = _get_kwrite()
             if prev and kwrite:
                 run_cmd([kwrite, "--file", "kcminputrc", "--group", "Mouse", "--key", "cursorTheme", prev])
             if prev and cmd_exists("plasma-apply-cursortheme"):
@@ -2604,7 +2580,7 @@ def undo() -> dict:
 
     # Mark manifest as undone
     manifest["undone"] = True
-    manifest["undone_at"] = datetime.utcnow().isoformat()
+    manifest["undone_at"] = datetime.now(timezone.utc).isoformat()
     manifest_path.write_text(json.dumps(manifest, indent=2), encoding="utf-8")
 
     status = "success" if not failed else "partial"
@@ -2629,6 +2605,11 @@ PRESETS = {
             "secondary": "#f5c2e7", "accent": "#fab387", "surface": "#313244",
             "muted": "#6c7086", "danger": "#f38ba8", "success": "#a6e3a1", "warning": "#f9e2af",
         },
+        "kvantum_theme": "catppuccin-mocha-blue",
+        "plasma_theme": "default",
+        "cursor_theme": "catppuccin-macchiato-blue-cursors",
+        "icon_theme": "Papirus-Dark",
+        "gtk_theme": "Adwaita-dark",
         "mood_tags": ["pastel", "dark", "cozy"],
     },
     "nord": {
@@ -2639,6 +2620,12 @@ PRESETS = {
             "secondary": "#81a1c1", "accent": "#ebcb8b", "surface": "#3b4252",
             "muted": "#4c566a", "danger": "#bf616a", "success": "#a3be8c", "warning": "#ebcb8b",
         },
+        # Nord primary is a teal-blue; catppuccin-mocha-teal is the closest Kvantum match.
+        "kvantum_theme": "catppuccin-mocha-teal",
+        "plasma_theme": "default",
+        "cursor_theme": "catppuccin-macchiato-teal-cursors",
+        "icon_theme": "Papirus-Dark",
+        "gtk_theme": "Adwaita-dark",
         "mood_tags": ["arctic", "blue", "flat"],
     },
     "gruvbox-dark": {
@@ -2649,6 +2636,12 @@ PRESETS = {
             "secondary": "#b16286", "accent": "#d79921", "surface": "#3c3836",
             "muted": "#928374", "danger": "#cc241d", "success": "#98971a", "warning": "#d79921",
         },
+        # KvDark: neutral fallback; no Kvantum theme closely matches gruvbox warm tones.
+        "kvantum_theme": "KvDark",
+        "plasma_theme": "default",
+        "cursor_theme": "Adwaita",
+        "icon_theme": "Papirus-Dark",
+        "gtk_theme": "Adwaita-dark",
         "mood_tags": ["retro", "warm", "sepia"],
     },
     "dracula": {
@@ -2659,6 +2652,11 @@ PRESETS = {
             "secondary": "#ff79c6", "accent": "#ffb86c", "surface": "#44475a",
             "muted": "#6272a4", "danger": "#ff5555", "success": "#50fa7b", "warning": "#f1fa8c",
         },
+        "kvantum_theme": "catppuccin-mocha-mauve",
+        "plasma_theme": "default",
+        "cursor_theme": "catppuccin-macchiato-mauve-cursors",
+        "icon_theme": "Papirus-Dark",
+        "gtk_theme": "Adwaita-dark",
         "mood_tags": ["dark", "neon", "purple"],
     },
     "tokyo-night": {
@@ -2669,6 +2667,11 @@ PRESETS = {
             "secondary": "#bb9af7", "accent": "#ff9e64", "surface": "#24283b",
             "muted": "#565f89", "danger": "#f7768e", "success": "#9ece6a", "warning": "#e0af68",
         },
+        "kvantum_theme": "catppuccin-mocha-blue",
+        "plasma_theme": "default",
+        "cursor_theme": "catppuccin-macchiato-blue-cursors",
+        "icon_theme": "Papirus-Dark",
+        "gtk_theme": "Adwaita-dark",
         "mood_tags": ["cyberpunk", "blue", "neon"],
     },
     "rose-pine": {
@@ -2679,6 +2682,12 @@ PRESETS = {
             "secondary": "#f6c177", "accent": "#ebbcba", "surface": "#1f1d2e",
             "muted": "#6e6a86", "danger": "#eb6f92", "success": "#31748f", "warning": "#f6c177",
         },
+        # Primary is a soft teal; catppuccin-mocha-teal is the closest available accent.
+        "kvantum_theme": "catppuccin-mocha-teal",
+        "plasma_theme": "default",
+        "cursor_theme": "catppuccin-macchiato-teal-cursors",
+        "icon_theme": "Papirus-Dark",
+        "gtk_theme": "Adwaita-dark",
         "mood_tags": ["soft", "pastel", "nature"],
     },
     "solarized-dark": {
@@ -2689,6 +2698,11 @@ PRESETS = {
             "secondary": "#2aa198", "accent": "#b58900", "surface": "#073642",
             "muted": "#586e75", "danger": "#dc322f", "success": "#859900", "warning": "#b58900",
         },
+        "kvantum_theme": "catppuccin-mocha-sapphire",
+        "plasma_theme": "default",
+        "cursor_theme": "catppuccin-macchiato-sapphire-cursors",
+        "icon_theme": "Papirus-Dark",
+        "gtk_theme": "Adwaita-dark",
         "mood_tags": ["low-contrast", "warm", "readable"],
     },
     "doom-knight": {
@@ -2699,10 +2713,13 @@ PRESETS = {
             "secondary": "#7b2d8b", "accent": "#e8d5a3", "surface": "#1a1625",
             "muted": "#4a3f5c", "danger": "#8b1a1a", "success": "#4a7c59", "warning": "#c9a227",
         },
-        "mood_tags": ["dark", "gothic", "gold", "dragonfable"],
+        # Primary is gold; catppuccin-mocha-yellow is the closest Kvantum accent.
+        "kvantum_theme": "catppuccin-mocha-yellow",
+        "plasma_theme": "default",
         "cursor_theme": "catppuccin-macchiato-yellow-cursors",
         "icon_theme": "Papirus-Dark",
         "gtk_theme": "Adwaita-dark",
+        "mood_tags": ["dark", "gothic", "gold", "dragonfable"],
     },
     "void-dragon": {
         "name": "void-dragon",
@@ -2723,8 +2740,11 @@ PRESETS = {
         # catppuccin-mocha-teal (balanced), catppuccin-mocha-sky (brighter),
         # catppuccin-mocha-sapphire (deeper blue).
         "kvantum_theme": "catppuccin-mocha-teal",
+        "plasma_theme": "default",
         # Suggested cursor: catppuccin-macchiato-teal-cursors (matches cyan primary).
         "cursor_theme": "catppuccin-macchiato-teal-cursors",
+        "icon_theme": "Papirus-Dark",
+        "gtk_theme": "Adwaita-dark",
         "mood_tags": ["void", "dragon", "cyan", "gold", "dark-fantasy"],
     },
     "shiva-temple": {
@@ -2736,7 +2756,9 @@ PRESETS = {
             "muted": "#3a3040", "danger": "#b81830", "success": "#387048", "warning": "#c89020",
         },
         "kvantum_theme": "catppuccin-mocha-mauve",
+        "plasma_theme": "default",
         "cursor_theme": "catppuccin-macchiato-mauve-cursors",
+        "icon_theme": "Papirus-Dark",
         "gtk_theme": "Adwaita-dark",
         "mood_tags": ["shiva", "temple", "cosmic", "indigo", "vermillion", "dark", "sacred"],
     },
@@ -2755,8 +2777,12 @@ PRESETS = {
             "success":    "#579523",
             "warning":    "#aa301b",
         },
-        "kvantum_theme": "BreezeDark",
+        # KvDark is the canonical built-in dark Kvantum theme present on most installs.
+        # BreezeDark is a native Qt/KDE style, NOT a Kvantum theme — do not use it here.
+        "kvantum_theme": "KvDark",
+        "plasma_theme": "default",
         "cursor_theme": "default",
+        "icon_theme": "Papirus-Dark",
         "gtk_theme": "Adwaita-dark",
         "mood_tags": ["gothic", "maximalist", "blood", "wine", "fantasy", "bareblood"],
     },
@@ -2784,6 +2810,10 @@ def main():
                               help="Derive palette from --wallpaper instead of reading --design")
     apply_parser.add_argument("--name", default=None, help="Theme name override when using --extract")
     apply_parser.add_argument("--dry-run", action="store_true", help="Preview without applying")
+    apply_parser.add_argument("--only", default=None,
+                              help="Restrict to this app key or element category (e.g. 'kitty', 'terminal')")
+    apply_parser.add_argument("--app", default=None,
+                              help="Specific sub-app to materialize (e.g. 'kitty' within 'terminal')")
 
     preset_parser = subparsers.add_parser("preset", help="Apply a named preset")
     preset_parser.add_argument("name", choices=list(PRESETS.keys()), help="Preset name")
@@ -2885,7 +2915,13 @@ def main():
                 sys.exit(2)
             with open(args.design, "r", encoding="utf-8") as f:
                 design = json.load(f)
-        manifest = materialize(design, wallpaper=args.wallpaper, dry_run=args.dry_run)
+        # --app / --only: restrict materialization to a specific app key
+        only_app = args.app or args.only  # --app takes precedence
+        only_apps = None
+        if only_app and only_app in APP_MATERIALIZERS:
+            all_detected = discover_apps()
+            only_apps = {k: v for k, v in all_detected.items() if k == only_app}
+        manifest = materialize(design, apps=only_apps, wallpaper=args.wallpaper, dry_run=args.dry_run)
         print(json.dumps(manifest, indent=2, default=str))
         return
 
@@ -2930,7 +2966,7 @@ def main():
                     print(f"         from    {val}  ({'EXISTS' if exists else 'MISSING — would delete dest'})")
 
             # --- Injection removals ---
-            if action in ("inject_include", "inject_theme") and change.get("injected"):
+            if action in ("inject_include", "inject_theme", "inject_import") and change.get("injected"):
                 print(f"  [{app}] REMOVE injected block from {change.get('path')}")
                 print(f"         marker: {change.get('marker')}")
 

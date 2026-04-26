@@ -15,8 +15,8 @@ Four layers of protection, from external long-term to session-level.
 
 ### Layer 0 — GitHub dotfiles (external)
 
-Your full home directory config backed up to a private GitHub repo:
-`~/.dotfiles` → `git@github.com:H-Ali13381/home-pc-backup.git`
+Your full home directory config backed up to a private GitHub repo.
+Set yours up once and push before any major ricing session.
 
 This is your off-machine, long-term backup. Use it to:
 - Restore on a new machine
@@ -27,7 +27,7 @@ Setup (one-time):
 ```bash
 git init --bare $HOME/.dotfiles
 alias dotfiles='git --git-dir=$HOME/.dotfiles --work-tree=$HOME'
-dotfiles remote add origin git@github.com:H-Ali13381/home-pc-backup.git
+dotfiles remote add origin git@github.com:YOUR_USERNAME/YOUR_DOTFILES_REPO.git
 # Add .gitignore, then add files you want to track
 dotfiles add ~/.bashrc ~/.config/kdeglobals ...
 dotfiles commit -m "init: dotfiles baseline"
@@ -70,8 +70,8 @@ The `undo` command:
 
 The `desktop_state_audit.py` script captures the COMPLETE desktop state. It is READ-ONLY
 and writes:
-- JSON manifest: `~/.cache/hermes-ricer/baselines/<timestamp>_baseline.json`
-- Config backup dir: `~/.cache/hermes-ricer/baselines/<timestamp>_files/`
+- JSON manifest: `~/.cache/linux-ricing/baselines/<timestamp>_baseline.json`
+- Config backup dir: `~/.cache/linux-ricing/baselines/<timestamp>_files/`
 
 This baseline includes wallpaper path, panel/widget topology, all config files,
 and every themable setting. Use it to manually restore anything the ricer undo misses.
@@ -112,28 +112,28 @@ Run this sequence before trusting ricer on a daily driver:
 
 Use the session script for all production ricing. It enforces the safety protocol automatically.
 
-    ~/.hermes/skills/creative/hermes-ricer/scripts/deterministic_ricing_session.py
+    ~/.hermes/skills/creative/linux-ricing/scripts/deterministic_ricing_session.py
 
 ### Quick Reference
 
     # Dry-run a preset (no changes)
-    python3 ~/.hermes/skills/creative/hermes-ricer/scripts/deterministic_ricing_session.py \
+    python3 ~/.hermes/skills/creative/linux-ricing/scripts/deterministic_ricing_session.py \
         --preset <name> --dry-run
 
     # Apply for real (with confirmation prompt)
-    python3 ~/.hermes/skills/creative/hermes-ricer/scripts/deterministic_ricing_session.py \
+    python3 ~/.hermes/skills/creative/linux-ricing/scripts/deterministic_ricing_session.py \
         --preset <name>
 
     # Apply with wallpaper
-    python3 ~/.hermes/skills/creative/hermes-ricer/scripts/deterministic_ricing_session.py \
+    python3 ~/.hermes/skills/creative/linux-ricing/scripts/deterministic_ricing_session.py \
         --preset <name> --wallpaper /path/to/wallpaper.png
 
     # Rollback last session
-    python3 ~/.hermes/skills/creative/hermes-ricer/scripts/deterministic_ricing_session.py \
+    python3 ~/.hermes/skills/creative/linux-ricing/scripts/deterministic_ricing_session.py \
         --rollback
 
     # Show status
-    python3 ~/.hermes/skills/creative/hermes-ricer/scripts/deterministic_ricing_session.py \
+    python3 ~/.hermes/skills/creative/linux-ricing/scripts/deterministic_ricing_session.py \
         --status
 
 ### Protocol Phases
@@ -192,6 +192,7 @@ nested structure and post-flight comparison will always show SAME.
     },
     "kvantum_theme": "catppuccin-mocha-teal",
     "cursor_theme": "catppuccin-macchiato-teal-cursors",
+    "icon_theme": "Papirus-Dark",
     "gtk_theme": "Adwaita-dark",
     "mood_tags": ["void", "dragon", "cyan", "gold", "dragonfable"],
 }
@@ -224,11 +225,11 @@ certainly not installed. Always specify an installed theme explicitly.
 
 | File | Purpose |
 |------|---------|
-| `~/.cache/hermes-ricer/current/manifest.json` | Active theme — what's currently applied |
-| `~/.cache/hermes-ricer/current/history/` | One JSON per past apply |
-| `~/.cache/hermes-ricer/backups/<ts>/` | Pre-apply file backups |
-| `~/.cache/hermes-ricer/baselines/<ts>_baseline.json` | Immutable pre-session audit |
-| `~/.cache/hermes-ricer/session_logs/` | Session script verbose logs |
+| `~/.cache/linux-ricing/current/manifest.json` | Active theme — what's currently applied |
+| `~/.cache/linux-ricing/current/history/` | One JSON per past apply |
+| `~/.cache/linux-ricing/backups/<ts>/` | Pre-apply file backups |
+| `~/.cache/linux-ricing/baselines/<ts>_baseline.json` | Immutable pre-session audit |
+| `~/.config/rice-sessions/` | Session logs (session_manager.py) |
 
 ### Manifest JSON structure
 
@@ -236,7 +237,7 @@ certainly not installed. Always specify an installed theme explicitly.
 {
   "theme_name": "void-dragon",
   "applied_at": "2026-04-22T21:00:00",
-  "backup_dir": "/home/neos/.cache/hermes-ricer/backups/20260422_210000",
+  "backup_dir": "~/.cache/linux-ricing/backups/20260422_210000",
   "previous_state": {
     "active_colorscheme": "BreezeDark",
     "look_and_feel": "org.kde.breeze.desktop",

@@ -1,17 +1,18 @@
+import os
 from pathlib import Path
 
 SKILL_DIR = Path(__file__).parent.parent
 SCRIPTS_DIR = SKILL_DIR / "scripts"
 SESSIONS_DIR = Path.home() / ".config" / "rice-sessions"
 DB_PATH = str(Path.home() / ".local" / "share" / "linux-ricing" / "sessions.sqlite")
-MODEL = "claude-sonnet-4-6"
+MODEL = os.environ.get("RICER_MODEL", "claude-sonnet-4-6")
 
 PALETTE_SLOTS = [
     "background", "foreground", "primary", "secondary",
     "accent", "surface", "muted", "danger", "success", "warning",
 ]
 DESIGN_REQUIRED_KEYS = [
-    "name", "description", "palette", "kvantum_theme",
+    "name", "description", "palette", "kvantum_theme", "plasma_theme",
     "cursor_theme", "icon_theme", "gtk_theme", "mood_tags",
 ]
 ELEMENT_QUEUE_DEFAULT = [

@@ -30,9 +30,17 @@ The user should never have to know what a `kvantum.kvconfig` file is.
 
 ---
 
-## 2. Session Workflow (8 Steps)
+## 2. Session Workflow (9 Steps)
 
 When this skill is triggered, follow these steps in order. Do not skip steps.
+
+### Non-Negotiable Gates
+- Ask before reading personal histories, memory files, or private screenshots; never expose secret values.
+- Do not install packages, apply configs, or restart visible desktop services before the user approves the visual plan.
+- Step 4 must produce a visual preview, not only prose.
+- Step 4.5 must capture the safety baseline before implementation starts.
+- Step 6 proceeds one element at a time unless the user explicitly approves an all-at-once application.
+- Every applicable quality-bar item must be logged as verified, accepted-deviation, or skipped with a reason before handoff.
 
 ### Pre-flight — Resume Detection
 **Before anything else**, check for incomplete sessions:
@@ -70,13 +78,19 @@ Before asking any questions, read the machine. Detect:
 
 **Environment:**
 - Window manager and compositor
-- Installed apps: terminal, browser, editor, games (check Steam playtime)
-- Current wallpaper (analyze visually)
+- Installed apps: terminal, browser, editor, games (only inspect playtime/history after user consent)
+- Current wallpaper (analyze visually only if visible/available without opening private files, or after user consent)
 - Existing theme: colors, fonts, GTK/icon theme
 - Current hotkeys and panel/toolbar layout
-- `USER.md` / `SOUL.md` / `MEMORY.md` if present
-- Animated wallpaper engine: `swww`, `mpvpaper`, `xwinwrap`, `komorebi`, `waypaper`, KDE built-in, Wallpaper Engine via Steam/Wine
-- `FAL_KEY` set in Hermes? (needed for wallpaper generation)
+- `USER.md` / `SOUL.md` / `MEMORY.md` only after asking permission; these may contain private context
+- Animated wallpaper engine: `awww` (swww v0.12+ rename — `swww` is gone from Arch repos), `mpvpaper`, `xwinwrap`, `komorebi`, `waypaper`, KDE built-in, Wallpaper Engine via Steam/Wine
+- `FAL_KEY` set in Hermes? (presence only; never print, copy, or expose the value)
+
+**Privacy boundaries:**
+- The silent audit may read non-sensitive system facts (WM/DE, monitors, GPU, installed theming tools, current config paths).
+- Ask before inspecting personal history or memory files: Steam/playtime, browser history, `USER.md`, `SOUL.md`, `MEMORY.md`, screenshots containing personal content, or any private notes.
+- Secrets are never read aloud or logged. Report only `set` / `not set` for keys such as `FAL_KEY`.
+- If consent is declined, continue with generic aesthetic questions rather than mining personal signals.
 
 **Device signals feed design decisions:**
 
@@ -117,11 +131,12 @@ Make guesses from the audit and present them as leading questions:
 **Stance framing:** Use the Design Stance Model (see §1 + `dev/DESIGN_PHILOSOPHY.md`) to reflect the user's preferences back at them — not as a menu, as a hypothesis:
 > *"From what you've described, it sounds like somewhere between Ghost and Blade — legible and a little adversarial. Does that track?"*
 
-**Creative tools — use all of them:**
-- Spin up subagents at high temperature for wild, unexpected ideas
-- `mcp_image_generate` to show reference images, not just describe them
-- Web search for visual references (games, films, art movements)
-- Mine recurring obsessions from audit (games, animals, aesthetics)
+**Creative tools — use what is available:**
+- If subagents are available, spin them up at high temperature for wild, unexpected ideas
+- If image generation is available, use it to show reference images, not just describe them
+- If web search is available, gather visual references (games, films, art movements)
+- If consented personal signals are available, mine recurring obsessions from the audit (games, animals, aesthetics)
+- If these tools are unavailable, substitute hand-built CSS/SVG mockups, palette boards, local references, and a stronger written rationale
 
 Chaos is good here. More ideas is better. Nothing is eliminated yet.
 
@@ -169,8 +184,8 @@ If image generation is unavailable or produces unusable output, build a CSS/SVG 
 **Verification before approval:**
 1. Save all preview assets in the session dir.
 2. Start a local preview server or provide direct file paths.
-3. Open/render the page with browser/vision or an equivalent check.
-4. Confirm images are not broken and the mockup shows the planned UI elements.
+3. Open/render the page with browser/vision if available; otherwise use an equivalent check such as static HTML validation, direct file existence checks for assets, CSS/SVG inspection, or asking the user to open the path and confirm.
+4. Confirm images are not broken and the mockup shows the planned UI elements; if this cannot be machine-verified, record the fallback verification method.
 5. Tell the user the exact URL/path to open.
 
 → *Not right?* Go back to **Step 2** (not Step 3 — re-explore, don't just prune)
@@ -190,11 +205,13 @@ Save the preview page and assets to the session dir.
 ```bash
 python3 ~/.hermes/skills/creative/linux-ricing/scripts/desktop_state_audit.py
 ```
-Inform the user: *"Rollback point set at `~/.cache/linux-ricing/baselines/<timestamp>/`. You can return to this state at any time with `ricer undo`."*
+Inform the user: *"Safety baseline captured as `~/.cache/linux-ricing/baselines/<timestamp>_baseline.json` with files in `~/.cache/linux-ricing/baselines/<timestamp>_files/`. `ricer undo` restores changes made by the ricer apply/preset manifest; this baseline is an immutable manual recovery snapshot."*
 
 ```bash
 python3 ~/.hermes/skills/creative/linux-ricing/scripts/session_manager.py append-step 4.5 \
-  "baseline=~/.cache/linux-ricing/baselines/<timestamp>"
+  "baseline_manifest=~/.cache/linux-ricing/baselines/<timestamp>_baseline.json" \
+  "baseline_files=~/.cache/linux-ricing/baselines/<timestamp>_files" \
+  "undo_scope=ricer manifest only"
 ```
 
 ### Step 5 — Install
@@ -207,6 +224,8 @@ python3 ~/.hermes/skills/creative/linux-ricing/scripts/session_manager.py append
 
 ### Step 6 — Implement
 Run `ricer preset <name> --dry-run` (or `ricer apply --design <file> --dry-run`) first — preview all changes without writing anything. Show the user the dry-run output.
+
+**Important tooling boundary:** the public `ricer` CLI currently applies a full detected stack when run without `--dry-run`. Treat the full dry-run as a change inventory, not permission to apply everything at once. Unless a component-targeted CLI has been added, implement Step 6 manually or via the relevant materializer/template for exactly one element at a time, then verify and log that element before moving on. Do not run full `ricer preset <name>` or full `ricer apply --design <file>` after approval unless the user explicitly approves an all-at-once application and accepts the reduced per-element gate.
 
 #### Preview-as-Canvas Implementation Contract (mandatory gate)
 
@@ -223,7 +242,7 @@ Before touching any config, treat the Step 4 visual artifacts as the **source of
 3. **One element at a time.** For each element, in this order:
    1. **Element spec** — write a short spec (4–10 lines) before editing any file: target file(s), exact colors / fonts / radii / spacing pulled from the preview, behavior (auto-hide, blur, opacity), and what "matches the preview" looks like in concrete terms. Save inline in session.md via `append-item` so the spec is auditable. Element specs are the smallest unit of work — never edit before one exists.
    2. **Apply** — materialize via `ricer` or the relevant materializer (see §4, §9).
-   3. **Verify visually** — capture or render the live element and compare to the preview asset. Use a screenshot + vision check, a side-by-side diff, or `kscreen-doctor`/`hyprctl` introspection where the element is non-visual (logical geometry, scale).
+   3. **Verify visually** — capture or render the live element and compare to the preview asset. Use a screenshot + vision check when available, a side-by-side diff, user-confirmed screenshot, static render, or `kscreen-doctor`/`hyprctl` introspection where the element is non-visual (logical geometry, scale). Record which verification method was used.
    4. **Score** — rate the live element against the preview using the 5-category scorecard below. Each category is 0–2 (0 = miss, 1 = partial, 2 = match); report all five plus the total /10:
       - **Palette** — color match, contrast, accent placement
       - **Shape** — geometry, layout, alignment, radii, chrome silhouette
@@ -248,6 +267,8 @@ Never batch multiple elements into one unverified step.
 
 `session_manager.py` `append-item` only takes free-form text (no key=value parsing). Encode the spec, score, and verdict inside the text itself. After each verified element:
 
+**Tooling limitation:** `session_manager.py` records this checklist as plain Markdown and does not mechanically validate scores or terminal states. The quality bar is a required agent protocol, not an automated guarantee. Before closing Step 6, manually re-read `session.md` and confirm every applicable checklist item has exactly one terminal state and score evidence.
+
 ```bash
 # Element spec (write before editing files)
 python3 ~/.hermes/skills/creative/linux-ricing/scripts/session_manager.py append-item \
@@ -266,7 +287,7 @@ python3 ~/.hermes/skills/creative/linux-ricing/scripts/session_manager.py append
   "<element>: SKIP — <reason: not in preview / hardware unsupported / user descoped>"
 ```
 
-When all elements are done, close the step:
+When all elements are done and the manual checklist audit passes, close the step:
 ```bash
 python3 ~/.hermes/skills/creative/linux-ricing/scripts/session_manager.py append-step 6
 ```
@@ -349,9 +370,9 @@ When building a rice from scratch or applying a theme:
 3. **Select or generate design system** — preset name, text prompt, or image extraction
 4. **Install missing packages** — adapt package names for detected package manager (see §10)
 5. **Dry-run** — `ricer preset <name> --dry-run` to preview all changes
-6. **Apply** — materialize configs for all detected targets (terminal, bar, launcher, notifications, WM borders, GTK, wallpaper, lock screen, fastfetch)
-7. **Verify** — visual check of each layer; `ricer status` for summary
-8. **Iterate** — one component at a time with user confirmation between steps
+6. **Apply one element at a time** — use targeted materializers/templates or manual edits for exactly one target (terminal, bar, launcher, notifications, WM borders, GTK, wallpaper, lock screen, fastfetch)
+7. **Verify** — visual check of that layer; `ricer status` for summary where applicable
+8. **Iterate** — repeat apply/verify/log for the next component with user confirmation between steps
 9. **Confirm rollback** — `ricer simulate-undo` to verify restore plan
 
 Always iterate one component at a time with user confirmation between each step.
@@ -382,7 +403,7 @@ command -v xbps-install && echo void
 |---------|----------|-----------|
 | **KDE Plasma** (plasmashell running) | `KDE/` | plasma-apply-colorscheme, Kvantum, kwriteconfig6, qdbus6 |
 | **Hyprland** (hyprctl on PATH) | `Hyprland/` | hyprctl, waybar, rofi, dunst, awww, hyprlock |
-| **Sway / i3 / bspwm** | `shared/` + X11 stack | polybar/waybar, rofi, picom, feh |
+| **Sway / i3 / bspwm** | `shared/` app docs only | Partial/experimental: app theming may work, but full WM rice is not documented |
 
 ### Cross-environment rules
 - **Dunst conflicts with KDE's notification server** — write dunst config but don't start the daemon when plasmashell is active
@@ -397,6 +418,7 @@ command -v xbps-install && echo void
 ~/.hermes/skills/creative/linux-ricing/
 ├── SKILL.md                  ← you are here (entry point)
 ├── QUICKSTART.md             ← zero-to-themed-desktop in 5 minutes
+├── manifest.json             ← skill manifest: entry point, coverage, requirements
 ├── shared/                   ← cross-environment docs & app theming
 │   ├── design-system.md      ← 10-key palette schema, ANSI mapping, color derivation
 │   ├── palette-extraction.md ← image → palette (4 vision passes + Pillow algorithm)
@@ -404,11 +426,16 @@ command -v xbps-install && echo void
 │   ├── widgets.md             ← EWW setup, AI→widget pipeline, image slicing, hover patterns
 │   ├── rollback.md           ← 4-layer backup architecture, session protocol, presets
 │   ├── gtk.md                ← GTK 3/4 theming (works under KDE & Hyprland)
-│   ├── terminal.md           ← kitty, alacritty color mapping & config
+│   ├── terminal.md           ← kitty, alacritty, wezterm, foot color mapping & config
 │   ├── shell-prompt.md       ← starship, powerlevel10k, fzf theming
 │   ├── waybar.md             ← waybar config, CSS, @import injection
 │   ├── rofi.md               ← rofi rasi themes, power menu script
 │   ├── dunst.md              ← dunst INI config, DBus conflict handling
+│   ├── mako.md               ← mako INI config, urgency sections, reload
+│   ├── swaync.md             ← SwayNC CSS, JSON config, mako conflict
+│   ├── polybar.md            ← polybar color fragment injection
+│   ├── wofi.md               ← wofi CSS selectors, GTK theme interaction
+│   ├── picom.md              ← picom shadow/opacity/blur (X11 only)
 │   ├── templates.md          ← all Jinja2 template dirs documented
 │   ├── catalog-capture.md    ← screenshot catalog for theme comparison
 │   ├── hermes-skin.md        ← sync Hermes agent CLI theme with desktop palette
@@ -422,8 +449,8 @@ command -v xbps-install && echo void
 │   ├── cursor.md             ← cursor theme install & activation
 │   ├── splash-screen.md      ← KDE splash customization
 │   ├── konsole.md            ← Konsole colorscheme format
-│   └── wallpaper.md          ← plasma-apply-wallpaperimage
-│   ├── widgets.md            ← EWW on KDE, Plasmoid alternative
+│   ├── wallpaper.md          ← plasma-apply-wallpaperimage
+│   └── widgets.md            ← EWW on KDE, Plasmoid alternative
 ├── Hyprland/                 ← Hyprland-specific docs
 │   ├── setup.md              ← full rice from scratch on Arch
 │   ├── borders-animations.md ← border gradients, gaps, animation curves
@@ -433,7 +460,7 @@ command -v xbps-install && echo void
 │   ├── waybar.md             ← Hyprland-specific: workspace modules, autostart
 │   ├── rofi.md               ← Hyprland-specific: keybindings
 │   ├── dunst.md              ← Hyprland-specific: autostart, plasmashell conflict
-│   ├── widgets.md            ← EWW on Hyprland: layer rules, workspace integration
+│   └── widgets.md            ← EWW on Hyprland: layer rules, workspace integration
 ├── scripts/
 │   ├── ricer.py              ← main Python driver (CLI)
 │   ├── palette_extractor.py  ← Pillow-based image → palette
@@ -446,11 +473,38 @@ command -v xbps-install && echo void
 ├── templates/                ← Jinja2 config templates (see shared/templates.md)
 │   └── kitty/ waybar/ rofi/ dunst/ gtk/ alacritty/ hyprland/
 │       kde/ polybar/ wofi/ mako/ swaync/ picom/
+├── examples/                 ← sample design_system YAML files for reference & testing
+│   └── dragonfable.yaml      ← example (11 built-in presets live in ricer.py)
 ├── assets/
 │   └── catalog/              ← captured theme comparison screenshots
-├── tests/                    ← test suite
+├── references/               ← internal architecture notes (not end-user docs)
+│   └── color-extractor-architecture.md
+├── tests/                    ← pytest suite (palette extractor, bug reproducers, capture)
+├── workflow/                 ← LangGraph StateGraph orchestration layer
+│   ├── run.py                ← entrypoint: python workflow/run.py
+│   ├── graph.py              ← StateGraph definition, SQLite checkpointing
+│   ├── state.py              ← RiceSessionState TypedDict
+│   ├── nodes/                ← one module per step (audit, explore, refine, …, handoff)
+│   ├── verifiers/            ← conditional edge routing (route_after_refine, etc.)
+│   └── requirements.txt      ← langgraph, langchain-anthropic, anthropic
+├── skills/                   ← nine focused sub-skills (each has its own SKILL.md)
+│   ├── hermes-ricer/         ← main orchestrator sub-skill
+│   ├── hermes-cli-skin/      ← Hermes terminal appearance
+│   ├── hyprland-rice-from-scratch/
+│   ├── ricer-apps/           ← per-app theming
+│   ├── ricer-catalog-capture/
+│   ├── ricer-gtk/
+│   ├── ricer-kde/
+│   ├── ricer-rollback/
+│   └── ricer-wallpaper/
 └── dev/                      ← internal development notes
-    └── TODO.md
+    ├── DESIGN_PHILOSOPHY.md  ← full design theory: 7 stances, game UI, session state spec
+    ├── TODO.md
+    ├── HANDOFF_<date>.md     ← live-session handoff snapshots
+    ├── research_corporate_design.md
+    ├── research_counterculture_design.md
+    ├── research_game_ui.md
+    └── research_usability.md
 ```
 
 ### Runtime directories
@@ -461,8 +515,9 @@ command -v xbps-install && echo void
 | Active manifest | `~/.cache/linux-ricing/current/manifest.json` |
 | Manifest history | `~/.cache/linux-ricing/current/history/` |
 | Backups | `~/.cache/linux-ricing/backups/<timestamp>/` |
-| Baselines | `~/.cache/linux-ricing/baselines/<timestamp>_baseline.json` |
-| Session logs | `~/.cache/linux-ricing/session_logs/` |
+| Baselines | `~/.cache/linux-ricing/baselines/<timestamp>_baseline.json` + `<timestamp>_files/` |
+| Session dirs | `~/.config/rice-sessions/<theme-slug>-<timestamp>/` |
+| Session index | `~/.config/rice-sessions/.current` → symlink to active session dir |
 | CLI symlink | `~/.local/bin/ricer` → `scripts/ricer.py` |
 
 ---
@@ -528,8 +583,10 @@ Every preset **must** include: `name`, `description`, `palette` (all 10 keys), `
 | `dracula` | Dark theme with vibrant colors |
 | `tokyo-night` | Dark Tokyo-inspired blue/purple |
 | `rose-pine` | Rose Piné — warm dawn theme |
+| `solarized-dark` | Precision colors for machines and people |
 | `doom-knight` | DragonFable DoomKnight — deep purples, battered gold, dark crimson |
 | `void-dragon` | Void dragon knight — cyan soul blade, gold filigree, void sky |
+| `shiva-temple` | Lord Shiva's haunted temple — cosmic void, third-eye indigo, vermillion, temple gold |
 | `bareblood` | Gothic maximalist — blood reds, wine blacks, muted rose-grey |
 
 Apply: `ricer preset <name>` — Preview: `ricer preset <name> --dry-run`
@@ -566,10 +623,12 @@ Installs jinja2 + pillow (non-fatal on pip failure), chmod +x ricer.py, creates 
 
 ### Arch Linux (primary target)
 
+Show package lists first and wait for explicit user approval before running any install command. Do not add `--noconfirm`; the package manager prompt is part of the safety review.
+
 **Core Hyprland stack:**
 ```bash
-sudo pacman -S --noconfirm hyprland xdg-desktop-portal-hyprland uwsm \
-  waybar rofi dunst kitty awww hyprlock hypridle \
+sudo pacman -S --needed hyprland xdg-desktop-portal-hyprland uwsm \
+  waybar rofi-wayland dunst kitty awww hyprlock hypridle \
   papirus-icon-theme ttf-jetbrains-mono-nerd otf-firamono-nerd \
   fastfetch wl-clipboard grim slurp brightnessctl playerctl \
   polkit-kde-agent qt5-wayland qt6-wayland nwg-look
@@ -582,7 +641,7 @@ yay -S kvantum-theme-catppuccin-git    # AUR — Kvantum accent packs
 ```
 
 ### Package name gotchas
-- `rofi-wayland` does NOT exist in Arch repos — use `rofi` (v2.0+ has native Wayland)
+- Rofi packaging changes across distros. On current Arch, prefer `rofi-wayland` for Wayland sessions; if unavailable, use the distro's `rofi` package and verify Wayland support with `rofi -v` / package metadata.
 - `swww` does NOT exist in Arch repos — use `awww` (swww v0.12+ rename)
 - `hyprpaper` v0.8.3 silently fails — use `awww` instead
 - `org.kde.video` wallpaper plugin does NOT work on KDE Plasma 6 — the package is absent even if the plugin ID appears in qdbus output. Plasmashell logs "Error loading the wallpaper, no valid package loaded". Use AUR package `plasma6-wallpapers-smart-video-wallpaper-reborn` (`yay -S plasma6-wallpapers-smart-video-wallpaper-reborn`). Plugin ID: `luisbocanegra.smart.video.wallpaper.reborn`. Config key for video file is `VideoUrls` (NOT `VideoPath`). Requires `mpv` as backend. CRITICAL: plasmashell restart (e.g. after applying a colorscheme) resets the wallpaper — re-apply via qdbus after restart.
@@ -632,7 +691,7 @@ Skipping items silently is the #1 failure mode of this skill. The agent tends to
 - [ ] **Custom widgets** (EWW) — AI-designed UI elements with image textures
 - [ ] **Hermes CLI skin** — agent's terminal appearance matches the palette
 
-Minimum viable rice: 6 verified (each ≥8/10 total on the five-category scorecard). Total environment: 10+.
+Minimum viable rice: at least 6 implemented items verified at ≥8/10 on the five-category scorecard. The remaining applicable checklist items still need terminal log states (`✓ verified`, `✓ accepted-deviation`, or `SKIP <reason>`) before Step 6 is considered complete. Total environment: 10+ verified items.
 
 **Common items skipped and why they shouldn't be:**
 - Fastfetch: takes <5 minutes, high visual impact when opening terminal
@@ -668,7 +727,12 @@ No live-reload for GTK — apps must be closed and reopened to pick up settings.
 When Hyprland launches on a KDE system, plasmashell may start in the background, squatting on the `org.freedesktop.Notifications` D-Bus name (blocking dunst) and causing monitor DPMS issues. Fix: `exec-once = pkill plasmashell; dunst`.
 
 ### awww Daemon Must Run First
-`awww img` panics if awww-daemon isn't running. Always `pgrep awww-daemon || awww-daemon &; sleep 2` before setting wallpaper.
+`awww img` panics if awww-daemon isn't running. Always check and start it before setting a wallpaper:
+```bash
+pgrep awww-daemon || (awww-daemon &)
+sleep 2
+```
+Note: `pgrep awww-daemon || awww-daemon &` is parsed as `(pgrep ... || awww-daemon) &` by bash (& has lower precedence than ||), backgrounding the whole expression. The parenthesised form makes the intent explicit.
 
 ### KDE Video Wallpaper — org.kde.video is Fake
 `org.kde.video` appears in `/usr/share/plasma/wallpapers/` enum and can be set via qdbus6 without error, but no actual wallpaper package exists for it. Plasmashell logs "Error loading the wallpaper, no valid package loaded." **Use `plasma6-wallpapers-smart-video-wallpaper-reborn` (AUR)** instead — plugin ID `luisbocanegra.smart.video.wallpaper.reborn`. Requires `mpv` as backend.
@@ -848,7 +912,7 @@ Coverage key: **✅ full doc** · **⚠ partial** (templates/brief mention) · *
 |-------|----------|-------|
 | **KDE Plasma** | ✅ full | `KDE/setup.md` + all KDE subdocs |
 | **Hyprland** | ✅ full | `Hyprland/setup.md` + all Hyprland subdocs |
-| **Sway / i3 / bspwm** | 🔲 out of scope | X11/Sway-specific config not documented. GTK theming (`shared/gtk.md`) works across all WMs; app theming docs are WM-agnostic. |
+| **Sway / i3 / bspwm** | ⚠ partial | Full WM rice is not documented. GTK/app theming docs are WM-agnostic; use environment-specific WM config at your own discretion. |
 | **GNOME** | 🔲 out of scope | gsettings-based theming not documented. GTK theming (`shared/gtk.md`) applies. |
 
 ### Applications
@@ -881,7 +945,7 @@ Coverage key: **✅ full doc** · **⚠ partial** (templates/brief mention) · *
 | **Hermes CLI skin** | ✅ full | `shared/hermes-skin.md` |
 | **feh / nitrogen** | ⚠ partial | Brief mention in wallpaper docs — X11-only wallpaper setters |
 | **ironbar** | 🔲 out of scope | Rust bar, niche Wayland adoption — use waybar |
-| **fuzzel** | 🔲 out of scope | Wayland launcher — use rofi-wayland |
+| **fuzzel** | 🔲 out of scope | Wayland launcher — use rofi/rofi-wayland for this skill |
 | **i3lock-color** | 🔲 out of scope | X11 lock screen — use hyprlock on Wayland |
 | **conky** | 🔲 out of scope | X11 desktop overlay — broken on Wayland |
 | **cava** | 🔲 out of scope | Terminal audio visualizer — cosmetic extra, minimal theming surface |

@@ -62,7 +62,10 @@ def install_node(state: RiceSessionState) -> dict:
         print(f"  [WARN] Some packages failed: {errors}")
 
     print("[Step 5] Installation complete.\n")
-    return {"packages": packages, "current_step": 5, "errors": errors}
+    result: dict = {"packages": packages, "current_step": 5}
+    if errors:
+        result["errors"] = errors
+    return result
 
 
 def _resolve_packages(design: dict, profile: dict) -> list[str]:

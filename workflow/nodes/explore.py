@@ -70,7 +70,7 @@ def explore_node(state: RiceSessionState) -> dict:
         clean_content = response.content.split(DIRECTION_SENTINEL)[0].strip()
         print(f"\n[Explore] Direction confirmed: {direction}\n")
         return {
-            "messages": messages[-(len(messages) - (0 if messages else 0)):] + [
+            "messages": messages + [
                 AIMessage(content=clean_content)
             ],
             "design": direction,

@@ -4,7 +4,8 @@ Generate a KDE Plasma panel-background.svg from a parchment palette.
 Palette extracted from the style-transfer mockup.
 Output: void-dragon Plasma theme panel-background.svg
 """
-import os, base64
+import base64
+import os
 from PIL import Image
 
 ASSETS = os.path.dirname(os.path.abspath(__file__))

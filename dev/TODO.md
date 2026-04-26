@@ -39,7 +39,7 @@ End-to-end test on KDE Plasma 6 / Wayland: `ricer apply --wallpaper X --extract`
 - Contrast: `materialize_kvantum:1402-1405` defaults to `"kvantum-dark"` and `materialize_gtk:2046-2048` defaults to `Adwaita-dark/Papirus-Dark/default` — inconsistent contract.
 - Result: on `ricer apply --extract`, Plasma panel chrome and cursor stay on whatever was previously set — no visible update for those layers. The skill's 10-layer promise silently collapses to 8.
 - **Fix (pick one):**
-  - (a) **Extractor emits defaults**: `palette_extractor.extract_palette` appends `plasma_theme: "default"`, `cursor_theme: "breeze_cursors"`, `icon_theme: "Papirus-Dark"/"Papirus"` (by YIQ of bg), `gtk_theme: "Adwaita-dark"/"Adwaita"`, `kvantum_theme: "kvantum-dark"/"kvantum-light"`. Keeps materializer contracts strict.
+  - (a) **Extractor emits defaults**: `palette_extractor.extract_palette` appends `plasma_theme: "default"`, `cursor_theme: "breeze_cursors"`, `icon_theme: "Papirus-Dark"/"Papirus"` (by YIQ of bg), `gtk_theme: "Adwaita-dark"/"Adwaita"`, `kvantum_theme: "kvantum-dark"/"kvantum"`. Keeps materializer contracts strict.
   - (b) **Materializers default in-place**: `materialize_plasma_theme` and `materialize_cursor` pick sensible defaults from palette when keys are missing (mirror `materialize_gtk` / `materialize_kvantum`). Keeps design JSON minimal.
   - (a) is cleaner — the design_system JSON is the canonical description, and it should be complete.
 - **Fix applied:** `palette_extractor._default_theme_names()` now emits `kvantum_theme`, `cursor_theme`, `icon_theme`, `gtk_theme`, `plasma_theme` defaults based on YIQ luma of `palette["background"]`. Reproducer `test_p1_extract_apply_covers_plasma_theme_and_cursor` goes green; manifests now contain entries for plasma_theme + cursor materializers.
@@ -78,70 +78,30 @@ Goal: close the gap between documented capability ("Image/Wallpaper → Extract 
 
 ### Findings from review
 
-- [ ] `ricer-wallpaper/SKILL.md:394` — `danger <- rotate_hue(Vibrant, 0)` is a no-op (0° rotation = identity). Rewrite as "find vibrant swatch whose hue is nearest 0° (red), within ±40°; else synthesize".
-- [ ] No fallback cascade documented for images missing a Vibrant / LightMuted / etc. swatch (dark scenic, monochrome). Slots end up unassigned.
-- [ ] No palette-level collision detection. `primary==warning` is fixed in materializers (`ricer.py:599, 695`) but `secondary==muted`, `background==surface`, etc. are undetected.
-- [ ] `setup.sh:28-31` installs Pillow; SKILL.md recommends colorthief. Recipe ↔ declared deps mismatch.
-- [ ] No alpha handling — PNGs with transparency would bias quantization toward Pillow's default black fill.
-- [ ] Determinism guarantee undocumented (tie-breaking for equal-frequency swatches unspecified).
+- [x] `ricer-wallpaper/SKILL.md:394` — `danger <- rotate_hue(Vibrant, 0)` no-op: fixed. Real extractor finds nearest-hue swatch.
+- [x] No fallback cascade: implemented in `palette_extractor.py` for all 6 swatch classes.
+- [x] No palette-level collision detection: `validate_palette()` enforces uniqueness + contrast.
+- [x] `setup.sh` Pillow vs colorthief mismatch: resolved — Pillow-only implementation, no colorthief.
+- [x] No alpha handling: `load_and_normalize()` alpha-composites over `#808080` before quantization.
+- [x] Determinism guarantee: swatches sorted by `(-frequency, hex_string)` — documented in module.
 
 ### What to build
 
-- [ ] Create `scripts/palette_extractor.py` (~250 lines, Pillow-only, no new deps):
-  - [ ] `load_and_normalize(path)` — `Image.open().convert("RGBA")` → alpha-composite over neutral `#808080` → convert to RGB → thumbnail to 400×400 max.
-  - [ ] `quantize_swatches(img, n=12)` — `img.quantize(colors=12, method=Image.Quantize.MAXCOVERAGE, kmeans=0)`, extract palette + frequencies. Fall back to MEDIANCUT if MAXCOVERAGE raises.
-  - [ ] `classify(rgb) -> str` — HLS-based 6-way classifier (Vibrant / LightVibrant / DarkVibrant / Muted / LightMuted / DarkMuted) using thresholds `s>0.4`, `l∈(0.25, 0.75)` as in the SKILL.md.
-  - [ ] `assign_slots(classified)` — perceptual-role mapping with fallback cascade:
-
-    | Slot | Primary | Fallback cascade |
-    |---|---|---|
-    | background | DarkMuted (darkest) | DarkVibrant darkened → `#0a0a0a` |
-    | foreground | LightMuted (lightest) | LightVibrant → yiq_text_color(background) |
-    | primary | Vibrant with highest chroma | LightVibrant → DarkVibrant → desaturated foreground |
-    | secondary | DarkVibrant | Vibrant darkened 40% → primary darkened |
-    | accent | LightVibrant, hue ≠ primary | `rotate_hue(primary, 30°)` |
-    | surface | Muted | `adjust_lightness(background, 1.15)` |
-    | muted | `adjust_lightness(DarkMuted, 1.3)` | `adjust_lightness(background, 1.08)` |
-    | danger | vibrant with hue nearest 0° (red), within ±40° | synth `#cc3344` at primary's lightness |
-    | success | vibrant with hue nearest 120° (green), within ±40° | synth `#3a9b5c` |
-    | warning | vibrant with hue nearest 45° (amber), within ±35° | synth `#d4a012` |
-
-  - [ ] `validate_palette(p)` — (a) contrast: `abs(yiq(bg) − yiq(fg)) ≥ 128`, else lighten/darken fg until it does. (b) uniqueness: no two slots equal; perturb duplicates by `adjust_lightness ±15%` or `rotate_hue ±20°`.
-  - [ ] `infer_mood_tags(p)` — 2-3 tags from mean-saturation / mean-lightness / dominant-hue.
-  - [ ] `extract_palette(image_path, *, name=None) -> dict` — orchestrator, returns full `design_system` dict.
-  - [ ] Determinism: sort swatches by `(-frequency, hex_string)` before classification. Document.
-
-### Wire to CLI (`scripts/ricer.py`)
-
-- [ ] Add `from palette_extractor import extract_palette` near top.
-- [ ] New subcommand `ricer extract --image PATH [--out FILE] [--name NAME]` — prints design_system.json (or writes to `--out`).
-- [ ] Extend `ricer apply` with `--extract` flag: when set with `--wallpaper`, derive design_system in-memory from the wallpaper instead of loading `--design`.
-- [ ] Both commands fail with a clear error if Pillow is unavailable.
-
-### Docs alignment
-
-- [ ] Rewrite `ricer/ricer-wallpaper/SKILL.md:343-408` to describe the real implementation: point at `scripts/palette_extractor.py`, replace the `rotate_hue(Vibrant, 0)` line, add the fallback cascade table, document determinism.
-- [ ] Update `creative/linux-ricing/SKILL.md:126-137` — add `ricer extract` and `ricer apply --extract` to the CLI section.
-- [ ] `setup.sh` — no change (Pillow already installed). Keep non-fatal-on-pip-failure behavior.
+- [x] Create `scripts/palette_extractor.py` — complete: `load_and_normalize`, `quantize_swatches`, `_classify_swatch`, `assign_slots`, `validate_palette`, `infer_mood_tags`, `extract_palette`, `_default_theme_names`.
+- [x] Wire to CLI: `ricer extract --image PATH [--out FILE] [--name NAME]` — done.
+- [x] `ricer apply --extract` flag — done; derives design_system in-memory from wallpaper.
+- [x] Docs alignment: SKILL.md updated with real CLI commands.
 
 ### Tests
 
-- [ ] Create `tests/palette_extractor_test.py`:
-  - [ ] Determinism: run twice on same fixture → identical output.
-  - [ ] All 10 slots filled + valid `#rrggbb` on 3 fixtures.
-  - [ ] Contrast invariant: `yiq_text_color(bg) == '#ffffff'`; foreground passes min-contrast.
-  - [ ] Slot uniqueness: no duplicate hex values.
-  - [ ] Semantic hue: `danger` within 60° of red, `success` within 60° of green, `warning` within 60° of amber.
-- [ ] Create fixtures `tests/fixtures/`:
-  - [ ] `vibrant.png` — covers all 6 ricemood categories.
-  - [ ] `monochrome.png` — greyscale gradient (tests fallback cascade).
-  - [ ] `dark_scenic.png` — 95% dark + one bright accent cluster (tests MAXCOVERAGE vs MEDIANCUT accent capture).
+- [x] `tests/test_palette_extractor.py` — complete. Covers: determinism, 10-slot completeness, contrast, uniqueness, semantic hue, classify thresholds, dark_scenic accent capture.
+- [x] Fixtures: synthesized in-memory (no committed binaries) — vibrant, monochrome, dark_scenic.
 
 ### End-to-end verification (reversible, on KDE sandbox)
 
 ```bash
 # Unit tests
-python3 -m pytest tests/palette_extractor_test.py -v
+python3 -m pytest tests/test_palette_extractor.py -v
 
 # Extract-only — no desktop change
 ricer extract --image ~/Pictures/maplestory_bg.png
@@ -161,11 +121,11 @@ Pass criteria: tests green, extraction deterministic on rerun, apply+undo round-
 
 ### Reused utilities (already in `scripts/ricer.py`)
 
-- `hex_to_rgb_tuple`, `rgb_tuple_to_hex` — line 348-356
-- `yiq_text_color` — line 359 (contrast validation)
-- `rotate_hue` — line 372 (fallback hue derivation)
-- `adjust_lightness` — line 385 (contrast + fallback lightness)
-- `blend_hex` — line 398
+- `hex_to_rgb_tuple`, `rgb_tuple_to_hex` — line 347-356
+- `yiq_text_color` — line 358 (contrast validation)
+- `rotate_hue` — line 371 (fallback hue derivation)
+- `adjust_lightness` — line 384 (contrast + fallback lightness)
+- `simple_render` — line 401 (Jinja2-compatible fallback renderer)
 
 ### Out of scope
 
