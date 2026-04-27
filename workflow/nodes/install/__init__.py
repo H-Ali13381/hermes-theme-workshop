@@ -1,10 +1,12 @@
 """Step 5 — Show package list and install after user confirmation."""
 from __future__ import annotations
 
+import os
+
 from langgraph.types import interrupt
 
 from ...state import RiceSessionState
-from .resolver import resolve_packages, install_packages
+from .resolver import resolve_packages, install_packages, can_sudo_noninteractive
 
 
 def install_node(state: RiceSessionState) -> dict:
@@ -36,9 +38,23 @@ def install_node(state: RiceSessionState) -> dict:
         print("[Step 5] Package installation skipped.\n")
         return {"packages": packages, "current_step": 5}
 
+    # Acquire sudo password — 3-tier escalation
+    sudo_password = os.environ.get("SUDO_PASSWORD", "")          # Tier 1: env var
+
+    if not sudo_password and not can_sudo_noninteractive():       # Tier 2: cached creds
+        # Tier 3: escalate — workflow pauses, run.py prompts via getpass (masked)
+        sudo_password = interrupt({
+            "step": 5,
+            "type": "sudo_password",
+            "message": (
+                "Package installation requires sudo.\n\n"
+                "Enter your sudo password (or press Enter to attempt without):"
+            ),
+        })
+
     print(f"[Step 5] Installing {len(packages)} package(s)...", flush=True)
     errors: list[str] = []
-    install_packages(packages, errors)
+    install_packages(packages, errors, sudo_password=str(sudo_password) if sudo_password else "")
 
     if errors:
         print(f"  [WARN] Some packages failed: {errors}")

@@ -2,9 +2,7 @@
 
 ## Open Issues
 
-- **`sudo` in install step needs Hermes propagation** — `install_packages()` in `workflow/nodes/install/resolver.py` runs `sudo pacman` and `yay` as bare subprocesses. Hermes has a mechanism to propagate sudo auth requests back to the user through the chat. The install step should use that mechanism instead of running `sudo` directly, so the user gets an authentication prompt in the chat when packages need to be installed.
-
-- **KDE lock screen materializer missing** — `lock_screen:kde` is queued for KDE users (`detectors.py:137`) but `scripts/ricer.py` has no KDE lock screen entry in `APP_MATERIALIZERS`. Need to add `materialize_kde_lockscreen()` that applies a theme to kscreenlocker (via `kwriteconfig6` or a color scheme file). Register in `APP_MATERIALIZERS` at `scripts/ricer.py:2278`.
+_(none)_
 
 ---
 

@@ -133,7 +133,8 @@ class RicerCliRoutingTests(unittest.TestCase):
 
         self.assertNotEqual(result.get("error", ""), "unsupported element: lock_screen:kde")
         cmd = run.call_args.args[0]
-        self.assertIn("--only=kde", cmd)
+        self.assertIn("--only=kde_lockscreen", cmd)
+        self.assertNotIn("--only=kde", cmd)
 
 
 if __name__ == "__main__":

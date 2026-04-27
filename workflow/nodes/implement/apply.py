@@ -44,8 +44,17 @@ def apply_element(element: str, design: dict, session_dir: str) -> dict:
     return {"success": False, "error": result.stderr[:300] or result.stdout[:300]}
 
 
+# Elements where category:provider doesn't map directly to the materializer key.
+_PROVIDER_REMAPS: dict[str, str] = {
+    "lock_screen:kde": "kde_lockscreen",
+}
+
+
 def _element_to_materializer(element: str) -> str | None:
     """Translate workflow element names to ricer.py APP_MATERIALIZERS keys."""
+    if element in _PROVIDER_REMAPS:
+        return _PROVIDER_REMAPS[element]
+
     if ":" in element:
         category, provider = element.split(":", 1)
         if category in {"terminal", "bar", "launcher", "notifications", "shell_prompt",

@@ -153,9 +153,10 @@ def discover_apps() -> dict[str, Any]:
     # CRITICAL: without this block, kvantum/plasma_theme/cursor materializers are
     # never called because the APP_MATERIALIZERS loop checks `if app_name in apps`.
     if "kde" in apps:
-        apps["kvantum"] = {"installed": True}
-        apps["plasma_theme"] = {"installed": True}
-        apps["cursor"] = {"installed": True}
+        apps["kvantum"]        = {"installed": True}
+        apps["plasma_theme"]   = {"installed": True}
+        apps["cursor"]         = {"installed": True}
+        apps["kde_lockscreen"] = {"installed": True}
 
     # Hyprland sub-system — register when hyprland is the active WM.
     # hyprctl is the detection signal; no binary named "hyprland" in PATH.
@@ -1535,6 +1536,68 @@ def materialize_cursor(design: dict, backup_ts: str, dry_run: bool = False) -> l
 
 
 # ---------------------------------------------------------------------------
+# APP HANDLERS — KDE lock screen (kscreenlocker greeter)
+# ---------------------------------------------------------------------------
+
+def materialize_kde_lockscreen(design: dict, backup_ts: str, dry_run: bool = False) -> list[dict]:
+    """Set the kscreenlocker greeter LnF to match palette brightness.
+
+    The greeter inherits palette colors from kdeglobals automatically (materialize_kde
+    handles that). This materializer sets the greeter chrome style — dark vs. light mode
+    of the locker UI (input field, buttons, background tint) — via kscreenlockerrc
+    [Greeter] Theme. No daemon restart needed; kscreenlocker reads config fresh on lock.
+    """
+    palette = design["palette"]
+    kscreenlockerrc = HOME / ".config" / "kscreenlockerrc"
+    changes = []
+
+    greeter_theme = _lockscreen_lnf_for_palette(palette)
+
+    if dry_run:
+        changes.append({
+            "app": "kde_lockscreen", "action": "dry-run",
+            "greeter_theme": greeter_theme, "config_path": str(kscreenlockerrc),
+        })
+        return changes
+
+    # Snapshot previous value for undo
+    prev_theme = None
+    for tool in ["kreadconfig6", "kreadconfig5"]:
+        if cmd_exists(tool):
+            rc, out, _ = run_cmd([tool, "--file", "kscreenlockerrc",
+                                  "--group", "Greeter", "--key", "Theme"])
+            if rc == 0 and out:
+                prev_theme = out
+            break
+
+    kscreenlockerrc_backup = backup_file(kscreenlockerrc, backup_ts, "kscreenlocker/kscreenlockerrc")
+
+    kwrite = _get_kwrite()
+    if kwrite:
+        run_cmd([kwrite, "--file", "kscreenlockerrc",
+                 "--group", "Greeter", "--key", "Theme", greeter_theme])
+
+    changes.append({
+        "app": "kde_lockscreen", "action": "write",
+        "greeter_theme": greeter_theme, "config_path": str(kscreenlockerrc),
+        "backup": kscreenlockerrc_backup,
+        "previous_theme": prev_theme,
+    })
+    return changes
+
+
+def _lockscreen_lnf_for_palette(palette: dict) -> str:
+    """Return breezedark or breeze LnF ID based on palette background brightness."""
+    bg = palette.get("background", "#000000")
+    # yiq_text_color returns "#ffffff" for dark backgrounds (needs white text)
+    return (
+        "org.kde.breezedark.desktop"
+        if yiq_text_color(bg) == "#ffffff"
+        else "org.kde.breeze.desktop"
+    )
+
+
+# ---------------------------------------------------------------------------
 # WALLPAPER
 # ---------------------------------------------------------------------------
 
@@ -2362,10 +2425,11 @@ def _build_starship_toml(palette: dict, theme_name: str) -> str:
 
 APP_MATERIALIZERS = {
     # KDE stack
-    "kde": materialize_kde,
-    "kvantum": materialize_kvantum,
-    "plasma_theme": materialize_plasma_theme,
-    "cursor": materialize_cursor,
+    "kde":            materialize_kde,
+    "kvantum":        materialize_kvantum,
+    "plasma_theme":   materialize_plasma_theme,
+    "cursor":         materialize_cursor,
+    "kde_lockscreen": materialize_kde_lockscreen,
     # Terminals
     "kitty": materialize_kitty,
     "alacritty": materialize_alacritty,

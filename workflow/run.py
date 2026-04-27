@@ -122,11 +122,16 @@ def _run_loop(graph, config: dict, initial_input) -> None:
 
         # Display interrupt to user
         interrupt_val = pending[0].value
+        itype = interrupt_val.get("type", "") if isinstance(interrupt_val, dict) else ""
         _display_interrupt(interrupt_val)
 
-        # Get user response
+        # Get user response — mask input for password prompts
         try:
-            user_input = input("> ").strip()
+            if itype == "sudo_password":
+                import getpass
+                user_input = getpass.getpass("Password: ")
+            else:
+                user_input = input("> ").strip()
         except (EOFError, KeyboardInterrupt):
             print("\n\nSession paused. Resume with:")
             thread_id = config["configurable"]["thread_id"]

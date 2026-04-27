@@ -28,28 +28,60 @@ def resolve_packages(design: dict, profile: dict) -> list[str]:
     return sorted(pkgs)
 
 
-def install_packages(packages: list[str], errors: list[str]) -> None:
-    """Try pacman first, fall back to yay for AUR packages."""
+def install_packages(packages: list[str], errors: list[str], sudo_password: str = "") -> None:
+    """Install packages. Uses sudo_password if provided, else sudo -n (cached), then yay."""
     for pkg in packages:
-        try:
-            rc = subprocess.run(
-                ["sudo", "pacman", "-S", "--noconfirm", "--needed", pkg],
-                capture_output=True, text=True, timeout=300,
-            ).returncode
-        except subprocess.TimeoutExpired:
+        if not _try_install_pkg(pkg, sudo_password):
             errors.append(pkg)
-            continue
-        if rc != 0:
-            try:
-                rc2 = subprocess.run(
-                    ["yay", "-S", "--noconfirm", "--needed", pkg],
-                    capture_output=True, text=True, timeout=300,
-                ).returncode
-            except subprocess.TimeoutExpired:
-                errors.append(pkg)
-                continue
-            if rc2 != 0:
-                errors.append(pkg)
+
+
+def can_sudo_noninteractive() -> bool:
+    """Return True if sudo -n true succeeds (cached credentials in this session)."""
+    return subprocess.run(
+        ["sudo", "-n", "true"], capture_output=True, timeout=5
+    ).returncode == 0
+
+
+def _try_install_pkg(pkg: str, sudo_password: str) -> bool:
+    """Try pacman (with password or -n), then yay. Returns True if installed."""
+    if sudo_password:
+        try:
+            r = subprocess.run(
+                ["sudo", "-S", "-p", "", "-k", "pacman", "-S", "--noconfirm", "--needed", pkg],
+                input=sudo_password + "\n",
+                capture_output=True, text=True, timeout=300,
+            )
+            if r.returncode == 0:
+                return True
+        except subprocess.TimeoutExpired:
+            return False
+
+    try:
+        r = subprocess.run(
+            ["sudo", "-n", "pacman", "-S", "--noconfirm", "--needed", pkg],
+            capture_output=True, text=True, timeout=300,
+        )
+        if r.returncode == 0:
+            return True
+    except subprocess.TimeoutExpired:
+        return False
+
+    try:
+        r = subprocess.run(
+            ["yay", "-S", "--noconfirm", "--needed", pkg],
+            capture_output=True, text=True, timeout=300,
+        )
+        return r.returncode == 0
+    except subprocess.TimeoutExpired:
+        return False
+
+
+def verify_installed(packages: list[str]) -> list[str]:
+    """Return packages not yet in the local pacman database (no sudo needed)."""
+    return [
+        p for p in packages
+        if subprocess.run(["pacman", "-Q", p], capture_output=True).returncode != 0
+    ]
 
 
 def _match(value: str, table: dict[str, str], pkgs: set[str]) -> None:
