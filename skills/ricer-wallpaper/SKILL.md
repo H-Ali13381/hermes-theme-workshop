@@ -63,11 +63,16 @@ Use the `ricer extract` CLI — backed by `scripts/palette_extractor.py` (Pillow
     # Extract and write to a file
     ricer extract --image /path/to/image.png --out ~/my-theme.json --name my-theme
 
-    # Extract palette from wallpaper AND apply it in one step
-    ricer apply --wallpaper /path/to/image.png --extract
+    # Extract palette from wallpaper AND apply exactly one target
+    ricer apply --wallpaper /path/to/image.png --extract --only=kde
+    ricer apply --wallpaper /path/to/image.png --extract --only=kitty
 
-    # Dry-run: preview all changes without writing anything
-    ricer apply --wallpaper /path/to/image.png --extract --dry-run
+    # Dry-run: preview one target without writing anything
+    ricer apply --wallpaper /path/to/image.png --extract --only=kde --dry-run
+
+`ricer apply` intentionally requires `--only` or `--app`; bare extract+apply must fail closed so
+workflow runs can materialize, verify, and score one desktop element at a time. Use `ricer extract
+--image ... --out design.json` first if you need to reuse the same extracted design for many targets.
 
 The extractor pipeline: alpha-composite → thumbnail → quantize (MAXCOVERAGE, fallback MEDIANCUT) →
 classify into 6 ricemood buckets → assign 10 semantic slots with fallback cascades → validate contrast

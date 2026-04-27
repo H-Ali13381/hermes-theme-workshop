@@ -2,13 +2,11 @@
 from __future__ import annotations
 
 import json
-import re
 
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
-from langchain_anthropic import ChatAnthropic
 from langgraph.types import interrupt
 
-from ..config import MODEL, SKILL_DIR
+from ..config import get_llm, SKILL_DIR
 from ..state import RiceSessionState
 
 DIRECTION_SENTINEL = "<<DIRECTION_CONFIRMED>>"
@@ -49,9 +47,10 @@ Speak in vibes, not taxonomy. Reference films, music, games, spaces — not soft
 
 def explore_node(state: RiceSessionState) -> dict:
     """Multi-turn creative direction dialogue. Loops via graph routing until confirmed."""
-    llm = ChatAnthropic(model=MODEL, temperature=0.7)
+    llm = get_llm(0.7)
     messages = list(state.get("messages", []))
 
+    new_messages: list = []
     if not messages:
         # First turn — inject system + device context
         profile = state.get("device_profile", {})
@@ -60,6 +59,7 @@ def explore_node(state: RiceSessionState) -> dict:
             SystemMessage(content=SYSTEM_PROMPT),
             HumanMessage(content=f"Let's start a ricing session.\n\nMachine profile:\n{device_ctx}"),
         ]
+        new_messages = list(messages)  # seed messages are new on first turn
 
     # Generate response (re-executes on interrupt resume — idempotent for same messages)
     response = llm.invoke(messages)
@@ -70,9 +70,7 @@ def explore_node(state: RiceSessionState) -> dict:
         clean_content = response.content.split(DIRECTION_SENTINEL)[0].strip()
         print(f"\n[Explore] Direction confirmed: {direction}\n")
         return {
-            "messages": messages + [
-                AIMessage(content=clean_content)
-            ],
+            "messages": new_messages + [AIMessage(content=clean_content)],
             "design": direction,
             "current_step": 2,
         }
@@ -85,7 +83,7 @@ def explore_node(state: RiceSessionState) -> dict:
     })
 
     return {
-        "messages": messages + [response, HumanMessage(content=str(user_reply))],
+        "messages": new_messages + [response, HumanMessage(content=str(user_reply))],
     }
 
 
@@ -99,9 +97,9 @@ def _format_device_context(profile: dict) -> str:
         f"Installed apps: {', '.join(installed) if installed else 'standard set'}",
         f"FAL (animated wallpaper): {'available' if profile.get('fal_available') else 'not configured'}",
     ]
-    current = profile.get("current_theme", {})
-    if current:
-        lines.append(f"Current theme: {json.dumps(current)}")
+    current_wallpaper = profile.get("current_wallpaper", "")
+    if current_wallpaper:
+        lines.append(f"Current wallpaper: {current_wallpaper}")
     return "\n".join(lines)
 
 
@@ -111,11 +109,13 @@ def _parse_direction(content: str) -> dict:
     if len(parts) < 2:
         return {}
     after = parts[1].strip()
-    # Find JSON object
-    match = re.search(r"\{.*\}", after, re.DOTALL)
-    if match:
+    decoder = json.JSONDecoder()
+    idx = after.find("{")
+    if idx >= 0:
         try:
-            return json.loads(match.group())
+            obj, _ = decoder.raw_decode(after, idx)
+            return obj
         except Exception:
             pass
-    return {"stance": "Ghost", "mood": ["dark", "minimal", "focused"], "reference_anchor": after[:80]}
+    print("[Explore][WARN] Could not parse direction JSON from LLM response — returning empty direction", flush=True)
+    return {}

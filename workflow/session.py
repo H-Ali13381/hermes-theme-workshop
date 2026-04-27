@@ -6,6 +6,7 @@ Direct Python API for updating session.md.  Every function accepts
 from __future__ import annotations
 
 import re
+import sys
 from pathlib import Path
 
 STEP_NAMES: dict[str, str] = {
@@ -32,11 +33,13 @@ def append_step(session_dir: str, step: str | int, note: str = "") -> None:
     otherwise a new section is appended.
     """
     if not session_dir:
+        print(f"[session] append_step({step}): session_dir is empty — skipping", file=sys.stderr)
         return
     step_id = str(step)
     step_name = STEP_NAMES.get(step_id, f"Step {step_id}")
     md = _md(session_dir)
     if not md.exists():
+        print(f"[session] append_step({step}): {md} not found — skipping", file=sys.stderr)
         return
 
     content = md.read_text()
@@ -65,35 +68,56 @@ def append_item(session_dir: str, text: str) -> None:
     """Append one bullet line to the Step 6 — Implement section.
 
     Creates the section header if it does not yet exist.
+
+    Uses string indexing rather than a regex substitution so that sections
+    separated by either a single newline or a blank line are handled correctly.
+    The previous regex used a lookahead for ``\\n## `` which failed to match
+    when the next section was preceded by a blank line (``\\n\\n## ``).
     """
     if not session_dir:
+        print(f"[session] append_item: session_dir is empty — skipping", file=sys.stderr)
         return
     md = _md(session_dir)
     if not md.exists():
+        print(f"[session] append_item: {md} not found — skipping", file=sys.stderr)
         return
 
     content = md.read_text()
     item = f"- {text}\n"
+    header = "## Step 6 — Implement"
 
-    if "## Step 6 — Implement" in content:
-        content = re.sub(
-            r"(## Step 6 — Implement[^\n]*\n)(.*?)((?=\n## )|\Z)",
-            lambda m: m.group(1) + m.group(2) + item + m.group(3),
-            content,
-            flags=re.DOTALL,
-        )
-        md.write_text(content)
-    else:
+    if header not in content:
         with md.open("a") as f:
-            f.write(f"\n## Step 6 — Implement\n{item}")
+            f.write(f"\n{header}\n{item}")
+        return
+
+    # Find the end of the Step-6 header line, then locate where the next
+    # section begins (any "## " that follows).  Works regardless of whether
+    # sections are separated by one or two newlines.
+    idx = content.index(header)
+    eol = content.find("\n", idx)           # end of the header line
+    if eol == -1:
+        eol = len(content)
+    next_sec = re.search(r"\n## ", content[eol:])
+    if next_sec:
+        insert_at = eol + next_sec.start()  # position of the \n before next ##
+    else:
+        insert_at = len(content)            # Step 6 is the last section
+
+    prefix = content[:insert_at]
+    if not prefix.endswith("\n"):
+        prefix += "\n"
+    md.write_text(prefix + item + content[insert_at:])
 
 
 def mark_complete(session_dir: str) -> None:
     """Set Status to COMPLETE in session.md."""
     if not session_dir:
+        print("[session] mark_complete: session_dir is empty — skipping", file=sys.stderr)
         return
     md = _md(session_dir)
     if not md.exists():
+        print(f"[session] mark_complete: {md} not found — skipping", file=sys.stderr)
         return
     content = md.read_text()
     content = re.sub(r"^Status: .*$", "Status: COMPLETE", content, flags=re.MULTILINE)

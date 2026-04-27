@@ -130,7 +130,7 @@ class LiveBugReproducers(unittest.TestCase):
             self.skipTest("wp_test equals current wallpaper; cannot observe change")
 
         r = run([RICER, "apply", "--wallpaper", self.wp_test, "--extract",
-                 "--name", "p0-wallpaper-repro"], timeout=60)
+                 "--only", "kde", "--name", "p0-wallpaper-repro"], timeout=60)
         self.assertEqual(r.returncode, 0, f"ricer apply failed: {r.stderr}")
 
         applied = read_current_wallpaper()
@@ -152,35 +152,30 @@ class LiveBugReproducers(unittest.TestCase):
     # P1 — materialize_plasma_theme / materialize_cursor silently skip
     # ------------------------------------------------------------------
     def test_p1_extract_apply_covers_plasma_theme_and_cursor(self):
-        """INVARIANT: `ricer apply --extract` must produce manifest entries
-        for every detected KDE themable layer — including plasma_theme and
-        cursor — not silently skip them.
+        """INVARIANT: single-target `ricer apply --extract --only ...` must
+        produce manifest entries for KDE sub-materializers instead of silently
+        skipping them.
 
         Regression test: previously materialize_plasma_theme and
         materialize_cursor early-returned empty lists, silently omitting KDE
         theming from the manifest. Both materializers now emit entries correctly.
         """
-        r = run([RICER, "apply", "--wallpaper", self.wp_test, "--extract",
-                 "--dry-run", "--name", "p1-cover-repro"], timeout=30)
-        self.assertEqual(r.returncode, 0, f"dry-run failed: {r.stderr}")
+        seen_apps = set()
+        for target in ("plasma_theme", "cursor"):
+            r = run([RICER, "apply", "--wallpaper", self.wp_test, "--extract",
+                     "--only", target, "--dry-run", "--name", f"p1-cover-{target}"], timeout=30)
+            self.assertEqual(r.returncode, 0, f"dry-run failed for {target}: {r.stderr}")
+            manifest = json.loads(r.stdout)
+            seen_apps.update(c.get("app") for c in manifest.get("changes", []))
 
-        # Filter deprecation warnings from stdout
-        stdout_lines = [ln for ln in r.stdout.splitlines()
-                        if not ln.startswith(("/", " ")) or ln.startswith("{")
-                        or ln.startswith("  ") or ln.startswith("[") or ln.startswith("]")
-                        or ":" in ln]
-        # Simpler: locate the JSON object and parse it
-        json_start = r.stdout.find("{")
-        self.assertGreaterEqual(json_start, 0, "no JSON in dry-run output")
-        manifest = json.loads(r.stdout[json_start:])
-
-        apps_touched = {c["app"] for c in manifest["changes"]}
-        for required in ("plasma_theme", "cursor"):
-            self.assertIn(
-                required, apps_touched,
-                f"BUG P1: {required} missing from manifest (silent skip).\n"
-                f"  apps touched: {sorted(apps_touched)}",
-            )
+        self.assertIn(
+            "plasma_theme", seen_apps,
+            f"BUG P1a: dry-run manifest missing plasma_theme entry. apps={seen_apps}",
+        )
+        self.assertIn(
+            "cursor", seen_apps,
+            f"BUG P1b: dry-run manifest missing cursor entry. apps={seen_apps}",
+        )
 
     # ------------------------------------------------------------------
     # P2 — kdeglobals must be captured pre-apply by exactly one materializer
@@ -202,7 +197,7 @@ class LiveBugReproducers(unittest.TestCase):
         before_sha = _sha256(HOME / ".config" / "kdeglobals")
 
         r = run([RICER, "apply", "--wallpaper", self.wp_test, "--extract",
-                 "--name", "p2-backup-order-repro"], timeout=60)
+                 "--only", "kde", "--name", "p2-backup-order-repro"], timeout=60)
         self.assertEqual(r.returncode, 0, f"apply failed: {r.stderr}")
 
         manifest = json.loads((HOME / ".cache" / "linux-ricing" / "current" / "manifest.json").read_text())

@@ -39,10 +39,14 @@ For a full desktop ricing session, load all five subskills.
 ## Supported Targets
 
 Desktop Environments / WMs:
-- KDE Plasma (primary) — colorscheme, Kvantum widgets, cursor, splash, wallpaper, Konsole
-- Hyprland — config includes, border/gradient colors, animations
-- Sway / i3 — config includes, bar colors, gaps
-- bspwm — bspc theme commands
+- KDE Plasma — full recipe: colorscheme, Kvantum widgets, Plasma theme, cursor/icon/GTK, wallpaper, Konsole
+- GNOME — supported recipe: GTK theme, cursor theme, icon theme, wallpaper/app layers; do not require KDE-only fields
+- Hyprland — full recipe: compositor borders/gradients, hyprlock, GTK/cursor/icon layers, waybar/rofi/dunst/mako, wallpaper
+
+Unsupported/unknown desktops:
+- Route to recipe `other` and stop the workflow before creative exploration or materialization.
+- Show a clear user-facing message: currently supported recipes are KDE Plasma, GNOME, and Hyprland; recommend submitting a GitHub ticket requesting support for their environment.
+- Do not fall back to a generic/KDE recipe silently.
 
 Applications:
 - Terminal: kitty, alacritty, konsole
@@ -80,11 +84,16 @@ Rollback manifest saved to ~/.cache/linux-ricing/current/manifest.json
     ricer discover              # detect desktop stack and installed apps
     ricer status                # show active theme + detected stack
     ricer presets               # list built-in presets
-    ricer preset <name>         # apply a named preset
-    ricer preset <name> --dry-run  # preview without writing anything
+    ricer preset <name>         # apply a named preset across detected targets
+    ricer preset <name> --dry-run  # preview preset-wide changes without writing anything
     ricer simulate-undo         # show exactly what undo would restore
     ricer undo                  # restore previous state
-    ricer apply --design <path> # apply a design_system.json file
+    ricer apply --design <path> --only=<materializer>  # apply exactly one target
+    ricer apply --wallpaper <path> --extract --only=<materializer>  # extract palette, apply one target
+
+Safety contract: `ricer apply` must always target exactly one materializer (`--only` or `--app`).
+Bare `ricer apply --design <path>` and bare `ricer apply --wallpaper <path> --extract` must fail closed.
+Use `ricer preset <name>` for preset-wide application; do not make `apply` silently theme every detected app.
 
 ---
 
@@ -123,8 +132,16 @@ Verify with: `ricer status` — should show WM/DE and detected apps.
 
 ---
 
-## Design System JSON — 10-Key Palette
+## Design System JSON — 10-Key Palette + Recipe Fields
 
+Every recipe requires the base design fields: `name`, `description`, `palette` (all 10 semantic keys), and `mood_tags`.
+Recipe-specific fields are required only for that desktop environment:
+
+- KDE: `kvantum_theme`, `plasma_theme`, `cursor_theme`, `icon_theme`, `gtk_theme`
+- GNOME: `gtk_theme`, `cursor_theme`, `icon_theme`
+- Hyprland: `gtk_theme`, `cursor_theme`, `icon_theme`
+
+Example KDE design:
 ```json
 {
   "name": "my-theme",
@@ -142,6 +159,7 @@ Verify with: `ricer status` — should show WM/DE and detected apps.
     "warning":    "#c87820"
   },
   "kvantum_theme": "catppuccin-mocha-teal",
+  "plasma_theme": "default",
   "cursor_theme": "catppuccin-macchiato-teal-cursors",
   "icon_theme": "Papirus-Dark",
   "gtk_theme": "Adwaita-dark",

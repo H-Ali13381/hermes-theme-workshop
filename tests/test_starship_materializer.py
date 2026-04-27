@@ -1,0 +1,143 @@
+"""Unit tests for materialize_starship and _build_starship_toml."""
+from __future__ import annotations
+
+import sys
+import tempfile
+import unittest
+from pathlib import Path
+from unittest.mock import patch
+
+ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(ROOT / "scripts"))
+
+from ricer import materialize_starship, _build_starship_toml  # noqa: E402
+
+_DESIGN = {
+    "name": "ghost-blade",
+    "description": "Test theme",
+    "palette": {
+        "background": "#1a1b26",
+        "foreground": "#c0caf5",
+        "primary":    "#7aa2f7",
+        "secondary":  "#bb9af7",
+        "accent":     "#7dcfff",
+        "surface":    "#24283b",
+        "muted":      "#565f89",
+        "danger":     "#f7768e",
+        "success":    "#9ece6a",
+        "warning":    "#e0af68",
+    },
+    "mood_tags": ["cyber", "cold"],
+}
+
+
+class BuildStarshipTomlTests(unittest.TestCase):
+    def setUp(self):
+        self.toml = _build_starship_toml(_DESIGN["palette"], "ghost-blade")
+
+    def test_palette_header_selects_theme(self):
+        self.assertIn('palette = "ghost-blade"', self.toml)
+
+    def test_palette_section_defines_all_ten_slots(self):
+        self.assertIn("[palettes.ghost-blade]", self.toml)
+        for slot in ("background", "foreground", "primary", "secondary", "accent",
+                     "surface", "muted", "danger", "success", "warning"):
+            self.assertIn(slot, self.toml)
+
+    def test_palette_values_are_hex_colors(self):
+        self.assertIn('#7aa2f7"', self.toml)
+        self.assertIn('#1a1b26"', self.toml)
+
+    def test_character_module_uses_success_and_danger_slots(self):
+        self.assertIn("$success", self.toml)
+        self.assertIn("$danger", self.toml)
+
+    def test_directory_uses_primary(self):
+        self.assertIn("[directory]", self.toml)
+        self.assertIn("$primary", self.toml)
+
+    def test_git_branch_uses_secondary(self):
+        self.assertIn("[git_branch]", self.toml)
+        self.assertIn("$secondary", self.toml)
+
+    def test_cmd_duration_uses_muted(self):
+        self.assertIn("[cmd_duration]", self.toml)
+        self.assertIn("$muted", self.toml)
+
+    def test_no_raw_hex_in_style_strings(self):
+        # Style strings must reference palette slots, not inline hex values
+        import re
+        # Everything after the palette section should only have $name references
+        after_palette = self.toml.split("[character]", 1)[-1]
+        raw_hex = re.findall(r'"[^"]*#[0-9a-fA-F]{6}[^"]*"', after_palette)
+        self.assertEqual(raw_hex, [], f"Raw hex found in style strings: {raw_hex}")
+
+
+class ThemeNameNormalizationTests(unittest.TestCase):
+    def test_spaces_replaced_with_hyphens(self):
+        toml = _build_starship_toml(_DESIGN["palette"], "my-theme")
+        self.assertIn("[palettes.my-theme]", toml)
+
+    def test_materialize_normalizes_design_name(self):
+        design = {**_DESIGN, "name": "my theme/name!"}
+        with patch("ricer.HOME", new=Path(tempfile.mkdtemp())):
+            changes = materialize_starship(design, backup_ts="20260101_000000", dry_run=True)
+        self.assertEqual(len(changes), 1)
+        self.assertEqual(changes[0]["action"], "dry-run")
+
+
+class MaterializeStarshipTests(unittest.TestCase):
+    def test_dry_run_returns_single_change_without_writing(self):
+        with patch("ricer.HOME", new=Path(tempfile.mkdtemp())):
+            changes = materialize_starship(_DESIGN, backup_ts="20260101_000000", dry_run=True)
+
+        self.assertEqual(len(changes), 1)
+        self.assertEqual(changes[0]["app"], "starship")
+        self.assertEqual(changes[0]["action"], "dry-run")
+        self.assertIn("starship.toml", changes[0]["path"])
+
+    def test_writes_toml_file(self):
+        tmpdir = Path(tempfile.mkdtemp())
+        with patch("ricer.HOME", new=tmpdir), \
+             patch("ricer.BACKUP_DIR", new=tmpdir / ".cache" / "backup"):
+            changes = materialize_starship(_DESIGN, backup_ts="20260101_000000")
+
+        config_path = tmpdir / ".config" / "starship.toml"
+        self.assertTrue(config_path.exists(), "starship.toml was not created")
+        content = config_path.read_text()
+        self.assertIn('palette = "ghost-blade"', content)
+        self.assertIn("[palettes.ghost-blade]", content)
+
+    def test_change_record_has_app_path_and_backup_fields(self):
+        tmpdir = Path(tempfile.mkdtemp())
+        with patch("ricer.HOME", new=tmpdir), \
+             patch("ricer.BACKUP_DIR", new=tmpdir / ".cache" / "backup"):
+            changes = materialize_starship(_DESIGN, backup_ts="20260101_000000")
+
+        self.assertEqual(len(changes), 1)
+        change = changes[0]
+        self.assertEqual(change["app"], "starship")
+        self.assertEqual(change["action"], "write")
+        self.assertIn("starship.toml", change["path"])
+        # backup is None when there is no pre-existing file to back up
+        self.assertIn("backup", change)
+
+    def test_backup_created_when_existing_config_present(self):
+        tmpdir = Path(tempfile.mkdtemp())
+        backup_dir = tmpdir / ".cache" / "backup"
+        config_path = tmpdir / ".config" / "starship.toml"
+        config_path.parent.mkdir(parents=True, exist_ok=True)
+        config_path.write_text("# old config\n")
+
+        with patch("ricer.HOME", new=tmpdir), \
+             patch("ricer.BACKUP_DIR", new=backup_dir):
+            changes = materialize_starship(_DESIGN, backup_ts="20260101_000000")
+
+        self.assertIsNotNone(changes[0]["backup"])
+        backup_path = Path(changes[0]["backup"])
+        self.assertTrue(backup_path.exists())
+        self.assertEqual(backup_path.read_text(), "# old config\n")
+
+
+if __name__ == "__main__":
+    unittest.main()

@@ -15,17 +15,30 @@ def verify_element(element: str, spec: dict, design: dict) -> dict:
         else:
             result["files_missing"].append(str(path))
 
+    palette_keys = spec.get("palette_keys", [])
+    files_written = result["files_written"]
+
+    # No files written means there is nothing to verify against
+    if not files_written:
+        result["palette_match"] = False
+        return result
+
+    # No palette keys declared → no color requirements, so match is satisfied
+    if not palette_keys:
+        result["palette_match"] = True
+        return result
+
     palette_match = True
-    for written in result["files_written"]:
+    for written in files_written:
         try:
             content = Path(written).read_text(errors="ignore")
-            for key in spec.get("palette_keys", []):
+            for key in palette_keys:
                 color = design.get("palette", {}).get(key, "")
                 if color and color.lower() not in content.lower():
                     palette_match = False
                     break
-        except Exception:
-            pass
+        except OSError:
+            palette_match = False
 
     result["palette_match"] = palette_match
     return result

@@ -31,15 +31,23 @@ def resolve_packages(design: dict, profile: dict) -> list[str]:
 def install_packages(packages: list[str], errors: list[str]) -> None:
     """Try pacman first, fall back to yay for AUR packages."""
     for pkg in packages:
-        rc = subprocess.run(
-            ["sudo", "pacman", "-S", "--noconfirm", "--needed", pkg],
-            capture_output=True, text=True,
-        ).returncode
-        if rc != 0:
-            rc2 = subprocess.run(
-                ["yay", "-S", "--noconfirm", "--needed", pkg],
-                capture_output=True, text=True,
+        try:
+            rc = subprocess.run(
+                ["sudo", "pacman", "-S", "--noconfirm", "--needed", pkg],
+                capture_output=True, text=True, timeout=300,
             ).returncode
+        except subprocess.TimeoutExpired:
+            errors.append(pkg)
+            continue
+        if rc != 0:
+            try:
+                rc2 = subprocess.run(
+                    ["yay", "-S", "--noconfirm", "--needed", pkg],
+                    capture_output=True, text=True, timeout=300,
+                ).returncode
+            except subprocess.TimeoutExpired:
+                errors.append(pkg)
+                continue
             if rc2 != 0:
                 errors.append(pkg)
 

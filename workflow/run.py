@@ -22,6 +22,7 @@ SKILL_DIR = Path(__file__).parent.parent
 sys.path.insert(0, str(SKILL_DIR))
 
 from langgraph.checkpoint.sqlite import SqliteSaver
+from langgraph.errors import GraphInterrupt
 from langgraph.types import Command
 from langchain_core.messages import AIMessage
 
@@ -81,20 +82,25 @@ def _run_loop(graph, config: dict, initial_input) -> None:
         try:
             for chunk in graph.stream(current_input, config, stream_mode="updates"):
                 _print_chunk(chunk)
+        except GraphInterrupt:
+            pass  # Expected — handled below via get_state
+        except StopIteration:
+            pass
         except Exception as e:
-            if "GraphInterrupt" in type(e).__name__:
-                pass  # Expected — handled below via get_state
-            elif "StopIteration" in type(e).__name__:
-                pass
-            else:
-                print(f"\n[ERROR] {e}")
-                raise
+            print(f"\n[ERROR] {e}")
+            raise
 
         # Check graph state
         state = graph.get_state(config)
 
-        # No pending nodes → session complete
+        # No pending nodes → session ended (complete or early exit)
         if not state.next:
+            device_profile = state.values.get("device_profile", {})
+            if device_profile.get("desktop_recipe") == "other":
+                msg = device_profile.get("unsupported_message", "Unsupported desktop environment.")
+                print(f"\n{msg}\n")
+                return
+
             session_dir = state.values.get("session_dir", "")
             print("\n" + "="*60)
             print("  Session complete!")
@@ -172,12 +178,19 @@ def _list_sessions(checkpointer) -> None:
     """List all sessions in the checkpoint store."""
     print("\nSessions:\n")
     try:
-        configs = list(checkpointer.list({"configurable": {}}))
+        # Pass None to list all checkpoints across every thread_id.
+        # Passing {"configurable": {}} (no thread_id) may return nothing
+        # in some SqliteSaver versions.
+        configs = list(checkpointer.list(None))
         if not configs:
             print("  No sessions found.\n")
             return
+        seen: set[str] = set()
         for c in configs:
             thread_id = c.config["configurable"].get("thread_id", "?")
+            if thread_id in seen:
+                continue  # show only the latest checkpoint per thread
+            seen.add(thread_id)
             ts = c.metadata.get("created_at", "unknown")
             step = c.metadata.get("step", "?")
             print(f"  {thread_id}  (step {step}, {ts})")

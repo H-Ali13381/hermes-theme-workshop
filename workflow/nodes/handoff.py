@@ -2,12 +2,12 @@
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
 
 from langchain_core.messages import HumanMessage, SystemMessage
-from langchain_anthropic import ChatAnthropic
 
-from ..config import MODEL
+from ..config import get_llm
 from ..session import mark_complete
 from ..state import RiceSessionState
 
@@ -48,7 +48,7 @@ def handoff_node(state: RiceSessionState) -> dict:
     session_dir = state.get("session_dir", "")
 
     # Generate markdown via LLM
-    llm = ChatAnthropic(model=MODEL, temperature=0.1)
+    llm = get_llm(0.1)
     payload = {
         "design": design,
         "implementation_log": impl_log,
@@ -86,14 +86,36 @@ def _md_to_html(md: str, design: dict) -> str:
     surface = design.get("palette", {}).get("surface", "#1c1e2a")
 
     # Minimal markdown→HTML conversion
-    import re
+    def _convert_table(match: re.Match) -> str:
+        """Convert a Markdown pipe table block to an HTML <table>."""
+        lines = [l.strip() for l in match.group(0).strip().splitlines()]
+        rows = [l for l in lines if not re.match(r"^\|[-| :]+\|$", l)]
+        html_rows = []
+        for i, row in enumerate(rows):
+            cells = [c.strip() for c in row.strip("|").split("|")]
+            tag = "th" if i == 0 else "td"
+            html_rows.append(
+                "<tr>" + "".join(f"<{tag}>{c}</{tag}>" for c in cells) + "</tr>"
+            )
+        return "<table>" + "".join(html_rows) + "</table>"
+
     body = md
+    # Tables: a block of lines each starting with |
+    body = re.sub(r"(\|.+\n)+", _convert_table, body)
     body = re.sub(r"^# (.+)$", r"<h1>\1</h1>", body, flags=re.MULTILINE)
     body = re.sub(r"^## (.+)$", r"<h2>\1</h2>", body, flags=re.MULTILINE)
     body = re.sub(r"^### (.+)$", r"<h3>\1</h3>", body, flags=re.MULTILINE)
     body = re.sub(r"`([^`]+)`", r"<code>\1</code>", body)
     body = re.sub(r"\*\*([^*]+)\*\*", r"<strong>\1</strong>", body)
-    body = re.sub(r"\n\n", "</p><p>", body)
+    # Split on code fences so paragraph tags don't get inserted inside them
+    parts = re.split(r"(```[\s\S]*?```)", body)
+    converted = []
+    for part in parts:
+        if part.startswith("```"):
+            converted.append(part)
+        else:
+            converted.append(part.replace("\n\n", "</p><p>"))
+    body = "".join(converted)
     body = f"<p>{body}</p>"
 
     return f"""<!DOCTYPE html>

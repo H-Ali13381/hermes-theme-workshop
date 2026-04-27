@@ -16,22 +16,45 @@ def apply_element(element: str, design: dict, session_dir: str) -> dict:
     if not ricer.exists():
         return {"success": False, "error": "ricer.py not found"}
 
-    app_name = element.split(":")[0]
-    sub_app  = element.split(":")[-1] if ":" in element else None
+    materializer = _element_to_materializer(element)
+    if materializer is None:
+        return {"success": False, "error": f"unsupported element: {element}"}
 
     design_file = Path(session_dir) / "design.json" if session_dir else None
+    tmpfile: Path | None = None
     if not design_file or not design_file.exists():
-        tf = tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False)
-        json.dump(design, tf)
-        tf.close()
-        design_file = Path(tf.name)
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as tf:
+            json.dump(design, tf)
+            tf.flush()
+            design_file = Path(tf.name)
+        tmpfile = design_file  # remember to clean up
 
-    cmd = [sys.executable, str(ricer), "apply", "--design", str(design_file), f"--only={app_name}"]
-    if sub_app and sub_app != app_name:
-        cmd.append(f"--app={sub_app}")
+    cmd = [sys.executable, str(ricer), "apply", "--design", str(design_file), f"--only={materializer}"]
 
-    result = subprocess.run(cmd, capture_output=True, text=True, timeout=60)
+    try:
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=60)
+    except subprocess.TimeoutExpired:
+        return {"success": False, "error": "apply timed out after 60s"}
+    finally:
+        if tmpfile is not None:
+            tmpfile.unlink(missing_ok=True)
 
     if result.returncode == 0:
         return {"success": True, "stdout": result.stdout[:500]}
     return {"success": False, "error": result.stderr[:300] or result.stdout[:300]}
+
+
+def _element_to_materializer(element: str) -> str | None:
+    """Translate workflow element names to ricer.py APP_MATERIALIZERS keys."""
+    if ":" in element:
+        category, provider = element.split(":", 1)
+        if category in {"terminal", "bar", "launcher", "notifications", "shell_prompt",
+                        "window_decorations", "lock_screen"}:
+            return provider
+        return None
+
+    aliases = {
+        "gtk_theme": "gtk",
+        "fastfetch": "fastfetch",
+    }
+    return aliases.get(element)

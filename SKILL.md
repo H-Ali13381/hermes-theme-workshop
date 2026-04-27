@@ -569,7 +569,16 @@ See `shared/design-system.md` for the full 10-key → 16 ANSI derivation algorit
 
 ### Required metadata keys
 
-Every preset **must** include: `name`, `description`, `palette` (all 10 keys), `kvantum_theme`, `cursor_theme`, `icon_theme`, `gtk_theme`, `mood_tags`. Missing `kvantum_theme` silently falls back to `"kvantum-dark"` which is almost certainly not installed.
+Workflow-generated designs use **desktop-environment recipes**. Always require base keys: `name`, `description`, `palette` (all 10 keys), and `mood_tags`.
+
+Recipe-specific required keys:
+- **KDE Plasma:** `kvantum_theme`, `plasma_theme`, `cursor_theme`, `icon_theme`, `gtk_theme`
+- **GNOME:** `gtk_theme`, `cursor_theme`, `icon_theme`
+- **Hyprland:** `gtk_theme`, `cursor_theme`, `icon_theme`
+
+Unsupported / unknown desktops must not silently fall back to KDE or generic GTK. The workflow should stop after audit with a user-facing message saying the desktop environment is currently unsupported and recommending that the user submit a GitHub ticket requesting support for their environment.
+
+Presets may still include the full KDE-oriented metadata set for backward compatibility, but validators and prompts should be recipe-aware rather than globally requiring KDE fields.
 
 ---
 

@@ -14,7 +14,7 @@ def run(cmd: list[str], timeout: int = 10) -> tuple[int, str]:
     try:
         r = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
         return r.returncode, r.stdout.strip()
-    except Exception:
+    except (subprocess.TimeoutExpired, FileNotFoundError, OSError):
         return -1, ""
 
 
@@ -32,6 +32,18 @@ def detect_wm() -> str:
     return "unknown"
 
 
+def desktop_recipe_for_wm(wm: str) -> str:
+    """Map detected WM/DE strings to supported recipe names."""
+    w = (wm or "").lower()
+    if "hypr" in w:
+        return "hyprland"
+    if "kde" in w or "plasma" in w:
+        return "kde"
+    if "gnome" in w:
+        return "gnome"
+    return "other"
+
+
 def detect_chassis() -> str:
     _, out = run(["cat", "/sys/class/dmi/id/chassis_type"])
     return "laptop" if out.strip() in {"8", "9", "10", "11", "14"} else "desktop"
@@ -46,7 +58,7 @@ def detect_screens() -> int:
     if out2:
         try:
             return len(json.loads(out2))
-        except Exception:
+        except (json.JSONDecodeError, ValueError):
             pass
     return 1
 
@@ -67,7 +79,7 @@ def detect_apps() -> dict[str, bool]:
         "dunst", "mako", "swaync",
         "hyprlock", "swaylock",
         "starship", "fastfetch", "neofetch",
-        "feh", "swww", "swaybg", "awww",
+        "feh", "swww", "swaybg", "wbg",
     ]
     return {app: run(["which", app])[0] == 0 for app in apps}
 
@@ -106,9 +118,9 @@ def build_element_queue(wm: str, apps: dict) -> list[str]:
             queue.append(f"bar:{b}")
             break
 
-    for l in ["rofi", "wofi"]:
-        if apps.get(l):
-            queue.append(f"launcher:{l}")
+    for launcher in ["rofi", "wofi"]:
+        if apps.get(launcher):
+            queue.append(f"launcher:{launcher}")
             break
 
     for n in ["dunst", "mako", "swaync"]:
@@ -124,7 +136,7 @@ def build_element_queue(wm: str, apps: dict) -> list[str]:
         queue.append("window_decorations:kde")
         queue.append("lock_screen:kde")
 
-    queue.append("gtk")
+    queue.append("gtk_theme")
 
     if apps.get("fastfetch") or apps.get("neofetch"):
         queue.append("fastfetch")

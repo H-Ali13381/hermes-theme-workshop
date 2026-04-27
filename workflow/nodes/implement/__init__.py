@@ -17,10 +17,6 @@ from .score  import score_element, format_scorecard
 def implement_node(state: RiceSessionState) -> dict:
     """Process one element from element_queue per invocation."""
     queue = state.get("element_queue", [])
-    if not queue:
-        print("[Step 6] All elements implemented.\n")
-        return {"element_queue": [], "current_step": 6}
-
     element     = queue[0]
     remaining   = queue[1:]
     design      = state.get("design", {})

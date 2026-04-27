@@ -244,6 +244,19 @@ include line. Check version with `dunst --version` before relying on include inj
 4. Add `"<app>": materialize_<app>` to `APP_MATERIALIZERS`
 5. If the app has no standalone binary (like KDE sub-systems), register it explicitly
    in `discover_apps()` alongside the parent system check
+6. If workflow/orchestration code uses semantic element names (e.g. `terminal:kitty`,
+   `gtk_theme`, `window_decorations:kde`), add or update the explicit alias layer that
+   maps those names to `APP_MATERIALIZERS` keys. Do not pass category names directly to
+   `ricer.py --only` unless they are real materializer keys.
+7. Add fail-closed routing tests for every new alias/materializer:
+   - invalid `--only=<unknown>` exits non-zero and does not emit/apply a manifest
+   - invalid `--app=<unknown>` exits non-zero and does not fall back to all apps
+   - workflow element aliases produce the exact `--only=<materializer>` command
+   - dry-runs assert the exact `changes[].app` target set, not just exit code 0
+
+Critical pitfall: never let an unknown filter become `None` if downstream treats `None`
+as “discover/apply everything.” Targeted theming commands must fail closed; otherwise a
+single unsupported workflow element can theme the entire desktop stack.
 
 Template placeholder convention: `{{background}}`, `{{foreground}}`, `{{primary}}`, etc.
 Use Jinja2 if available, built-in str.format_map as fallback.

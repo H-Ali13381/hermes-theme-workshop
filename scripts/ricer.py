@@ -142,6 +142,9 @@ def discover_apps() -> dict[str, Any]:
     if cmd_exists("fastfetch"):
         apps["fastfetch"] = {"installed": True, "config_dir": str(HOME / ".config" / "fastfetch")}
 
+    if cmd_exists("starship"):
+        apps["starship"] = {"installed": True, "config": str(HOME / ".config" / "starship.toml")}
+
     # GTK is always themeable — gsettings or direct settings.ini write
     apps["gtk"] = {"installed": True}
 
@@ -2272,6 +2275,88 @@ def materialize_swaync(design: dict, backup_ts: str, dry_run: bool = False) -> l
 
 
 # ---------------------------------------------------------------------------
+# APP HANDLERS — starship (cross-shell prompt)
+# ---------------------------------------------------------------------------
+
+def materialize_starship(design: dict, backup_ts: str, dry_run: bool = False) -> list[dict]:
+    """Write ~/.config/starship.toml with palette-derived colors.
+
+    Uses Starship's [palettes.*] feature to map all 10 design slots as named
+    colors, then styles the common prompt modules to reference those slots.
+    This is a full rewrite — any previous starship.toml is replaced.
+    """
+    palette = design["palette"]
+    raw_name = design.get("name", "rice")
+    theme_name = re.sub(r"[^a-zA-Z0-9-]+", "-", raw_name).strip("-") or "rice"
+    config_path = HOME / ".config" / "starship.toml"
+    changes = []
+
+    content = _build_starship_toml(palette, theme_name)
+
+    if dry_run:
+        changes.append({"app": "starship", "action": "dry-run", "path": str(config_path)})
+        return changes
+
+    config_backup = backup_file(config_path, backup_ts, "starship/starship.toml")
+    config_path.parent.mkdir(parents=True, exist_ok=True)
+    config_path.write_text(content, encoding="utf-8")
+    changes.append({
+        "app": "starship", "action": "write",
+        "path": str(config_path), "backup": config_backup,
+    })
+
+    return changes
+
+
+def _build_starship_toml(palette: dict, theme_name: str) -> str:
+    """Build a starship.toml using the [palettes.*] feature for named color slots."""
+    p = palette
+    lines = [
+        f'palette = "{theme_name}"',
+        "",
+        f"[palettes.{theme_name}]",
+        f'background = "{p["background"]}"',
+        f'foreground = "{p["foreground"]}"',
+        f'primary    = "{p["primary"]}"',
+        f'secondary  = "{p["secondary"]}"',
+        f'accent     = "{p["accent"]}"',
+        f'surface    = "{p["surface"]}"',
+        f'muted      = "{p["muted"]}"',
+        f'danger     = "{p["danger"]}"',
+        f'success    = "{p["success"]}"',
+        f'warning    = "{p["warning"]}"',
+        "",
+        "[character]",
+        'success_symbol = "[❯](bold $success)"',
+        'error_symbol   = "[❯](bold $danger)"',
+        "",
+        "[directory]",
+        'style = "bold $primary"',
+        "",
+        "[git_branch]",
+        'style = "bold $secondary"',
+        "",
+        "[git_status]",
+        'style = "bold $warning"',
+        "",
+        "[cmd_duration]",
+        'style       = "bold $muted"',
+        "min_time    = 2000",
+        "",
+        "[username]",
+        'style_user = "bold $accent"',
+        'style_root = "bold $danger"',
+        "show_always = false",
+        "",
+        "[hostname]",
+        'style    = "bold $accent"',
+        "ssh_only = true",
+        "",
+    ]
+    return "\n".join(lines)
+
+
+# ---------------------------------------------------------------------------
 # MATERIALIZATION ORCHESTRATOR
 # ---------------------------------------------------------------------------
 
@@ -2302,6 +2387,7 @@ APP_MATERIALIZERS = {
     "gtk": materialize_gtk,
     "picom": materialize_picom,
     "fastfetch": materialize_fastfetch,
+    "starship": materialize_starship,
 }
 
 
@@ -2915,12 +3001,20 @@ def main():
                 sys.exit(2)
             with open(args.design, "r", encoding="utf-8") as f:
                 design = json.load(f)
-        # --app / --only: restrict materialization to a specific app key
+        # --app / --only: restrict materialization to a specific materializer key.
+        # Fail closed: an unknown target must never fall back to applying all apps.
         only_app = args.app or args.only  # --app takes precedence
-        only_apps = None
-        if only_app and only_app in APP_MATERIALIZERS:
-            all_detected = discover_apps()
-            only_apps = {k: v for k, v in all_detected.items() if k == only_app}
+        if not only_app:
+            print("apply requires --only or --app to target exactly one materializer", file=sys.stderr)
+            sys.exit(2)
+        if only_app not in APP_MATERIALIZERS:
+            print(f"Unknown materializer: {only_app}", file=sys.stderr)
+            sys.exit(2)
+        all_detected = discover_apps()
+        if only_app not in all_detected:
+            print(f"Materializer not detected: {only_app}", file=sys.stderr)
+            sys.exit(2)
+        only_apps = {only_app: all_detected[only_app]}
         manifest = materialize(design, apps=only_apps, wallpaper=args.wallpaper, dry_run=args.dry_run)
         print(json.dumps(manifest, indent=2, default=str))
         return

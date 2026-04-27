@@ -5,10 +5,9 @@ import json
 from pathlib import Path
 
 from langchain_core.messages import HumanMessage, SystemMessage
-from langchain_anthropic import ChatAnthropic
 from langgraph.types import interrupt
 
-from ..config import MODEL
+from ..config import get_llm
 from ..session import append_step
 from ..state import RiceSessionState
 
@@ -44,7 +43,7 @@ def plan_node(state: RiceSessionState) -> dict:
 
     if not html_path.exists() or html_path.stat().st_size < 500:
         print("[Step 4] Generating visual preview...", flush=True)
-        llm = ChatAnthropic(model=MODEL, temperature=0.2, max_tokens=8192)
+        llm = get_llm(0.2, max_tokens=8192)
 
         prompt_messages = [
             SystemMessage(content=SYSTEM_PROMPT),
@@ -85,9 +84,8 @@ def plan_node(state: RiceSessionState) -> dict:
     # User wants changes — add feedback to messages and retry
     html_path.unlink(missing_ok=True)
     return {
-        "messages": messages + [
-            HumanMessage(content=f"Regenerate the preview with these changes: {decision}"),
-        ],
+        "plan_html_path": "",
+        "messages": [HumanMessage(content=f"Regenerate the preview with these changes: {decision}")],
     }
 
 
@@ -101,18 +99,21 @@ def _extract_html(content: str) -> str:
     """Strip markdown fences if the model wrapped the HTML."""
     import re
     content = content.strip()
-    # Remove ```html ... ``` wrapping
-    match = re.search(r"```(?:html)?\s*(<!DOCTYPE.*?)</?\s*```", content, re.DOTALL | re.IGNORECASE)
-    if match:
-        return match.group(1)
+    # Remove ```html ... ``` or ``` ... ``` wrapping.
+    # The previous regex tried to match partial closing tags inside the pattern
+    # and would almost never succeed; use a simple fence-strip instead.
+    fence_match = re.search(r"```(?:html)?\s*([\s\S]*?)```", content)
+    if fence_match:
+        inner = fence_match.group(1).strip()
+        if inner.startswith("<!DOCTYPE") or inner.startswith("<html"):
+            return inner
     if content.startswith("<!DOCTYPE") or content.startswith("<html"):
         return content
-    # Try to find the HTML block
-    start = content.find("<!DOCTYPE")
-    if start == -1:
-        start = content.find("<html")
-    if start != -1:
-        return content[start:]
+    # Try to find the HTML block anywhere in the response
+    for marker in ("<!DOCTYPE", "<html"):
+        start = content.find(marker)
+        if start != -1:
+            return content[start:]
     return content
 
 

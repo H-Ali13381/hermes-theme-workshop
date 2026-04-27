@@ -4,7 +4,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from ...state import RiceSessionState
-from .reloader import validate_file, reload_waybar, reload_dunst, reload_hyprland
+from .reloader import validate_file, reload_waybar, reload_dunst, reload_mako, reload_swaync, reload_hyprland
 
 
 def cleanup_node(state: RiceSessionState) -> dict:
@@ -34,13 +34,26 @@ def cleanup_node(state: RiceSessionState) -> dict:
     # Reload only the services that were actually changed
     elements = {r.get("element", "").split(":")[0] for r in impl_log}
 
-    if "bar"                in elements: reload_waybar(reloaded)
-    if "notifications"      in elements: reload_dunst(reloaded)
+    if "bar" in elements: reload_waybar(reloaded, errors)
+    if "notifications" in elements:
+        # Determine which notifier was actually implemented; default to dunst.
+        notif_element = next(
+            (r.get("element", "") for r in impl_log
+             if r.get("element", "").split(":")[0] == "notifications"),
+            "notifications:dunst",
+        )
+        notifier = notif_element.split(":")[-1] if ":" in notif_element else "dunst"
+        if notifier == "mako":
+            reload_mako(reloaded, errors)
+        elif notifier == "swaync":
+            reload_swaync(reloaded, errors)
+        else:
+            reload_dunst(reloaded, errors)
     if "window_decorations" in elements and "hypr" in wm:
         reload_hyprland(reloaded, errors)
     if "gtk_theme"          in elements:
         print("  GTK: changes apply to newly opened apps (no live reload)")
-        reloaded.append("gtk_notice")
+        reloaded.append("gtk")
 
     print(f"  Reloaded: {', '.join(reloaded) if reloaded else 'none'}")
     print(f"  Errors: {len(errors)}\n")

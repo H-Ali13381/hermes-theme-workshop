@@ -8,7 +8,13 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from .config import DESIGN_REQUIRED_KEYS, PALETTE_SLOTS
+from .config import (
+    BASE_REQUIRED_KEYS,
+    PALETTE_SLOTS,
+    RECIPE_REQUIRED_KEYS,
+    SUPPORTED_DESKTOP_RECIPES,
+    UNSUPPORTED_DESKTOP_MESSAGE,
+)
 
 
 class WorkflowValidator:
@@ -22,14 +28,19 @@ class WorkflowValidator:
 
     # ── Step 3 — Refine ─────────────────────────────────────────────────────
 
-    def design_complete(self, design: dict) -> tuple[bool, str]:
-        """True when the design has all required keys, palette slots, and valid hex values."""
+    def design_complete(self, design: dict, profile: dict | None = None) -> tuple[bool, str]:
+        """True when design has base keys, recipe keys, palette slots, and valid hex values."""
         if not design:
             return False, "design is empty"
 
-        missing_keys = [k for k in DESIGN_REQUIRED_KEYS if k not in design]
+        recipe = (profile or {}).get("desktop_recipe", "kde")
+        if recipe not in SUPPORTED_DESKTOP_RECIPES:
+            return False, UNSUPPORTED_DESKTOP_MESSAGE
+
+        required_keys = BASE_REQUIRED_KEYS + RECIPE_REQUIRED_KEYS[recipe]
+        missing_keys = [k for k in required_keys if k not in design]
         if missing_keys:
-            return False, f"missing keys: {missing_keys}"
+            return False, f"missing keys for {recipe} recipe: {missing_keys}"
 
         palette = design.get("palette", {})
         missing_slots = [k for k in PALETTE_SLOTS if k not in palette]
@@ -70,4 +81,3 @@ class WorkflowValidator:
 
 
 validator = WorkflowValidator()
-
