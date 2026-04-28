@@ -2,6 +2,116 @@
 
 ## Open Issues
 
+### Code Review — from Auggie review 2026-04-28
+
+#### 🔴 High Severity (Broken Functionality)
+
+- [ ] **[BUG] Dunst fragment uses double-quoted color values — invalid INI syntax**
+  `scripts/ricer.py` `materialize_dunst` fragment uses `frame_color = "#89b4fa"` etc. Dunst's
+  INI parser expects raw hex values without quotes. These entries are silently ignored or error.
+  **Fix:** strip the surrounding `"..."` from all color values in the dunst fragment.
+
+- [ ] **[BUG] Dunst `include` directive injected inside `[global]` section**
+  `scripts/ricer.py` ~L1076–1083: when `[global]` is found, the `include =` line is injected as
+  the first key inside the section. Dunst's `include` is a top-level directive that must appear
+  outside any `[section]` block — inside `[global]` it is treated as an unknown key and silently
+  ignored. **Fix:** inject the `include` line before the `[global]` header, not after it.
+
+- [ ] **[BUG] Infinite retry loop in `implement_node` — no retry counter**
+  `workflow/nodes/implement/__init__.py` L72–75: when the user selects `"retry"` at the score
+  gate the element is prepended back to the queue with no counter. If it consistently scores below
+  the threshold the session loops indefinitely. **Fix:** add a per-element retry count to the
+  state or record; interrupt with a hard `"skip"` after N retries.
+
+#### 🟠 Medium Severity (Incorrect Behaviour in Edge Cases)
+
+- [ ] **[BUG] `kdeglobals` ColorScheme regex can match across INI sections**
+  `scripts/ricer.py` ~L215–220: `re.search(r"^\[General\].*?^ColorScheme=(.+)$", text,
+  re.MULTILINE | re.DOTALL)` — `re.DOTALL` lets `.*?` cross section boundaries. A
+  `ColorScheme=` key in any section after `[General]` can produce a false match.
+  **Fix:** use a section-aware parser (e.g. `configparser`) or a tighter single-section regex.
+
+- [ ] **[BUG] KDE force-toggle only checks stdout for `"already set"`**
+  `scripts/ricer.py` L554: some `plasma-apply-colorscheme` versions emit this string to stderr.
+  The code checks only `out_pre` (stdout), so the BreezeClassic bounce is skipped and the theme
+  may not re-apply. **Fix:** check both stdout and stderr for the sentinel string.
+
+- [ ] **[BUG] `ChatAnthropic` never receives the API key from Hermes config**
+  `workflow/config.py` L90–94: `api_key` is resolved from `~/.hermes/config.yaml` / `.env` but
+  never forwarded to `ChatAnthropic(...)`. Falls back to `ANTHROPIC_API_KEY` env var; if unset,
+  all LLM calls fail silently. **Fix:** pass `api_key=api_key` to `ChatAnthropic` when non-empty.
+
+- [ ] **[BUG] Package installer is Arch-only with no distro detection or fallback**
+  `workflow/nodes/install/resolver.py` `install_packages()` only tries `pacman` and `yay`. The
+  skill supports KDE and GNOME, both common on Debian/Ubuntu/Fedora. Non-Arch users get silent
+  install failures. **Fix:** detect distro (`/etc/os-release`) and dispatch to `apt-get` /
+  `dnf` / `zypper` as appropriate, or warn explicitly that only Arch is supported.
+
+- [ ] **[BUG] `_remove_injected_block` leaves a stray blank line on undo**
+  `scripts/ricer.py` L2571–2598: injection prepends `marker\nimport_line\n\n` (trailing blank
+  line). The removal strips only the marker line and the next line — the blank line is left
+  behind. Repeated apply/undo cycles accumulate blank lines at the top of the config.
+  **Fix:** extend removal to also consume a trailing blank line after the injected directive.
+
+- [ ] **[BUG] YIQ threshold inconsistency between GTK dark-mode detection and lock screen**
+  `scripts/ricer.py` L2229 (`materialize_gtk`) uses `luminance < 128` to detect dark themes.
+  `_lockscreen_lnf_for_palette` (L1650) calls `yiq_text_color` which uses `< 200` (designed for
+  text readability, not theme classification). Backgrounds with YIQ 128–200 are misclassified as
+  dark for the lock screen. **Fix:** use the same `< 128` threshold consistently, or extract a
+  dedicated `is_dark_palette()` helper.
+
+- [ ] **[BUG] `refine.py` silently falls back to KDE recipe for unsupported desktops**
+  `workflow/nodes/refine.py` L26: `recipe = recipe if recipe in SUPPORTED_DESKTOP_RECIPES else "kde"`.
+  Any unrecognised recipe silently produces a design with KDE-specific fields irrelevant to the
+  actual environment. The audit node routes unsupported desktops to `END`, but if this fallback
+  fires (e.g. during a resume), the LLM gets misleading instructions.
+  **Fix:** raise an explicit error or return an error state rather than silently defaulting.
+
+#### 🟡 Low Severity / Code Quality
+
+- [ ] **[QUALITY] Mid-module `import` violates PEP 8 E402**
+  `scripts/ricer.py` L98: `from desktop_utils import discover_desktop` appears after module-level
+  constants and function definitions. Move it to the top of the file with other imports and remove
+  the `# noqa: E402` comment.
+
+- [ ] **[QUALITY] `_strip_jsonc_comments` is duplicated verbatim in two files**
+  Identical 30-line function exists in both `workflow/nodes/implement/score.py` and
+  `workflow/nodes/cleanup/reloader.py`. Extract to a shared utility module (e.g.
+  `workflow/utils.py`) and import from both.
+
+- [ ] **[QUALITY] `detect_chassis()` spawns a `cat` subprocess for a simple file read**
+  `workflow/nodes/audit/detectors.py` L48: `run(["cat", "/sys/class/dmi/id/chassis_type"])`.
+  **Fix:** use `Path("/sys/class/dmi/id/chassis_type").read_text()` directly — more portable,
+  no subprocess overhead.
+
+- [ ] **[QUALITY] `detect_apps()` uses external `which` instead of `shutil.which()`**
+  `workflow/nodes/audit/detectors.py` L84: spawns `which` per-app. `shutil.which()` is the
+  stdlib equivalent (already used in `ricer.py`'s `cmd_exists`). **Fix:** replace the
+  `run(["which", app])` calls with `shutil.which(app) is not None`.
+
+- [ ] **[QUALITY] `implement_node` doesn't guard against an empty element queue**
+  `workflow/nodes/implement/__init__.py` L20: `element = queue[0]` raises `IndexError` if
+  the queue is empty. **Fix:** add a guard — `if not queue: return {}` — before indexing.
+
+- [ ] **[QUALITY] `_run_loop` catches `StopIteration` — masks real errors**
+  `workflow/run.py` L87–88: in Python 3.7+ `StopIteration` escaping a generator becomes
+  `RuntimeError`. Catching it explicitly here can mask legitimate errors from `graph.stream()`.
+  **Fix:** remove the bare `except StopIteration: pass` branch; `GraphInterrupt` is the correct
+  mechanism.
+
+- [ ] **[QUALITY] `discover_desktop()` called independently by each Hyprland materializer**
+  `scripts/ricer.py` L1117 and L1208: both `materialize_hyprland` and `materialize_hyprlock`
+  call `discover_desktop()` (which runs `ps aux`) on each invocation. **Fix:** cache the result
+  or pass it as a parameter from `materialize()`.
+
+- [ ] **[QUALITY] Brace-counting heuristic for `.conf`/`.ini` syntax validation is fragile**
+  `workflow/nodes/implement/score.py` L122–126 and `workflow/nodes/cleanup/reloader.py` L65–69:
+  counting `{` + `[` vs `}` + `]` produces false failures when config values contain bracket
+  characters (e.g. Pango markup in dunst, array syntax). **Fix:** drop the heuristic for
+  `.conf`/`.ini` files, or explicitly limit it only to formats where it is reliable (CSS).
+
+---
+
 ### Workflow Wiring — from Auggie review 2026-04-28
 
 - [x] **[WIRING] `session_manager.py resume-check` is blind to LangGraph sessions**
@@ -15,12 +125,12 @@
   `"agent"` or `"workflow"`). New `workflow-run [THREAD_ID]` command added. `SKILL.md`
   Pre-flight updated to handle both source types and offer mode selection.
 
-- [ ] **[DOC] `manifest.json` `structure.workflow/` says `"verifiers/"` — should be `"validators.py"`**
+- [x] **[DOC] `manifest.json` `structure.workflow/` says `"verifiers/"` — should be `"validators.py"`**
   The description for the `workflow/` key in `manifest.json:36` lists `"verifiers/"` as a
   subdirectory, but the actual file is `workflow/validators.py` (a flat module, not a package).
   No `verifiers/` directory exists. Cosmetic doc error only — no runtime impact.
 
-- [ ] **[DOC] `manifest.json` `requirements.workflow_packages` missing `langchain-openai`**
+- [x] **[DOC] `manifest.json` `requirements.workflow_packages` missing `langchain-openai`**
   `workflow/config.py:get_llm()` imports `langchain_openai.ChatOpenAI` for any non-Anthropic-native
   provider. `workflow/requirements.txt` correctly includes `langchain-openai>=0.3.0`, but
   `manifest.json:42-46` (`workflow_packages` list) omits it. A user following the manifest to
@@ -61,7 +171,7 @@ Full plan: `dev/kde-validation-plan.md`
   this field get nothing.
   **Fix options:** (A) implement `materialize_icon_theme` via `kwriteconfig6 --file kdeglobals --group Icons --key Theme <name>` + KWin reconfigure; (B) explicitly document as SKIP in Quality Bar §11.
 
-- [ ] **[FEATURE] Generative icon theme via fal.ai style transfer**
+- [ ] **[FEATURE][DEFERRED] Generative icon theme via fal.ai style transfer**
   When no suitable installed theme matches the palette, offer to generate a customized icon
   set by style-transferring the palette colors onto a base icon pack (e.g. Papirus) using
   fal.ai image-gen tools. Would live as a new stage in the implement/ pipeline: enumerate
@@ -71,7 +181,7 @@ Full plan: `dev/kde-validation-plan.md`
 
 #### Tests to write
 
-- [ ] **tests/test_kde_materializers.py** — no dedicated unit tests exist for:
+- [x] **tests/test_kde_materializers.py** — no dedicated unit tests exist for:
   - `materialize_kde` (colorscheme): decimal RGB check, plasma-apply-colorscheme call, BreezeClassic bounce, kdeglobals backup ordering
   - `materialize_kvantum`: widgetStyle="kvantum" regression guard, fallback behavior, qdbus reconfigure call order, kvconfig-only backup
   - `snapshot_kde_state`: all 7 fields, LookAndFeelPackage fallback, missing kvantum.kvconfig, wallpaper_plugin capture
@@ -80,7 +190,7 @@ Full plan: `dev/kde-validation-plan.md`
   - `materialize_konsole`: colorscheme file location, required sections present, default profile update
   - `discover_apps`: all 4 KDE sub-systems (kvantum, plasma_theme, cursor, kde_lockscreen) registered when KDE detected, absent when not
 
-- [ ] **tests/test_kde_undo.py** — no unit tests for KDE-specific undo restore paths:
+- [x] **tests/test_kde_undo.py** — no unit tests for KDE-specific undo restore paths:
   - previous colorscheme re-applied via plasma-apply-colorscheme
   - widgetStyle restored via `--delete` not empty string
   - cursor theme restored via plasma-apply-cursortheme
@@ -90,7 +200,7 @@ Full plan: `dev/kde-validation-plan.md`
 
 #### Skill doc to update
 
-- [ ] **skills/ricer-kde/SKILL.md** `discover_apps` block is missing `kde_lockscreen`
+- [x] **skills/ricer-kde/SKILL.md** `discover_apps` block is missing `kde_lockscreen`
   The "always ensure this block exists" example shows only 3 keys (kvantum, plasma_theme, cursor).
   Real code at `ricer.py ~L159` registers a 4th: `kde_lockscreen`. Update the example.
 

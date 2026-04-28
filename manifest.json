@@ -33,7 +33,7 @@
     "examples/": "Sample design_system YAML files (e.g. dragonfable.yaml) for reference and testing — 11 built-in presets: catppuccin-mocha, nord, gruvbox-dark, dracula, tokyo-night, rose-pine, solarized-dark, doom-knight, void-dragon, shiva-temple, bareblood",
     "references/": "Internal architecture notes (e.g. color-extractor-architecture.md) — not end-user docs",
     "tests/": "pytest suite — palette extractor, bug reproducers, capture",
-    "workflow/": "LangGraph StateGraph orchestration layer — maps the 8-step session to graph nodes with SQLite checkpointing for crash recovery (run.py entrypoint, graph.py, nodes/, verifiers/, state.py)",
+    "workflow/": "LangGraph StateGraph orchestration layer — maps the 8-step session to graph nodes with SQLite checkpointing for crash recovery (run.py entrypoint, graph.py, nodes/, validators.py, state.py)",
     "skills/": "Nine focused sub-skills: hermes-ricer (legacy orchestrator — superseded by workflow/), hermes-cli-skin, hyprland-rice-from-scratch, ricer-apps, ricer-catalog-capture, ricer-gtk, ricer-kde, ricer-rollback, ricer-wallpaper"
   },
   "requirements": {
@@ -43,6 +43,7 @@
       "langgraph>=1.1.9",
       "langgraph-checkpoint-sqlite>=2.0.0",
       "langchain-anthropic>=0.3.0",
+      "langchain-openai>=0.3.0",
       "anthropic>=0.40.0"
     ],
     "workflow_note": "workflow/ deps are only needed when running the LangGraph orchestration layer directly (python workflow/run.py). The standard agent workflow via SKILL.md has no extra deps beyond pillow + jinja2.",

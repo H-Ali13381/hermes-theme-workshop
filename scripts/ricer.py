@@ -2758,6 +2758,20 @@ def undo() -> dict:
             else:
                 skipped.append({"app": "icon_theme", "note": "no previous icon theme recorded"})
 
+        # ---- Lock screen: restore previous greeter theme ----
+        # Option B: active kwriteconfig6 restore, mirrors cursor/plasma_theme pattern.
+        # (The generic file-backup loop skips kde_lockscreen because its change dict
+        # uses "config_path" rather than "path" — this branch is the authoritative path.)
+        if app == "kde_lockscreen" and action == "write":
+            prev = change.get("previous_theme")
+            kwrite = _get_kwrite()
+            if prev and kwrite:
+                run_cmd([kwrite, "--file", "kscreenlockerrc",
+                         "--group", "Greeter", "--key", "Theme", prev])
+                restored.append({"app": "kde_lockscreen", "action": "restored", "theme": prev})
+            elif not prev:
+                skipped.append({"app": "kde_lockscreen", "note": "no previous lock screen theme recorded"})
+
         # ---- Wallpaper: restore previous using the same method that set it ----
         if app == "wallpaper" and action == "set":
             prev = change.get("previous_wallpaper")

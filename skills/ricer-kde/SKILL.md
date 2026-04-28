@@ -134,7 +134,7 @@ SVG Plasma themes are suitable only for: flat colors, gradients, rounded corners
 
 ## discover_apps — KDE Sub-system Registration
 
-`kvantum`, `plasma_theme`, and `cursor` have no standalone binary — they are KDE sub-systems.
+`kvantum`, `plasma_theme`, `cursor`, and `kde_lockscreen` have no standalone binary — they are KDE sub-systems.
 Without explicit registration, the `APP_MATERIALIZERS` loop silently skips them.
 
 Always ensure this block exists in `discover_apps()`:
@@ -144,6 +144,7 @@ if "kde" in apps:
     apps["kvantum"] = {"installed": True}
     apps["plasma_theme"] = {"installed": True}
     apps["cursor"] = {"installed": True}
+    apps["kde_lockscreen"] = {"installed": True}
 ```
 
 Any future materializer for a KDE sub-system (icon theme, splash, SDDM) MUST be registered
