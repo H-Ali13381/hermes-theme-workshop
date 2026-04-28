@@ -156,6 +156,7 @@ def discover_apps() -> dict[str, Any]:
         apps["kvantum"]        = {"installed": True}
         apps["plasma_theme"]   = {"installed": True}
         apps["cursor"]         = {"installed": True}
+        apps["icon_theme"]     = {"installed": True}
         apps["kde_lockscreen"] = {"installed": True}
 
     # Hyprland sub-system — register when hyprland is the active WM.
@@ -245,6 +246,15 @@ def snapshot_kde_state() -> dict[str, str | None]:
                 plasma_theme = out
                 break
 
+    # Snapshot icon theme
+    icon_theme = None
+    for tool in ["kreadconfig6", "kreadconfig5"]:
+        if cmd_exists(tool):
+            rc, out, _ = run_cmd([tool, "--file", "kdeglobals", "--group", "Icons", "--key", "Theme"])
+            if rc == 0 and out:
+                icon_theme = out
+                break
+
     # Snapshot cursor
     cursor = None
     for tool in ["kreadconfig6", "kreadconfig5"]:
@@ -274,6 +284,7 @@ def snapshot_kde_state() -> dict[str, str | None]:
         "widget_style": widget_style,
         "plasma_theme": plasma_theme,
         "cursor_theme": cursor,
+        "icon_theme": icon_theme,
         "wallpaper": wallpaper,
         "wallpaper_plugin": wallpaper_plugin,
     }
@@ -1361,11 +1372,9 @@ def materialize_kvantum(design: dict, backup_ts: str, dry_run: bool = False) -> 
     kvantum_dir = HOME / ".config" / "Kvantum"
     kvantum_config = kvantum_dir / "kvantum.kvconfig"
 
-    # Determine Kvantum theme from design or fallback
     kvantum_theme = design.get("kvantum_theme")
     if not kvantum_theme:
-        # Default to a sensible fallback based on the palette mood
-        kvantum_theme = "kvantum-dark"
+        return []
 
     if dry_run:
         changes.append({
@@ -1536,6 +1545,53 @@ def materialize_cursor(design: dict, backup_ts: str, dry_run: bool = False) -> l
 
 
 # ---------------------------------------------------------------------------
+# APP HANDLERS — KDE icon theme
+# ---------------------------------------------------------------------------
+
+def materialize_icon_theme(design: dict, backup_ts: str, dry_run: bool = False) -> list[dict]:
+    """Set the KDE icon theme via kdeglobals [Icons] Theme."""
+    changes = []
+    icon_theme = design.get("icon_theme")
+    if not icon_theme:
+        return changes
+
+    if dry_run:
+        changes.append({
+            "app": "icon_theme",
+            "action": "dry-run",
+            "theme": icon_theme,
+        })
+        return changes
+
+    # Snapshot current value for undo
+    prev_icon_theme = None
+    for tool in ["kreadconfig6", "kreadconfig5"]:
+        if cmd_exists(tool):
+            rc, out, _ = run_cmd([tool, "--file", "kdeglobals", "--group", "Icons", "--key", "Theme"])
+            if rc == 0 and out:
+                prev_icon_theme = out
+                break
+
+    # kdeglobals is already backed up by materialize_kde (which runs first).
+    # No separate backup needed here — prev_icon_theme covers undo.
+    kwrite = _get_kwrite()
+    if kwrite:
+        run_cmd([kwrite, "--file", "kdeglobals", "--group", "Icons", "--key", "Theme", icon_theme])
+
+    if cmd_exists("qdbus6"):
+        run_cmd(["qdbus6", "org.kde.KWin", "/KWin", "reconfigure"], timeout=5)
+
+    changes.append({
+        "app": "icon_theme",
+        "action": "write",
+        "theme": icon_theme,
+        "previous_icon_theme": prev_icon_theme,
+    })
+
+    return changes
+
+
+# ---------------------------------------------------------------------------
 # APP HANDLERS — KDE lock screen (kscreenlocker greeter)
 # ---------------------------------------------------------------------------
 
@@ -1568,7 +1624,7 @@ def materialize_kde_lockscreen(design: dict, backup_ts: str, dry_run: bool = Fal
                                   "--group", "Greeter", "--key", "Theme"])
             if rc == 0 and out:
                 prev_theme = out
-            break
+                break
 
     kscreenlockerrc_backup = backup_file(kscreenlockerrc, backup_ts, "kscreenlocker/kscreenlockerrc")
 
@@ -2429,6 +2485,7 @@ APP_MATERIALIZERS = {
     "kvantum":        materialize_kvantum,
     "plasma_theme":   materialize_plasma_theme,
     "cursor":         materialize_cursor,
+    "icon_theme":     materialize_icon_theme,
     "kde_lockscreen": materialize_kde_lockscreen,
     # Terminals
     "kitty": materialize_kitty,
@@ -2685,6 +2742,21 @@ def undo() -> dict:
                     failed.append({"app": "cursor", "action": "restore", "theme": prev, "error": f"exit code {rc}"})
             elif not prev:
                 skipped.append({"app": "cursor", "note": "no previous cursor recorded"})
+
+        # ---- Icon theme: restore previous ----
+        if app == "icon_theme" and action == "write":
+            prev = change.get("previous_icon_theme")
+            kwrite = _get_kwrite()
+            if prev and kwrite:
+                run_cmd([kwrite, "--file", "kdeglobals", "--group", "Icons", "--key", "Theme", prev])
+                if cmd_exists("qdbus6"):
+                    run_cmd(["qdbus6", "org.kde.KWin", "/KWin", "reconfigure"], timeout=5)
+                restored.append({"app": "icon_theme", "action": "restored", "theme": prev})
+            elif not prev and kwrite:
+                run_cmd([kwrite, "--file", "kdeglobals", "--group", "Icons", "--key", "Theme", "--delete"])
+                restored.append({"app": "icon_theme", "action": "cleared"})
+            else:
+                skipped.append({"app": "icon_theme", "note": "no previous icon theme recorded"})
 
         # ---- Wallpaper: restore previous using the same method that set it ----
         if app == "wallpaper" and action == "set":

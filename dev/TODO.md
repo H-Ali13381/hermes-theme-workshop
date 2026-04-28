@@ -2,7 +2,97 @@
 
 ## Open Issues
 
-_(none)_
+### Workflow Wiring — from Auggie review 2026-04-28
+
+- [x] **[WIRING] `session_manager.py resume-check` is blind to LangGraph sessions**
+  `scripts/session_manager.py:cmd_resume_check` only scans `~/.config/rice-sessions/` for
+  `session.md` files. Sessions started via `workflow/run.py` use a separate SQLite checkpoint
+  store (`~/.local/share/linux-ricing/sessions.sqlite`) and their session dirs are named by
+  LangGraph thread IDs (e.g. `rice-20260428-1234-abc123`). The Pre-flight check in `SKILL.md`
+  therefore never surfaces an in-progress LangGraph session to the user.
+  **Fix applied:** `_query_workflow_sessions()` calls `workflow/run.py --list` as a subprocess
+  and merges the results into `resume-check` output (each entry gains a `"source"` field:
+  `"agent"` or `"workflow"`). New `workflow-run [THREAD_ID]` command added. `SKILL.md`
+  Pre-flight updated to handle both source types and offer mode selection.
+
+- [ ] **[DOC] `manifest.json` `structure.workflow/` says `"verifiers/"` — should be `"validators.py"`**
+  The description for the `workflow/` key in `manifest.json:36` lists `"verifiers/"` as a
+  subdirectory, but the actual file is `workflow/validators.py` (a flat module, not a package).
+  No `verifiers/` directory exists. Cosmetic doc error only — no runtime impact.
+
+- [ ] **[DOC] `manifest.json` `requirements.workflow_packages` missing `langchain-openai`**
+  `workflow/config.py:get_llm()` imports `langchain_openai.ChatOpenAI` for any non-Anthropic-native
+  provider. `workflow/requirements.txt` correctly includes `langchain-openai>=0.3.0`, but
+  `manifest.json:42-46` (`workflow_packages` list) omits it. A user following the manifest to
+  install deps would miss this package and get an `ImportError` on non-Anthropic providers.
+
+---
+
+### KDE Element Validation — from Auggie review 2026-04-27
+
+Full plan: `dev/kde-validation-plan.md`
+
+
+########### claude --resume b2cb686a-7c16-4107-8ae2-fef93b595a69
+
+
+
+
+
+#### Bugs to fix
+
+- [x] **[BUG] materialize_kvantum fallback writes "kvantum-dark" as Kvantum theme name**
+  `ricer.py ~L1368`: when design has no `kvantum_theme` key, falls back to the string
+  `"kvantum-dark"` as the Kvantum theme name (not a valid installed theme — Kvantum silently
+  ignores it). `widgetStyle` is correctly set to `"kvantum"` separately, so the
+  silent-Breeze-fallback bug doesn't trigger, but the kvantum.kvconfig is left pointing at
+  a nonexistent theme. **Fix:** early-return empty list when `kvantum_theme` is absent.
+
+- [x] **[BUG] kde_lockscreen `break` fires before checking if kreadconfig returned a value**
+  `ricer.py ~L1571`: the `break` is inside the `cmd_exists` block but outside the `if rc == 0 and out`
+  check. If kreadconfig6 is installed but the key is unset (empty output), kreadconfig5 is never tried.
+  Inconsistent with `snapshot_kde_state` pattern which only breaks when a value is found.
+  Low practical risk on Plasma 6 (kreadconfig6 is always present and always responds), but should
+  be made consistent for correctness.
+
+- [x] **[GAP] `icon_theme` is schema-required for KDE but has no materializer**
+  `DEFAULT_DESIGN_SYSTEM` and all presets declare `icon_theme`. `discover_apps()` does NOT register
+  an `icon_theme` key. `APP_MATERIALIZERS` has no `icon_theme` entry. Silent no-op — users setting
+  this field get nothing.
+  **Fix options:** (A) implement `materialize_icon_theme` via `kwriteconfig6 --file kdeglobals --group Icons --key Theme <name>` + KWin reconfigure; (B) explicitly document as SKIP in Quality Bar §11.
+
+- [ ] **[FEATURE] Generative icon theme via fal.ai style transfer**
+  When no suitable installed theme matches the palette, offer to generate a customized icon
+  set by style-transferring the palette colors onto a base icon pack (e.g. Papirus) using
+  fal.ai image-gen tools. Would live as a new stage in the implement/ pipeline: enumerate
+  installed → if best match score is low → call fal.ai with palette + base icons → write
+  generated icons to `~/.local/share/icons/<theme-name>/`. Out of scope for the selection
+  flow; tracked here for future implementation.
+
+#### Tests to write
+
+- [ ] **tests/test_kde_materializers.py** — no dedicated unit tests exist for:
+  - `materialize_kde` (colorscheme): decimal RGB check, plasma-apply-colorscheme call, BreezeClassic bounce, kdeglobals backup ordering
+  - `materialize_kvantum`: widgetStyle="kvantum" regression guard, fallback behavior, qdbus reconfigure call order, kvconfig-only backup
+  - `snapshot_kde_state`: all 7 fields, LookAndFeelPackage fallback, missing kvantum.kvconfig, wallpaper_plugin capture
+  - `materialize_cursor`: kcminputrc write, plasma-apply-cursortheme call, skip when no cursor_theme, previous value capture
+  - `materialize_plasma_theme`: plasmarc group+key correctness, plasma-apply-desktoptheme call, skip when absent, backup is plasmarc not kdeglobals
+  - `materialize_konsole`: colorscheme file location, required sections present, default profile update
+  - `discover_apps`: all 4 KDE sub-systems (kvantum, plasma_theme, cursor, kde_lockscreen) registered when KDE detected, absent when not
+
+- [ ] **tests/test_kde_undo.py** — no unit tests for KDE-specific undo restore paths:
+  - previous colorscheme re-applied via plasma-apply-colorscheme
+  - widgetStyle restored via `--delete` not empty string
+  - cursor theme restored via plasma-apply-cursortheme
+  - plasma theme restored
+  - lock screen theme restored
+  - manifest marked `undone: True` after success
+
+#### Skill doc to update
+
+- [ ] **skills/ricer-kde/SKILL.md** `discover_apps` block is missing `kde_lockscreen`
+  The "always ensure this block exists" example shows only 3 keys (kvantum, plasma_theme, cursor).
+  Real code at `ricer.py ~L159` registers a 4th: `kde_lockscreen`. Update the example.
 
 ---
 

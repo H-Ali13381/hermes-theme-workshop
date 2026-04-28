@@ -415,6 +415,91 @@ def _infer_mood_tags(palette: dict[str, str]) -> list[str]:
     return tags
 
 
+# --- Icon theme selection ---
+
+_ICON_SEARCH_DIRS = [
+    Path("/usr/share/icons"),
+    Path.home() / ".local/share/icons",
+]
+_ICON_SKIP = {"hicolor", "locolor", "default"}
+
+# Ranked preferences: first installed name wins.
+_DARK_ICON_PREFS = [
+    "Papirus-Dark", "Tela-dark", "tela-dark", "tela-circle-dark",
+    "Numix-Circle", "breeze-dark", "Adwaita-dark",
+    "Papirus", "breeze", "Adwaita", "AdwaitaLegacy", "oxygen",
+]
+_LIGHT_ICON_PREFS = [
+    "Papirus", "Papirus-Light", "Tela", "tela", "tela-circle",
+    "Breeze_Light", "breeze", "Adwaita", "AdwaitaLegacy", "oxygen",
+    "Papirus-Dark", "breeze-dark",
+]
+
+
+def _has_app_icons(theme_dir: Path) -> bool:
+    """True if the theme contains application/place icons (not cursor-only)."""
+    app_cats = {"apps", "places", "applications"}
+    for level1 in theme_dir.iterdir():
+        if not level1.is_dir():
+            continue
+        for level2 in level1.iterdir():
+            if level2.is_dir() and level2.name in app_cats:
+                return True
+    return False
+
+
+def _installed_icon_themes(search_dirs=None) -> list[str]:
+    """Return names of installed icon themes that include application icons.
+
+    Filters out cursor-only themes (no apps/ or places/ at depth ≤ 2) and
+    infrastructure themes (hicolor, locolor, default).
+    """
+    dirs = search_dirs if search_dirs is not None else _ICON_SEARCH_DIRS
+    seen: set[str] = set()
+    themes: list[str] = []
+    for d in dirs:
+        d = Path(d)
+        if not d.exists():
+            continue
+        for sub in sorted(d.iterdir()):
+            if not sub.is_dir() or sub.name in seen or sub.name in _ICON_SKIP:
+                continue
+            if not (sub / "index.theme").exists():
+                continue
+            if not _has_app_icons(sub):
+                continue
+            seen.add(sub.name)
+            themes.append(sub.name)
+    return themes
+
+
+def select_icon_theme(palette: dict, search_dirs=None) -> str:
+    """Pick the best installed icon theme for the given palette.
+
+    Walks a ranked preference list (dark-first for dark palettes, light-first
+    for light palettes) and returns the first name that is actually installed.
+    Never writes a nonexistent theme to kdeglobals.
+    """
+    installed = set(_installed_icon_themes(search_dirs))
+    if not installed:
+        return "hicolor"
+
+    is_dark = _yiq_luma(palette["background"]) < 128
+    prefs = _DARK_ICON_PREFS if is_dark else _LIGHT_ICON_PREFS
+
+    for name in prefs:
+        if name in installed:
+            return name
+
+    # Fuzzy fallback: prefer any installed theme whose name contains "dark"/"light"
+    tag = "dark" if is_dark else "light"
+    for name in sorted(installed):
+        if tag in name.lower():
+            return name
+
+    return sorted(installed)[0]
+
+
 # --- Theme-name defaults ---
 
 def _default_theme_names(palette: dict[str, str]) -> dict[str, str]:
@@ -431,7 +516,7 @@ def _default_theme_names(palette: dict[str, str]) -> dict[str, str]:
     return {
         "kvantum_theme": "kvantum-dark" if is_dark else "kvantum",
         "cursor_theme": "breeze_cursors",
-        "icon_theme": "Papirus-Dark" if is_dark else "Papirus",
+        "icon_theme": select_icon_theme(palette),
         "gtk_theme": "Adwaita-dark" if is_dark else "Adwaita",
         "plasma_theme": "default",
     }

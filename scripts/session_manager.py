@@ -11,7 +11,13 @@ Usage:
       Create a new session dir + session.md. Prints the session dir path.
 
   python3 session_manager.py resume-check
-      Scan for incomplete sessions. Prints JSON list of candidates.
+      Scan for incomplete sessions (both agent-guided and LangGraph workflow).
+      Prints a unified JSON list; each entry has a "source" field:
+        "agent"    — agent-guided session (session.md in ~/.config/rice-sessions/)
+        "workflow" — LangGraph automated session (SQLite checkpoint)
+      Resume an agent session:   session_manager.py load <dir>
+      Resume a workflow session:  session_manager.py workflow-run <thread-id>
+                               OR python3 workflow/run.py --resume <thread-id>
 
   python3 session_manager.py load <session-dir>
       Point .current symlink at an existing session dir (for resume).
@@ -36,17 +42,64 @@ Usage:
   python3 session_manager.py complete
       Mark session COMPLETE (update header status). Step 8 should already be appended.
 
+  python3 session_manager.py workflow-run [<thread-id>]
+      Launch the LangGraph automated workflow (workflow/run.py).
+      If <thread-id> is given, resumes that session; otherwise starts a new one.
+
 Session tracking: ~/.config/rice-sessions/.current → symlink to active session dir.
 """
 
 import json
 import re
+import subprocess
 import sys
 from datetime import datetime
 from pathlib import Path
 
 SESSIONS_ROOT = Path.home() / ".config" / "rice-sessions"
 CURRENT_LINK = SESSIONS_ROOT / ".current"
+
+# Path to workflow/run.py — used for querying and launching LangGraph sessions.
+SKILL_DIR = Path(__file__).parent.parent
+WORKFLOW_RUN_PY = SKILL_DIR / "workflow" / "run.py"
+
+
+def _query_workflow_sessions() -> list[dict]:
+    """Return incomplete LangGraph sessions by invoking ``workflow/run.py --list``.
+
+    Output format from run.py --list (one line per session):
+        rice-YYYYMMDD-HHMM-xxxxxx  (step N, TS)
+    Returns [] silently when workflow/run.py is absent or its deps are not installed.
+    """
+    if not WORKFLOW_RUN_PY.exists():
+        return []
+    try:
+        result = subprocess.run(
+            [sys.executable, str(WORKFLOW_RUN_PY), "--list"],
+            capture_output=True, text=True, timeout=15,
+        )
+    except Exception:
+        return []
+
+    sessions: list[dict] = []
+    for line in result.stdout.splitlines():
+        line = line.strip()
+        # Match: rice-YYYYMMDD-HHMM-xxxxxx  (step N, TIMESTAMP)
+        m = re.match(r"(rice-\S+)\s+\(step\s+(\S+),\s*(.*)\)", line)
+        if not m:
+            continue
+        thread_id = m.group(1)
+        step = m.group(2).rstrip(",")
+        ts = m.group(3).strip()
+        sessions.append({
+            "source": "workflow",
+            "thread_id": thread_id,
+            "theme": "In Progress",
+            "started": ts,
+            "status": f"IN PROGRESS — Step {step}",
+            "resume_cmd": f"python3 {WORKFLOW_RUN_PY} --resume {thread_id}",
+        })
+    return sessions
 
 STEP_NAMES = {
     "1": "Audit",
@@ -138,8 +191,19 @@ def cmd_init():
 
 
 def cmd_resume_check():
+    """Print a unified JSON list of all incomplete sessions.
+
+    Each entry has a ``"source"`` field:
+      ``"agent"``    — agent-guided session tracked by session.md
+      ``"workflow"`` — LangGraph automated session (SQLite checkpoint)
+
+    Agent sessions include a ``"dir"`` key; workflow sessions include
+    ``"thread_id"`` and ``"resume_cmd"``.
+    """
     ensure_sessions_root()
     results = []
+
+    # --- agent-guided sessions (session.md files) ---
     for d in sorted(SESSIONS_ROOT.iterdir(), reverse=True):
         if not d.is_dir() or d.name.startswith("."):
             continue
@@ -153,11 +217,16 @@ def cmd_resume_check():
         status = status_m.group(1).strip() if status_m else "unknown"
         if "IN PROGRESS" in status:
             results.append({
+                "source": "agent",
                 "dir": str(d),
                 "theme": theme_m.group(1).strip() if theme_m else "unknown",
                 "started": started_m.group(1).strip() if started_m else "unknown",
                 "status": status,
             })
+
+    # --- LangGraph workflow sessions (SQLite checkpoint) ---
+    results.extend(_query_workflow_sessions())
+
     print(json.dumps(results, indent=2))
 
 
@@ -307,6 +376,26 @@ def cmd_complete():
     print(f"Session marked COMPLETE: {session_dir}")
 
 
+def cmd_workflow_run(thread_id: str | None = None) -> None:
+    """Launch or resume the LangGraph automated workflow.
+
+    Delegates to ``workflow/run.py``, passing ``--resume <thread_id>`` when a
+    thread ID is supplied.  Exits with the subprocess return code.
+    """
+    if not WORKFLOW_RUN_PY.exists():
+        print(
+            f"ERROR: workflow/run.py not found at {WORKFLOW_RUN_PY}\n"
+            "Make sure the skill directory is intact.",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+    cmd = [sys.executable, str(WORKFLOW_RUN_PY)]
+    if thread_id:
+        cmd += ["--resume", thread_id]
+    result = subprocess.run(cmd)
+    sys.exit(result.returncode)
+
+
 def main():
     if len(sys.argv) < 2:
         print(__doc__)
@@ -344,6 +433,8 @@ def main():
         cmd_read()
     elif cmd == "complete":
         cmd_complete()
+    elif cmd == "workflow-run":
+        cmd_workflow_run(sys.argv[2] if len(sys.argv) > 2 else None)
     else:
         print(f"ERROR: Unknown command '{cmd}'", file=sys.stderr)
         print(__doc__)

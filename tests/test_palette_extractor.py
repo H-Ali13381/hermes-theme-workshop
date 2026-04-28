@@ -231,5 +231,80 @@ class PaletteExtractorTests(unittest.TestCase):
         )
 
 
+class SelectIconThemeTests(unittest.TestCase):
+    """select_icon_theme: picks from installed themes, never returns nonexistent names."""
+
+    module = load_module()
+
+    def _fake_dir(self, themes: dict[str, list[str]]) -> Path:
+        """Build a tmp icon dir. themes maps name → list of category subdirs under 48x48/."""
+        import tempfile, os
+        d = Path(tempfile.mkdtemp())
+        for name, cats in themes.items():
+            sub = d / name
+            size_dir = sub / "48x48"
+            size_dir.mkdir(parents=True)
+            (sub / "index.theme").write_text(f"[Icon Theme]\nName={name}\n")
+            for cat in cats:
+                (size_dir / cat).mkdir()
+        return d
+
+    def test_no_themes_returns_hicolor(self):
+        d = Path(self._fake_dir({}))
+        result = self.module.select_icon_theme({"background": "#1e1e2e"}, search_dirs=[d])
+        self.assertEqual(result, "hicolor")
+
+    def test_prefers_papirus_dark_for_dark_palette(self):
+        d = self._fake_dir({
+            "Papirus": ["apps", "places"],
+            "Papirus-Dark": ["apps", "places"],
+            "breeze": ["apps", "places"],
+        })
+        result = self.module.select_icon_theme({"background": "#1e1e2e"}, search_dirs=[d])
+        self.assertEqual(result, "Papirus-Dark")
+
+    def test_prefers_papirus_for_light_palette(self):
+        d = self._fake_dir({
+            "Papirus": ["apps", "places"],
+            "Papirus-Dark": ["apps", "places"],
+        })
+        result = self.module.select_icon_theme({"background": "#eff1f5"}, search_dirs=[d])
+        self.assertEqual(result, "Papirus")
+
+    def test_cursor_only_themes_excluded(self):
+        d = self._fake_dir({
+            "catppuccin-cursors": ["cursors"],   # cursor-only, no apps/places
+            "breeze": ["apps", "places"],
+        })
+        result = self.module.select_icon_theme({"background": "#1e1e2e"}, search_dirs=[d])
+        self.assertEqual(result, "breeze")
+
+    def test_falls_back_to_installed_when_no_pref_matches(self):
+        d = self._fake_dir({
+            "my-custom-dark-theme": ["apps"],
+        })
+        result = self.module.select_icon_theme({"background": "#1e1e2e"}, search_dirs=[d])
+        self.assertEqual(result, "my-custom-dark-theme")
+
+    def test_skips_hicolor_locolor_default(self):
+        d = self._fake_dir({
+            "hicolor": ["apps"],
+            "locolor": ["apps"],
+            "default": ["apps"],
+            "Adwaita": ["apps", "places"],
+        })
+        result = self.module.select_icon_theme({"background": "#1e1e2e"}, search_dirs=[d])
+        self.assertEqual(result, "Adwaita")
+
+    def test_installed_icon_themes_filters_cursor_only(self):
+        d = self._fake_dir({
+            "my-cursors": ["cursors"],
+            "Papirus-Dark": ["apps", "places"],
+        })
+        themes = self.module._installed_icon_themes(search_dirs=[d])
+        self.assertIn("Papirus-Dark", themes)
+        self.assertNotIn("my-cursors", themes)
+
+
 if __name__ == "__main__":
     unittest.main()
