@@ -16,10 +16,11 @@ SCRIPTS_DIR = SKILL_DIR / "scripts"
 SESSIONS_DIR = Path.home() / ".config" / "rice-sessions"
 DB_PATH = str(Path.home() / ".local" / "share" / "linux-ricing" / "sessions.sqlite")
 
-PALETTE_SLOTS = [
-    "background", "foreground", "primary", "secondary",
-    "accent", "surface", "muted", "danger", "success", "warning",
-]
+# Ensure scripts/ is importable so we can share constants with the scripts layer.
+if str(SCRIPTS_DIR) not in sys.path:
+    sys.path.insert(0, str(SCRIPTS_DIR))
+
+from core.constants import REQUIRED_PALETTE_KEYS as PALETTE_SLOTS  # noqa: E402
 BASE_REQUIRED_KEYS = ["name", "description", "palette", "mood_tags"]
 RECIPE_REQUIRED_KEYS = {
     "kde": ["kvantum_theme", "plasma_theme", "cursor_theme", "icon_theme", "gtk_theme"],

@@ -141,13 +141,11 @@ def materialize_gnome_shell(design: dict, backup_ts: str, dry_run: bool = False)
     })
 
     if cmd_exists("gsettings"):
-        schema = "org.gnome.desktop.interface"
-        for key, val in [("color-scheme", color_scheme)]:
-            rc, _, _ = run_cmd(["gsettings", "set", schema, key, val])
-            changes.append({
-                "app": "gnome_shell", "action": "gsettings",
-                "key": key, "value": val, "success": rc == 0,
-            })
+        rc, _, _ = run_cmd(["gsettings", "set", "org.gnome.desktop.interface", "color-scheme", color_scheme])
+        changes.append({
+            "app": "gnome_shell", "action": "gsettings",
+            "key": "color-scheme", "value": color_scheme, "success": rc == 0,
+        })
 
     return changes
 

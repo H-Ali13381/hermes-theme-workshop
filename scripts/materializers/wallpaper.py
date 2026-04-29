@@ -82,28 +82,26 @@ def materialize_wallpaper(
     desktop = discover_desktop()
     prev_wallpaper, _ = _snapshot_current_wallpaper(desktop)
 
+    def _record(method: str, **extra):
+        """Append a wallpaper change record (dry-run or real)."""
+        changes.append({"app": "wallpaper", "action": "dry-run" if dry_run else "set",
+                        "path": wallpaper_path, "method": method,
+                        "previous_wallpaper": prev_wallpaper, **extra})
+
     if desktop["wm"] == "kde" and cmd_exists("plasma-apply-wallpaperimage"):
-        if dry_run:
-            changes.append({"app": "wallpaper", "action": "dry-run", "path": wallpaper_path,
-                            "method": "plasma-apply-wallpaperimage", "previous_wallpaper": prev_wallpaper})
-        else:
+        if not dry_run:
             run_cmd(["plasma-apply-wallpaperimage", wallpaper_path])
-            changes.append({"app": "wallpaper", "action": "set", "path": wallpaper_path,
-                            "method": "plasma-apply-wallpaperimage", "previous_wallpaper": prev_wallpaper})
+        _record("plasma-apply-wallpaperimage")
 
     elif cmd_exists("awww"):
-        if dry_run:
-            changes.append({"app": "wallpaper", "action": "dry-run", "path": wallpaper_path,
-                            "method": "awww img", "previous_wallpaper": prev_wallpaper})
-        else:
+        if not dry_run:
             rc, _, _ = run_cmd(["pgrep", "awww-daemon"], timeout=3)
             if rc != 0:
                 subprocess.Popen(["awww-daemon"], stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
                                  stderr=subprocess.DEVNULL, start_new_session=True)
                 time.sleep(2)
             run_cmd(["awww", "img", wallpaper_path])
-            changes.append({"app": "wallpaper", "action": "set", "path": wallpaper_path,
-                            "method": "awww img", "previous_wallpaper": prev_wallpaper})
+        _record("awww img")
 
     elif cmd_exists("hyprpaper"):
         hyprpaper_conf = HOME / ".config" / "hypr" / "hyprpaper.conf"
@@ -124,44 +122,31 @@ def materialize_wallpaper(
         if not monitors:
             monitors = [""]
 
-        if dry_run:
-            changes.append({"app": "wallpaper", "action": "dry-run", "path": wallpaper_path,
-                            "method": "hyprpaper-config-rewrite", "monitors": monitors,
-                            "previous_wallpaper": prev_wallpaper})
-            return changes
-
-        hyprpaper_backup = backup_file(hyprpaper_conf, backup_ts, "hyprpaper/hyprpaper.conf")
-        hyprpaper_conf.parent.mkdir(parents=True, exist_ok=True)
-        lines = [f"preload = {wallpaper_path}"]
-        for mon in monitors:
-            lines.append(f"wallpaper = {mon}, {wallpaper_path}")
-        lines.append("splash = false")
-        hyprpaper_conf.write_text("\n".join(lines) + "\n", encoding="utf-8")
-        run_cmd(["pkill", "-x", "hyprpaper"])
-        time.sleep(1)
-        subprocess.Popen(["hyprpaper"], stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
-                         stderr=subprocess.DEVNULL, start_new_session=True)
-        changes.append({"app": "wallpaper", "action": "set", "path": wallpaper_path,
-                        "method": "hyprpaper-config-rewrite", "monitors": monitors,
-                        "config_path": str(hyprpaper_conf), "config_backup": hyprpaper_backup,
-                        "previous_wallpaper": prev_wallpaper})
+        if not dry_run:
+            hyprpaper_backup = backup_file(hyprpaper_conf, backup_ts, "hyprpaper/hyprpaper.conf")
+            hyprpaper_conf.parent.mkdir(parents=True, exist_ok=True)
+            lines = [f"preload = {wallpaper_path}"]
+            for mon in monitors:
+                lines.append(f"wallpaper = {mon}, {wallpaper_path}")
+            lines.append("splash = false")
+            hyprpaper_conf.write_text("\n".join(lines) + "\n", encoding="utf-8")
+            run_cmd(["pkill", "-x", "hyprpaper"])
+            time.sleep(1)
+            subprocess.Popen(["hyprpaper"], stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
+                             stderr=subprocess.DEVNULL, start_new_session=True)
+            _record("hyprpaper-config-rewrite", monitors=monitors,
+                    config_path=str(hyprpaper_conf), config_backup=hyprpaper_backup)
+        else:
+            _record("hyprpaper-config-rewrite", monitors=monitors)
 
     elif cmd_exists("swww"):
-        if dry_run:
-            changes.append({"app": "wallpaper", "action": "dry-run", "path": wallpaper_path,
-                            "method": "swww img", "previous_wallpaper": prev_wallpaper})
-        else:
+        if not dry_run:
             run_cmd(["swww", "img", wallpaper_path])
-            changes.append({"app": "wallpaper", "action": "set", "path": wallpaper_path,
-                            "method": "swww img", "previous_wallpaper": prev_wallpaper})
+        _record("swww img")
 
     elif cmd_exists("feh"):
-        if dry_run:
-            changes.append({"app": "wallpaper", "action": "dry-run", "path": wallpaper_path,
-                            "method": "feh --bg-scale", "previous_wallpaper": prev_wallpaper})
-        else:
+        if not dry_run:
             run_cmd(["feh", "--bg-scale", wallpaper_path])
-            changes.append({"app": "wallpaper", "action": "set", "path": wallpaper_path,
-                            "method": "feh --bg-scale", "previous_wallpaper": prev_wallpaper})
+        _record("feh --bg-scale")
 
     return changes

@@ -53,4 +53,14 @@ def _describe_change(change: dict) -> list[str]:
         lines.append(f"  [cursor] RESTORE: {prev}" if prev
                      else "  [cursor] No previous cursor recorded — will skip")
 
+    if app == "icon_theme" and action == "write":
+        prev = change.get("previous_icon_theme")
+        lines.append(f"  [icon_theme] RESTORE: {prev}" if prev
+                     else "  [icon_theme] No previous icon theme recorded — will clear")
+
+    if app == "kde_lockscreen" and action == "write":
+        prev = change.get("previous_theme")
+        lines.append(f"  [kde_lockscreen] RESTORE: {prev}" if prev
+                     else "  [kde_lockscreen] No previous lock screen theme recorded — will skip")
+
     return lines

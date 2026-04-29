@@ -23,3 +23,17 @@ def _get_kwrite() -> str | None:
     if cmd_exists("kwriteconfig5"):
         return "kwriteconfig5"
     return None
+
+
+def _kread(file: str, group: str, key: str) -> str | None:
+    """Read one key from a KDE config file via kreadconfig6 or kreadconfig5.
+
+    Tries kreadconfig6 first; falls back to kreadconfig5 if the tool is absent
+    or the key is not set.  Returns the value string or None.
+    """
+    for tool in ["kreadconfig6", "kreadconfig5"]:
+        if cmd_exists(tool):
+            rc, out, _ = run_cmd([tool, "--file", file, "--group", group, "--key", key])
+            if rc == 0 and out:
+                return out
+    return None

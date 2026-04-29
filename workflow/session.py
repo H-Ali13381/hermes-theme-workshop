@@ -9,17 +9,9 @@ import re
 import sys
 from pathlib import Path
 
-STEP_NAMES: dict[str, str] = {
-    "1": "Audit",
-    "2": "Explore",
-    "3": "Refine",
-    "4": "Plan",
-    "4.5": "Rollback Checkpoint",
-    "5": "Install",
-    "6": "Implement",
-    "7": "Cleanup",
-    "8": "Handoff",
-}
+# Single source of truth — also used by scripts/session_manager.py.
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts"))
+from core.session_io import STEP_NAMES  # noqa: E402
 
 
 def _md(session_dir: str) -> Path:

@@ -49,7 +49,7 @@ DESIGN = {
 
 
 def run_ricer(*args: str) -> subprocess.CompletedProcess[str]:
-    with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as tf:
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".json", encoding="utf-8", delete=False) as tf:
         json.dump(DESIGN, tf)
         design_path = tf.name
     try:
@@ -153,7 +153,7 @@ class DesignFileLoaderTests(unittest.TestCase):
             Path(path).unlink(missing_ok=True)
 
     def test_loads_yaml_design(self):
-        with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as tf:
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", encoding="utf-8", delete=False) as tf:
             tf.write("name: yaml-test\npalette:\n  background: '#000000'\n")
             path = tf.name
         try:

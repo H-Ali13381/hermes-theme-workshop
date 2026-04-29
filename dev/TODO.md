@@ -823,6 +823,33 @@
 
 ---
 
+### Deep Audit Findings (Round 4)
+
+#### Missing `timeout=` Arguments in `subprocess.run`
+
+- [x] **[QUALITY] `workflow/nodes/cleanup/reloader.py:43,47,56,65,74,78,87,91`: eight `subprocess.run()` calls without `timeout=`**
+  `reload_waybar`, `reload_polybar`, `reload_dunst`, `reload_mako`, and `reload_swaync` all invoke `subprocess.run(["pkill", ...])` and `subprocess.run(["makoctl", ...])` / `subprocess.run(["swaync-client", ...])` without a `timeout=` argument. A hung `pkill` (e.g. stale dbus lock), an unresponsive `makoctl`, or a blocked `swaync-client` will stall the cleanup node indefinitely with no way to recover.
+  **Fix:** Add `timeout=5` to all eight calls (5 s is more than enough for signal delivery and daemon reloads).
+  **Done:** Added `timeout=5` to all eight `subprocess.run()` calls across `reload_waybar`, `reload_polybar`, `reload_dunst`, `reload_mako`, and `reload_swaync`. All 5 `ReloadErrorPropagationTests` pass.
+
+#### Non-Idiomatic Test Assertions
+
+- [x] **[QUALITY] `tests/test_kde_materializers.py:478`: `assertFalse([list])` is non-idiomatic and fragile**
+  `self.assertFalse([c for c in calls if "kwriteconfig6" in c])` in `TestMaterializePlasmaTheme.test_dry_run_returns_single_change` checks that the filtered list is falsy (empty) — the same anti-pattern that was fixed at lines 432 and 436 in a previous round but missed here.
+  **Fix:** Replace with `self.assertEqual([c for c in calls if "kwriteconfig6" in c], [])`.
+  **Done:** Changed `assertFalse([...])` → `assertEqual([...], [])` at line 478. `TestMaterializePlasmaTheme.test_dry_run_returns_single_change` passes.
+
+#### Missing `encoding=` Arguments
+
+- [x] **[QUALITY] `tests/test_ricer_cli_routing.py:52,156`: two `NamedTemporaryFile(mode="w")` calls without `encoding="utf-8"`**
+  Line 52: `tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False)` writes a JSON design file for CLI tests.
+  Line 156: `tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False)` writes a YAML design file.
+  Neither specifies `encoding="utf-8"`. Although the content is ASCII-only today, the omission is inconsistent with the rest of the test suite and would silently mis-encode any future non-ASCII theme names on non-UTF-8 locales.
+  **Fix:** Add `encoding="utf-8"` to both `NamedTemporaryFile` calls.
+  **Done:** Added `encoding="utf-8"` to both calls at lines 52 and 156. All 9 `RicerCliRoutingTests` + `DesignFileLoaderTests` pass.
+
+---
+
 ### Round 6 -- 2026-04-29
 
 #### Missing encoding= Arguments

@@ -3,7 +3,7 @@ import os
 
 from core.constants import HOME
 from core.colors import is_dark_palette
-from core.process import run_cmd, cmd_exists, _get_kwrite
+from core.process import run_cmd, cmd_exists, _get_kwrite, _kread
 from core.backup import backup_file
 from core.config_parsers import _read_kvantum_theme
 
@@ -34,13 +34,7 @@ def materialize_kvantum(design: dict, backup_ts: str, dry_run: bool = False) -> 
         return changes
 
     prev_kvantum_theme = _read_kvantum_theme(kvantum_config) if kvantum_config.exists() else None
-    prev_widget_style = None
-    for tool in ["kreadconfig6", "kreadconfig5"]:
-        if cmd_exists(tool):
-            rc, out, _ = run_cmd([tool, "--file", "kdeglobals", "--group", "KDE", "--key", "widgetStyle"])
-            if rc == 0 and out:
-                prev_widget_style = out
-                break
+    prev_widget_style = _kread("kdeglobals", "KDE", "widgetStyle")
 
     kvantum_backup = backup_file(kvantum_config, backup_ts, "kvantum/kvantum.kvconfig")
     kvantum_dir.mkdir(parents=True, exist_ok=True)
@@ -79,13 +73,7 @@ def materialize_plasma_theme(design: dict, backup_ts: str, dry_run: bool = False
         changes.append({"app": "plasma_theme", "action": "dry-run", "theme": plasma_theme, "config_path": str(plasmarc)})
         return changes
 
-    prev_theme = None
-    for tool in ["kreadconfig6", "kreadconfig5"]:
-        if cmd_exists(tool):
-            rc, out, _ = run_cmd([tool, "--file", "plasmarc", "--group", "Theme", "--key", "name"])
-            if rc == 0 and out:
-                prev_theme = out
-                break
+    prev_theme = _kread("plasmarc", "Theme", "name")
 
     plasmarc_backup = backup_file(plasmarc, backup_ts, "plasma/plasmarc")
     kwrite = _get_kwrite()
@@ -115,13 +103,7 @@ def materialize_cursor(design: dict, backup_ts: str, dry_run: bool = False) -> l
         changes.append({"app": "cursor", "action": "dry-run", "theme": cursor_theme, "config_path": str(kcminputrc)})
         return changes
 
-    prev_cursor = None
-    for tool in ["kreadconfig6", "kreadconfig5"]:
-        if cmd_exists(tool):
-            rc, out, _ = run_cmd([tool, "--file", "kcminputrc", "--group", "Mouse", "--key", "cursorTheme"])
-            if rc == 0 and out:
-                prev_cursor = out
-                break
+    prev_cursor = _kread("kcminputrc", "Mouse", "cursorTheme")
 
     cursor_backup = backup_file(kcminputrc, backup_ts, "cursor/kcminputrc")
     kwrite = _get_kwrite()
@@ -177,13 +159,7 @@ def materialize_icon_theme(design: dict, backup_ts: str, dry_run: bool = False) 
                     generated = True
                     changes.append({"app": "icon_theme", "action": "generated-fal", "theme": icon_theme})
 
-    prev_icon_theme = None
-    for tool in ["kreadconfig6", "kreadconfig5"]:
-        if cmd_exists(tool):
-            rc, out, _ = run_cmd([tool, "--file", "kdeglobals", "--group", "Icons", "--key", "Theme"])
-            if rc == 0 and out:
-                prev_icon_theme = out
-                break
+    prev_icon_theme = _kread("kdeglobals", "Icons", "Theme")
 
     kwrite = _get_kwrite()
     if kwrite:
@@ -218,13 +194,7 @@ def materialize_kde_lockscreen(design: dict, backup_ts: str, dry_run: bool = Fal
                         "greeter_theme": greeter_theme, "config_path": str(kscreenlockerrc)})
         return changes
 
-    prev_theme = None
-    for tool in ["kreadconfig6", "kreadconfig5"]:
-        if cmd_exists(tool):
-            rc, out, _ = run_cmd([tool, "--file", "kscreenlockerrc", "--group", "Greeter", "--key", "Theme"])
-            if rc == 0 and out:
-                prev_theme = out
-                break
+    prev_theme = _kread("kscreenlockerrc", "Greeter", "Theme")
 
     kscreenlockerrc_backup = backup_file(kscreenlockerrc, backup_ts, "kscreenlocker/kscreenlockerrc")
     kwrite = _get_kwrite()

@@ -62,11 +62,12 @@ class MaterializeKdeLockscreenTests(unittest.TestCase):
     # After the modular refactor, materialize_kde_lockscreen lives in
     # materializers.kde_extras and its helpers in core.{backup,process}.
     # Patches must target the module where each symbol is actually used.
-    _HOME_PATCH      = "materializers.kde_extras.HOME"
+    _HOME_PATCH       = "materializers.kde_extras.HOME"
     _BACKUP_DIR_PATCH = "core.backup.BACKUP_DIR"
     _CMD_EXISTS_PATCH = "materializers.kde_extras.cmd_exists"
     _GET_KWRITE_PATCH = "materializers.kde_extras._get_kwrite"
     _RUN_CMD_PATCH    = "materializers.kde_extras.run_cmd"
+    _KREAD_PATCH      = "materializers.kde_extras._kread"
 
     def test_dry_run_returns_single_change_without_writing(self):
         tmpdir = Path(tempfile.mkdtemp())
@@ -147,16 +148,14 @@ class MaterializeKdeLockscreenTests(unittest.TestCase):
         tmpdir = Path(tempfile.mkdtemp())
         self.addCleanup(shutil.rmtree, tmpdir, True)
 
-        def fake_run_cmd(cmd, **_):
-            if "kreadconfig6" in cmd[0]:
-                return (0, "org.kde.breeze.desktop", "")
-            return (0, "", "")
-
+        # _kread is imported into kde_extras; patch it there to return the
+        # "currently active" lock screen theme without running kreadconfig.
         with patch(self._HOME_PATCH, new=tmpdir), \
              patch(self._BACKUP_DIR_PATCH, new=tmpdir / "backup"), \
-             patch(self._CMD_EXISTS_PATCH, return_value=True), \
+             patch(self._CMD_EXISTS_PATCH, return_value=False), \
              patch(self._GET_KWRITE_PATCH, return_value=None), \
-             patch(self._RUN_CMD_PATCH, side_effect=fake_run_cmd):
+             patch(self._RUN_CMD_PATCH, return_value=(0, "", "")), \
+             patch(self._KREAD_PATCH, return_value="org.kde.breeze.desktop"):
             changes = materialize_kde_lockscreen(_DARK_DESIGN, backup_ts="20260101_000000")
 
         self.assertEqual(changes[0]["previous_theme"], "org.kde.breeze.desktop")

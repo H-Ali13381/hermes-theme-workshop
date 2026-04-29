@@ -1,42 +1,19 @@
 """core/audit_utils.py — Low-level shell and INI utilities for desktop_state_audit.
 
 Extracted from scripts/desktop_state_audit.py to keep that file within the
-300-line budget.  These helpers are intentionally self-contained (no imports
-from other core modules) so desktop_state_audit.py can remain standalone.
+300-line budget.  Subprocess and KDE config helpers are re-exported from
+core.process so there is a single implementation.
 """
 import re
 import shutil
-import subprocess
 from pathlib import Path
 
-
-def run_cmd(cmd: list[str], timeout: int = 5) -> tuple[int, str, str]:
-    """Run a shell command, return (returncode, stdout, stderr)."""
-    try:
-        result = subprocess.run(
-            cmd, capture_output=True, text=True, timeout=timeout
-        )
-        return result.returncode, result.stdout.strip(), result.stderr.strip()
-    except (OSError, subprocess.SubprocessError, TimeoutError) as e:
-        return -1, "", str(e)
-
-
-def cmd_exists(name: str) -> bool:
-    return shutil.which(name) is not None
+from core.process import run_cmd, cmd_exists, _kread
 
 
 def kread(group: str, key: str, file: str = "kdeglobals") -> str | None:
-    """Read a KDE config value using kreadconfig6 or kreadconfig5."""
-    for tool in ["kreadconfig6", "kreadconfig5"]:
-        if cmd_exists(tool):
-            rc, out, _ = run_cmd([
-                tool, "--file", file,
-                "--group", group,
-                "--key", key
-            ])
-            if rc == 0 and out:
-                return out
-    return None
+    """Read a KDE config value.  Thin wrapper around _kread with legacy arg order."""
+    return _kread(file, group, key)
 
 
 def read_ini_key(filepath: Path, section: str, key: str) -> str | None:

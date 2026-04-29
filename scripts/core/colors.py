@@ -1,14 +1,26 @@
-"""Color math utilities: hex↔RGB conversion, hue rotation, lightness adjustment, YIQ."""
+"""Color math utilities: hex↔RGB conversion, hue rotation, lightness adjustment, YIQ.
+
+This is the single source of truth for colour primitives.  Both the
+materializer layer (``from core.colors import …``) and the palette-extraction
+layer (``core.palette_primitives`` re-exports under private names) use the
+implementations defined here.
+"""
 import colorsys
 
 
 def _normalize_hex(hex_color: str) -> str:
-    """Return a 6-digit lowercase hex string from a '#rgb', '#rrggbb', or '#rrggbbaa' input."""
+    """Return a 6-digit lowercase hex string from a '#rgb', '#rrggbb', or '#rrggbbaa' input.
+
+    Raises ValueError on any other length so callers get an explicit error
+    instead of silently mis-decoding channel bytes.
+    """
     h = hex_color.lstrip("#").lower()
     if len(h) == 3:
         h = h[0] * 2 + h[1] * 2 + h[2] * 2
     elif len(h) == 8:
         h = h[:6]  # strip alpha channel
+    if len(h) != 6:
+        raise ValueError(f"Invalid hex color: {hex_color!r}")
     return h
 
 
@@ -71,3 +83,35 @@ def adjust_lightness(hex_color: str, factor: float) -> str:
     l = max(0.0, min(1.0, l * factor))
     nr, ng, nb = colorsys.hls_to_rgb(h, l, s)
     return rgb_tuple_to_hex(int(nr * 255), int(ng * 255), int(nb * 255))
+
+
+# ---------------------------------------------------------------------------
+# Extras used by the palette-extraction pipeline
+# ---------------------------------------------------------------------------
+
+def rgb_to_hls(rgb: tuple[int, int, int]) -> tuple[float, float, float]:
+    """Convert (r, g, b) integer tuple to (h, l, s) floats in [0, 1]."""
+    r, g, b = rgb
+    return colorsys.rgb_to_hls(r / 255, g / 255, b / 255)
+
+
+def hex_to_hls(hex_color: str) -> tuple[float, float, float]:
+    """Convert '#rrggbb' to (h, l, s) floats."""
+    return rgb_to_hls(hex_to_rgb_tuple(hex_color))
+
+
+def yiq_luma(hex_color: str) -> float:
+    """Return the YIQ perceptual luma of hex_color (0–255 scale)."""
+    r, g, b = hex_to_rgb_tuple(hex_color)
+    return (r * 299 + g * 587 + b * 114) / 1000
+
+
+def blend_hex(a: str, b: str, t: float = 0.5) -> str:
+    """Linear RGB blend.  t=0 → a, t=1 → b."""
+    ra, ga, ba = hex_to_rgb_tuple(a)
+    rb, gb, bb = hex_to_rgb_tuple(b)
+    return rgb_tuple_to_hex(
+        int(ra + (rb - ra) * t),
+        int(ga + (gb - ga) * t),
+        int(ba + (bb - ba) * t),
+    )

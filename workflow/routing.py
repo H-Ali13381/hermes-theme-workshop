@@ -13,7 +13,20 @@ import sys
 from langgraph.graph import END
 
 from .config import MAX_LOOP_ITERATIONS
-from .validators import validator
+from . import validators
+
+
+def _loop_limit_reached(state: dict, node: str, label: str) -> bool:
+    """Return True (and print a warning) if node has hit MAX_LOOP_ITERATIONS."""
+    count = state.get("loop_counts", {}).get(node, 0)
+    if count >= MAX_LOOP_ITERATIONS:
+        print(
+            f"[{label}] ABORT — reached {count}/{MAX_LOOP_ITERATIONS} iterations "
+            "without making progress. Check LLM response format.",
+            file=sys.stderr,
+        )
+        return True
+    return False
 
 
 def after_audit(state: dict) -> str:
@@ -27,64 +40,25 @@ def after_audit(state: dict) -> str:
 
 
 def after_explore(state: dict) -> str:
-    """Route after the explore node.
-
-    Loop back to explore until the creative direction has been confirmed;
-    proceed to refine once it is.
-
-    Safety guard: if the node has been invoked more than MAX_LOOP_ITERATIONS
-    times without confirming a direction (e.g. the LLM emits the sentinel
-    repeatedly but JSON parsing fails every time), abort to END rather than
-    spinning forever.
-    """
-    count = state.get("loop_counts", {}).get("explore", 0)
-    if count >= MAX_LOOP_ITERATIONS:
-        print(
-            f"[Explore] ABORT — reached {count}/{MAX_LOOP_ITERATIONS} iterations "
-            "without confirming a direction. Check LLM response format.",
-            file=sys.stderr,
-        )
+    """Loop until creative direction is confirmed; abort if loop limit is hit."""
+    if _loop_limit_reached(state, "explore", "Explore"):
         return END
-    return "refine" if validator.direction_confirmed(state.get("design", {})) else "explore"
+    return "refine" if validators.direction_confirmed(state.get("design", {})) else "explore"
 
 
 def after_refine(state: dict) -> str:
-    """Route after the refine node.
-
-    Loop back to refine until the design JSON is schema-valid and complete;
-    proceed to plan once it passes validation.
-
-    Safety guard: abort to END after MAX_LOOP_ITERATIONS invocations.
-    """
-    count = state.get("loop_counts", {}).get("refine", 0)
-    if count >= MAX_LOOP_ITERATIONS:
-        print(
-            f"[Refine] ABORT — reached {count}/{MAX_LOOP_ITERATIONS} iterations "
-            "without producing a valid design. Check LLM response format.",
-            file=sys.stderr,
-        )
+    """Loop until design JSON is schema-valid; abort if loop limit is hit."""
+    if _loop_limit_reached(state, "refine", "Refine"):
         return END
-    ok, _ = validator.design_complete(state.get("design", {}), state.get("device_profile", {}))
+    ok, _ = validators.design_complete(state.get("design", {}), state.get("device_profile", {}))
     return "plan" if ok else "refine"
 
 
 def after_plan(state: dict) -> str:
-    """Route after the plan node.
-
-    Loop back to plan until the HTML mockup file is present and valid;
-    proceed to baseline once it is ready.
-
-    Safety guard: abort to END after MAX_LOOP_ITERATIONS invocations.
-    """
-    count = state.get("loop_counts", {}).get("plan", 0)
-    if count >= MAX_LOOP_ITERATIONS:
-        print(
-            f"[Plan] ABORT — reached {count}/{MAX_LOOP_ITERATIONS} iterations "
-            "without an approved HTML preview. Check LLM response format.",
-            file=sys.stderr,
-        )
+    """Loop until HTML mockup is present and valid; abort if loop limit is hit."""
+    if _loop_limit_reached(state, "plan", "Plan"):
         return END
-    ok, _ = validator.plan_ready(state.get("plan_html_path", ""))
+    ok, _ = validators.plan_ready(state.get("plan_html_path", ""))
     return "baseline" if ok else "plan"
 
 
@@ -94,4 +68,4 @@ def after_implement(state: dict) -> str:
     Loop back to implement while there are still pending elements in the
     queue; proceed to cleanup when the queue is empty.
     """
-    return "cleanup" if validator.implement_done(state.get("element_queue", [])) else "implement"
+    return "cleanup" if validators.implement_done(state.get("element_queue", [])) else "implement"

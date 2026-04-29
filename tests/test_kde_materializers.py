@@ -140,15 +140,13 @@ class TestMaterializeIconTheme(unittest.TestCase):
         self.assertIn("Papirus-Dark", last)
 
     def test_change_entry_includes_previous_icon_theme(self):
-        def fake_run_cmd(cmd, **kwargs):
-            if "kreadconfig6" in cmd:
-                return (0, "Papirus", "")
-            return (0, "", "")
-
+        # _kread is imported into kde_extras; patch there so it returns the
+        # "currently active" icon theme without touching the real kreadconfig.
         with (
-            patch(f"{self._ICON_MOD}.run_cmd", side_effect=fake_run_cmd),
+            patch(f"{self._ICON_MOD}._kread", return_value="Papirus"),
             patch(f"{self._ICON_MOD}._get_kwrite", return_value="kwriteconfig6"),
-            patch(f"{self._ICON_MOD}.cmd_exists", side_effect=lambda n: n == "kreadconfig6"),
+            patch(f"{self._ICON_MOD}.run_cmd", return_value=(0, "", "")),
+            patch(f"{self._ICON_MOD}.cmd_exists", return_value=False),
         ):
             result = ricer.materialize_icon_theme(
                 {"icon_theme": "Papirus-Dark"}, backup_ts="20260427T000000"
@@ -169,6 +167,9 @@ class TestMaterializeKdeLockscreenReadconfig(unittest.TestCase):
 
         tool_outputs maps tool name -> (rc, stdout, stderr).
         Returns the list of run_cmd calls made.
+
+        Patches both `core.process` (where _kread lives) and the materializer
+        module so kreadconfig fallthrough behaviour is exercised end-to-end.
         """
         calls = []
 
@@ -180,14 +181,15 @@ class TestMaterializeKdeLockscreenReadconfig(unittest.TestCase):
             calls.append(list(cmd))
             return tool_outputs.get(tool, (1, "", "error"))
 
-        def fake_backup(path, ts, rel):
-            return None
-
         design = {"palette": {"background": "#1e1e2e"}}
         with (
+            # Patch _kread's home module so the fallthrough loop is exercised.
+            patch("core.process.cmd_exists", side_effect=fake_cmd_exists),
+            patch("core.process.run_cmd",    side_effect=fake_run_cmd),
+            # Patch the materializer module for non-kread cmd_exists / run_cmd calls.
             patch(f"{self._MOD}.cmd_exists", side_effect=fake_cmd_exists),
-            patch(f"{self._MOD}.run_cmd", side_effect=fake_run_cmd),
-            patch(f"{self._MOD}.backup_file", side_effect=fake_backup),
+            patch(f"{self._MOD}.run_cmd",    side_effect=fake_run_cmd),
+            patch(f"{self._MOD}.backup_file", return_value=None),
             patch(f"{self._MOD}._get_kwrite", return_value=None),
         ):
             result = ricer.materialize_kde_lockscreen(design, backup_ts="20260427T000000")
@@ -359,7 +361,11 @@ class TestSnapshotKdeState(unittest.TestCase):
 
     def _snap(self, outputs: dict[str, str],
               kvconfig: str | None = None, appletsrc: str | None = None):
-        """Run snapshot_kde_state inside a fresh tmpdir; return the result dict."""
+        """Run snapshot_kde_state inside a fresh tmpdir; return the result dict.
+
+        `outputs` maps KDE config key names (e.g. "ColorScheme") to the value
+        that _kread should return for that key.
+        """
         with tempfile.TemporaryDirectory() as tmp:
             home = Path(tmp)
             if kvconfig is not None:
@@ -372,9 +378,10 @@ class TestSnapshotKdeState(unittest.TestCase):
                 src.write_text(appletsrc, encoding="utf-8")
             with (
                 patch(f"{self._SNAP}.HOME", home),
-                patch(f"{self._SNAP}.cmd_exists", side_effect=lambda n: n == "kreadconfig6"),
-                patch(f"{self._SNAP}.run_cmd",
-                      side_effect=lambda cmd, **kw: (0, outputs.get(cmd[-1] if cmd else "", ""), "")),
+                # _kread is imported into core.snapshots; patch there so calls
+                # return values from `outputs` keyed by the KDE key name.
+                patch(f"{self._SNAP}._kread",
+                      side_effect=lambda file, group, key: outputs.get(key) or None),
             ):
                 return ricer.snapshot_kde_state()
 
@@ -412,13 +419,14 @@ class TestMaterializeCursor(unittest.TestCase):
         calls = []
         with (
             patch(f"{self._KE}.HOME", Path("/tmp/fake-home")),
+            # _kread is now used for the "previous cursor" lookup; patch it here.
+            patch(f"{self._KE}._kread", return_value=prev_cursor),
             patch(f"{self._KE}.run_cmd",
-                  side_effect=lambda cmd, **kw: calls.append(list(cmd)) or
-                  (0, prev_cursor if "cursorTheme" in cmd else "", "")),
+                  side_effect=lambda cmd, **kw: calls.append(list(cmd)) or (0, "", "")),
             patch(f"{self._KE}.backup_file", return_value="/tmp/backup"),
             patch(f"{self._KE}._get_kwrite", return_value="kwriteconfig6"),
             patch(f"{self._KE}.cmd_exists",
-                  side_effect=lambda n: n in ("kreadconfig6", "plasma-apply-cursortheme")),
+                  side_effect=lambda n: n == "plasma-apply-cursortheme"),
         ):
             changes = ricer.materialize_cursor(design, backup_ts="ts", dry_run=dry_run)
         return changes, calls
@@ -475,7 +483,7 @@ class TestMaterializePlasmaTheme(unittest.TestCase):
         changes, calls, _ = self._run({"palette": _MINIMAL_PALETTE, "plasma_theme": "breeze-dark"},
                                       dry_run=True)
         self.assertEqual(changes[0]["action"], "dry-run")
-        self.assertFalse([c for c in calls if "kwriteconfig6" in c])
+        self.assertEqual([c for c in calls if "kwriteconfig6" in c], [])
 
     def test_writes_plasmarc_group_theme_key_name(self):
         _, calls, _ = self._run({"palette": _MINIMAL_PALETTE, "plasma_theme": "breeze-dark"})

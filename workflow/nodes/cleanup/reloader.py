@@ -40,11 +40,11 @@ def validate_file(path: Path) -> tuple[bool, str]:
 
 
 def reload_waybar(reloaded: list[str], errors: list[str]) -> None:
-    r = subprocess.run(["pkill", "-SIGUSR2", "waybar"], capture_output=True)
+    r = subprocess.run(["pkill", "-SIGUSR2", "waybar"], capture_output=True, timeout=5)
     if r.returncode == 0:
         reloaded.append("waybar")
     else:
-        subprocess.run(["pkill", "waybar"], capture_output=True)
+        subprocess.run(["pkill", "waybar"], capture_output=True, timeout=5)
         try:
             subprocess.Popen(["waybar"], stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
             reloaded.append("waybar(restart)")
@@ -53,7 +53,7 @@ def reload_waybar(reloaded: list[str], errors: list[str]) -> None:
 
 
 def reload_polybar(reloaded: list[str], errors: list[str]) -> None:
-    subprocess.run(["pkill", "polybar"], capture_output=True)
+    subprocess.run(["pkill", "polybar"], capture_output=True, timeout=5)
     try:
         subprocess.Popen(["polybar"], stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         reloaded.append("polybar(restart)")
@@ -62,7 +62,7 @@ def reload_polybar(reloaded: list[str], errors: list[str]) -> None:
 
 
 def reload_dunst(reloaded: list[str], errors: list[str]) -> None:
-    subprocess.run(["pkill", "dunst"], capture_output=True)
+    subprocess.run(["pkill", "dunst"], capture_output=True, timeout=5)
     try:
         subprocess.Popen(["dunst"], stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         reloaded.append("dunst")
@@ -71,11 +71,11 @@ def reload_dunst(reloaded: list[str], errors: list[str]) -> None:
 
 
 def reload_mako(reloaded: list[str], errors: list[str]) -> None:
-    r = subprocess.run(["makoctl", "reload"], capture_output=True)
+    r = subprocess.run(["makoctl", "reload"], capture_output=True, timeout=5)
     if r.returncode == 0:
         reloaded.append("mako")
     else:
-        subprocess.run(["pkill", "mako"], capture_output=True)
+        subprocess.run(["pkill", "mako"], capture_output=True, timeout=5)
         try:
             subprocess.Popen(["mako"], stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
             reloaded.append("mako(restart)")
@@ -84,11 +84,11 @@ def reload_mako(reloaded: list[str], errors: list[str]) -> None:
 
 
 def reload_swaync(reloaded: list[str], errors: list[str]) -> None:
-    r = subprocess.run(["swaync-client", "--reload-config"], capture_output=True)
+    r = subprocess.run(["swaync-client", "--reload-config"], capture_output=True, timeout=5)
     if r.returncode == 0:
         reloaded.append("swaync")
     else:
-        subprocess.run(["pkill", "swaync"], capture_output=True)
+        subprocess.run(["pkill", "swaync"], capture_output=True, timeout=5)
         try:
             subprocess.Popen(["swaync"], stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
             reloaded.append("swaync(restart)")

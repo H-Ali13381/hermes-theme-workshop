@@ -34,46 +34,25 @@ def cmd_append_step(step_id: str, kvpairs: list[str]) -> None:
         else:
             bullets += f"- {pair}\n"
 
-    if step_id == "6":
-        content = md.read_text(encoding="utf-8")
-        if "## Step 6 — Implement" in content:
+    header = f"## Step {step_id} — {step_name}"
+    content = md.read_text(encoding="utf-8")
+    if header in content:
+        updated = re.sub(
+            rf"## Step {re.escape(step_id)} — {re.escape(step_name)}\b[^\n]*",
+            f"{header} ✓",
+            content,
+        )
+        if bullets:
             updated = re.sub(
-                r"## Step 6 — Implement\b[^\n]*",
-                "## Step 6 — Implement ✓",
-                content,
+                rf"({re.escape(header)} ✓\n)(.*?)((?=\n## )|\Z)",
+                lambda m: m.group(1) + m.group(2) + bullets + m.group(3),
+                updated,
+                flags=re.DOTALL,
             )
-            if bullets:
-                updated = re.sub(
-                    r"(## Step 6 — Implement ✓\n)(.*?)((?=\n## )|\Z)",
-                    lambda m: m.group(1) + m.group(2) + bullets + m.group(3),
-                    updated,
-                    flags=re.DOTALL,
-                )
-            md.write_text(updated, encoding="utf-8")
-        else:
-            with md.open("a", encoding="utf-8") as f:
-                f.write(f"\n## Step 6 — Implement ✓\n{bullets}")
+        md.write_text(updated, encoding="utf-8")
     else:
-        content = md.read_text(encoding="utf-8")
-        header_pattern = f"## Step {step_id} — {step_name}"
-        if header_pattern in content:
-            updated = re.sub(
-                rf"## Step {re.escape(step_id)} — {re.escape(step_name)}\b[^\n]*",
-                f"## Step {step_id} — {step_name} ✓",
-                content,
-            )
-            if bullets:
-                updated = re.sub(
-                    rf"(## Step {re.escape(step_id)} — {re.escape(step_name)} ✓\n)(.*?)((?=\n## )|\Z)",
-                    lambda m: m.group(1) + m.group(2) + bullets + m.group(3),
-                    updated,
-                    flags=re.DOTALL,
-                )
-            md.write_text(updated, encoding="utf-8")
-        else:
-            section = f"\n## Step {step_id} — {step_name} ✓\n{bullets}"
-            with md.open("a", encoding="utf-8") as f:
-                f.write(section)
+        with md.open("a", encoding="utf-8") as f:
+            f.write(f"\n{header} ✓\n{bullets}")
 
     update_status_line(session_dir, f"IN PROGRESS — Step {step_id} complete")
     print(f"Appended Step {step_id} — {step_name} ✓  →  {md}")

@@ -6,6 +6,7 @@ Phases 0-3 of the deterministic ricing protocol.
 """
 from __future__ import annotations
 
+import json
 import subprocess
 import sys
 from datetime import datetime
@@ -67,9 +68,9 @@ def ensure_deps() -> bool:
 
 
 def load_preset(name: str) -> dict | None:
-    rc, out, _ = run([sys.executable, str(RICER_PY), "presets"])
-    if name not in out:
-        log(f"FATAL: preset '{name}' not found. Run 'ricer presets' to list.")
+    from presets import PRESETS
+    if name not in PRESETS:
+        log(f"FATAL: preset '{name}' not found. Available: {list(PRESETS.keys())}")
         return None
     return {"name": name, "source": "preset"}
 

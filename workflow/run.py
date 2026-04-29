@@ -27,9 +27,14 @@ from langgraph.errors import GraphInterrupt
 from langgraph.types import Command
 from langchain_core.messages import AIMessage
 
-from workflow.config import DB_PATH, SESSIONS_DIR
+from workflow.config import DB_PATH, SESSIONS_DIR, SCRIPTS_DIR
 from workflow.graph import build_graph
 from workflow.state import RiceSessionState
+
+# Ensure scripts/ is importable for session_io helpers.
+if str(SCRIPTS_DIR) not in sys.path:
+    sys.path.insert(0, str(SCRIPTS_DIR))
+from core.session_io import SESSION_HEADER_TEMPLATE, set_current  # noqa: E402
 
 
 def main() -> None:
@@ -231,19 +236,13 @@ def _new_thread_id() -> str:
 def _init_session_dir(thread_id: str) -> Path:
     session_dir = SESSIONS_DIR / thread_id
     session_dir.mkdir(parents=True, exist_ok=True)
-    # Write session header — format aligned with session_manager.py SESSION_HEADER_TEMPLATE.
-    header = (
-        f"# Rice Session: {thread_id}\n"
-        f"Started: {datetime.now().isoformat(timespec='seconds')}\n"
-        f"Status: IN PROGRESS — Step 0 complete\n"
-        f"Session dir: {session_dir}\n\n---\n"
+    header = SESSION_HEADER_TEMPLATE.format(
+        theme_name=thread_id,
+        started=datetime.now().isoformat(timespec="seconds"),
+        session_dir=str(session_dir),
     )
     (session_dir / "session.md").write_text(header, encoding="utf-8")
-    # Update .current symlink so agent tools (session_manager.py) see this session.
-    current_link = SESSIONS_DIR / ".current"
-    if current_link.is_symlink() or current_link.exists():
-        current_link.unlink()
-    current_link.symlink_to(session_dir)
+    set_current(session_dir)
     return session_dir
 
 

@@ -108,7 +108,7 @@ def materialize_konsole(design: dict, backup_ts: str, dry_run: bool = False) -> 
         "accent":     hex_to_rgb(adjust_lightness(rotate_hue(palette["accent"], 15), 1.3)),
         "foreground": hex_to_rgb(adjust_lightness(palette["foreground"], 1.25)),
     }
-    color_scheme_content = _build_konsole_colorscheme(p, pi, color_scheme_name)
+    color_scheme_content = build_konsole_colorscheme(p, pi, color_scheme_name)
     profile_content = f"""[Appearance]
 ColorScheme={color_scheme_name}
 
@@ -231,6 +231,3 @@ def materialize_alacritty(design: dict, backup_ts: str, dry_run: bool = False) -
                     "backup": toml_backup, "injected": injected, "marker": hermes_marker})
     return changes
 
-
-# _build_konsole_colorscheme moved to materializers/terminal_colors.py
-_build_konsole_colorscheme = build_konsole_colorscheme

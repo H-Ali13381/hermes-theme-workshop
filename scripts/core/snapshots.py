@@ -2,26 +2,17 @@
 import re
 
 from core.constants import HOME
-from core.process import run_cmd, cmd_exists
+from core.process import _kread
 from core.config_parsers import _read_kvantum_theme, _appletsrc_image
 
 
 def snapshot_kde_state() -> dict[str, str | None]:
     """Read the currently active KDE colorscheme so we can restore it on undo."""
-    scheme = None
-    lookandfeel = None
+    scheme      = _kread("kdeglobals", "General", "ColorScheme")
+    lookandfeel = _kread("kdeglobals", "KDE",     "LookAndFeelPackage")
 
-    for tool in ["kreadconfig6", "kreadconfig5"]:
-        if cmd_exists(tool):
-            rc, out, _ = run_cmd([tool, "--file", "kdeglobals", "--group", "General", "--key", "ColorScheme"])
-            if rc == 0 and out:
-                scheme = out
-            rc2, out2, _ = run_cmd([tool, "--file", "kdeglobals", "--group", "KDE", "--key", "LookAndFeelPackage"])
-            if rc2 == 0 and out2:
-                lookandfeel = out2
-            if scheme:
-                break
-
+    # Fallback: parse kdeglobals directly when kreadconfig isn't available or
+    # the keys are absent (e.g. first-time run with no scheme applied yet).
     if not scheme or not lookandfeel:
         kdeglobals = HOME / ".config" / "kdeglobals"
         if kdeglobals.exists():
@@ -40,39 +31,7 @@ def snapshot_kde_state() -> dict[str, str | None]:
                         lookandfeel = m.group(1).strip()
 
     kvantum_config = HOME / ".config" / "Kvantum" / "kvantum.kvconfig"
-    kvantum_theme = _read_kvantum_theme(kvantum_config) if kvantum_config.exists() else None
-
-    widget_style = None
-    for tool in ["kreadconfig6", "kreadconfig5"]:
-        if cmd_exists(tool):
-            rc, out, _ = run_cmd([tool, "--file", "kdeglobals", "--group", "KDE", "--key", "widgetStyle"])
-            if rc == 0 and out:
-                widget_style = out
-                break
-
-    plasma_theme = None
-    for tool in ["kreadconfig6", "kreadconfig5"]:
-        if cmd_exists(tool):
-            rc, out, _ = run_cmd([tool, "--file", "plasmarc", "--group", "Theme", "--key", "name"])
-            if rc == 0 and out:
-                plasma_theme = out
-                break
-
-    icon_theme = None
-    for tool in ["kreadconfig6", "kreadconfig5"]:
-        if cmd_exists(tool):
-            rc, out, _ = run_cmd([tool, "--file", "kdeglobals", "--group", "Icons", "--key", "Theme"])
-            if rc == 0 and out:
-                icon_theme = out
-                break
-
-    cursor = None
-    for tool in ["kreadconfig6", "kreadconfig5"]:
-        if cmd_exists(tool):
-            rc, out, _ = run_cmd([tool, "--file", "kcminputrc", "--group", "Mouse", "--key", "cursorTheme"])
-            if rc == 0 and out:
-                cursor = out
-                break
+    kvantum_theme  = _read_kvantum_theme(kvantum_config) if kvantum_config.exists() else None
 
     wallpaper = None
     wallpaper_plugin = None
@@ -85,14 +44,14 @@ def snapshot_kde_state() -> dict[str, str | None]:
 
     return {
         "active_colorscheme": scheme,
-        "look_and_feel": lookandfeel,
-        "kvantum_theme": kvantum_theme,
-        "widget_style": widget_style,
-        "plasma_theme": plasma_theme,
-        "cursor_theme": cursor,
-        "icon_theme": icon_theme,
-        "wallpaper": wallpaper,
-        "wallpaper_plugin": wallpaper_plugin,
+        "look_and_feel":      lookandfeel,
+        "kvantum_theme":      kvantum_theme,
+        "widget_style":       _kread("kdeglobals",   "KDE",   "widgetStyle"),
+        "plasma_theme":       _kread("plasmarc",     "Theme", "name"),
+        "cursor_theme":       _kread("kcminputrc",   "Mouse", "cursorTheme"),
+        "icon_theme":         _kread("kdeglobals",   "Icons", "Theme"),
+        "wallpaper":          wallpaper,
+        "wallpaper_plugin":   wallpaper_plugin,
     }
 
 
