@@ -105,7 +105,7 @@ python3 ~/.hermes/skills/creative/linux-ricing/scripts/deterministic_ricing_sess
 
 ---
 
-## All 9 Presets
+## All 10 Presets
 
 | Name | Description |
 |------|-------------|
@@ -117,7 +117,6 @@ python3 ~/.hermes/skills/creative/linux-ricing/scripts/deterministic_ricing_sess
 | `rose-pine` | Rose Piné — warm dawn theme |
 | `doom-knight` | DragonFable DoomKnight — deep purples, battered gold, dark crimson |
 | `void-dragon` | Void dragon knight — cyan soul blade, gold filigree, void sky |
-| `bareblood` | Gothic maximalist — blood reds, wine blacks, muted rose-grey |
 
 ### void-dragon Canonical Dict
 

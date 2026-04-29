@@ -30,7 +30,7 @@
     "shared/": "21 cross-environment guide docs",
     "KDE/": "9 KDE Plasma-specific docs",
     "Hyprland/": "9 Hyprland-specific docs",
-    "examples/": "Sample design_system YAML files (e.g. dragonfable.yaml) for reference and testing — 11 built-in presets: catppuccin-mocha, nord, gruvbox-dark, dracula, tokyo-night, rose-pine, solarized-dark, doom-knight, void-dragon, shiva-temple, bareblood",
+    "examples/": "Sample design_system YAML files (e.g. dragonfable.yaml) for reference and testing — 10 built-in presets: catppuccin-mocha, nord, gruvbox-dark, dracula, tokyo-night, rose-pine, solarized-dark, doom-knight, void-dragon, shiva-temple",
     "references/": "Internal architecture notes (e.g. color-extractor-architecture.md) — not end-user docs",
     "tests/": "pytest suite — palette extractor, bug reproducers, capture",
     "workflow/": "LangGraph StateGraph orchestration layer — maps the 8-step session to graph nodes with SQLite checkpointing for crash recovery (run.py entrypoint, graph.py, nodes/, validators.py, state.py)",

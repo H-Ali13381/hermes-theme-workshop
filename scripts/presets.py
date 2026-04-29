@@ -167,30 +167,6 @@ PRESETS: dict[str, dict] = {
         "gtk_theme": "Adwaita-dark",
         "mood_tags": ["shiva", "temple", "cosmic", "indigo", "vermillion", "dark", "sacred"],
     },
-    "bareblood": {
-        "name": "bareblood",
-        "description": "Gothic maximalist dark fantasy. Blood reds, wine blacks, muted rose-grey. Zero blues — amber fills the cyan role.",
-        "palette": {
-            "background": "#140607",
-            "foreground": "#685259",
-            "primary":    "#cc1133",
-            "secondary":  "#3d2130",
-            "accent":     "#e8a766",
-            "surface":    "#3b0d10",
-            "muted":      "#180000",
-            "danger":     "#c5245c",
-            "success":    "#579523",
-            "warning":    "#aa301b",
-        },
-        # KvDark is the canonical built-in dark Kvantum theme present on most installs.
-        # BreezeDark is a native Qt/KDE style, NOT a Kvantum theme — do not use it here.
-        "kvantum_theme": "KvDark",
-        "plasma_theme": "default",
-        "cursor_theme": "default",
-        "icon_theme": "Papirus-Dark",
-        "gtk_theme": "Adwaita-dark",
-        "mood_tags": ["gothic", "maximalist", "blood", "wine", "fantasy", "bareblood"],
-    },
 }
 
 

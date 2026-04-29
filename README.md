@@ -364,7 +364,6 @@ For the fast path, see `QUICKSTART.md`.
 | `doom-knight` | Gothic gold and crimson (DragonFable) |
 | `void-dragon` | Void sky, cyan blade, gold filigree |
 | `shiva-temple` | Cosmic void, third-eye indigo, vermillion sindoor |
-| `bareblood` | Gothic maximalist — blood reds, wine blacks, amber accents |
 
 ### Example — Marathon 2025 Themes
 
@@ -396,7 +395,7 @@ Everything is in one skill — load `SKILL.md` and pull in the file you need:
 
 **Materializer CLI** (`scripts/`)
 - `ricer.py` — 23 app materializers; use `--only=<target>` or `--app=<target>` for single-target apply
-- `presets.py` — 11 built-in design presets (catppuccin-mocha through bareblood)
+- `presets.py` — 10 built-in design presets (catppuccin-mocha through shiva-temple)
 - `ricer_undo.py` — full rollback engine with per-app undo handlers
 - `palette_extractor.py` — image → 10-slot semantic palette with mood tags and theme-name defaults
 - `desktop_state_audit.py` — full desktop state snapshot for immutable baselines
