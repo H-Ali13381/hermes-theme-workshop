@@ -4,7 +4,7 @@
 engines, and everything in between. Extracted from iterative real-world usage on
 Arch Linux / KDE Plasma / Hyprland.
 
-![Marathon 2025 Themes](skills/linux-ricing/assets/previews/marathon2025-themes.png)
+![Marathon 2025 Themes](assets/previews/marathon2025-themes.png)
 
 > *Three themes (Chrysalis, Cortex, Extraction) generated live in a single Hyprland
 > ricing session — see [Part 2](#part-2--desktop-ricing-kde-hyprland-gtk).*
@@ -21,12 +21,14 @@ linux-ricing/                                   ★ AI-native desktop design sys
 ├── manifest.json                               ← skill manifest
 │
 ├── workflow/                                   ← LangGraph workflow engine
-│   ├── graph.py                                ← pipeline definition: all 8 steps, sequence, routing
-│   ├── run.py                                  ← CLI entry point (start / --resume / --list)
+│   ├── graph.py                                ← pipeline: all 8 steps, sequence, routing
+│   ├── run.py                                  ← CLI entry (start / --resume / --list)
 │   ├── state.py                                ← RiceSessionState TypedDict
+│   ├── routing.py                              ← conditional edge functions
 │   ├── validators.py                           ← gate conditions for each phase
 │   ├── session.py                              ← session log writer
 │   ├── config.py                               ← recipe schemas (KDE / GNOME / Hyprland)
+│   ├── utils.py                                ← CSS brace balancing, JSONC comment stripping
 │   └── nodes/
 │       ├── audit/       ← Step 1: silent machine scan, WM/GPU/app detection
 │       ├── explore.py   ← Step 2: creative direction loop
@@ -39,60 +41,76 @@ linux-ricing/                                   ★ AI-native desktop design sys
 │       └── handoff.py   ← Step 8: write session documentation
 │
 ├── scripts/
-│   ├── ricer.py                                ← materializer CLI (20+ app targets)
-│   ├── session_manager.py
-│   ├── palette_extractor.py
-│   ├── desktop_state_audit.py
-│   ├── deterministic_ricing_session.py
-│   ├── capture_theme_references.py
-│   ├── reference_capture_window.py
-│   ├── generate_panel_svg.py
-│   └── setup.sh
+│   ├── ricer.py                                ← materializer CLI (23 app targets)
+│   ├── ricer_undo.py                           ← rollback engine
+│   ├── presets.py                              ← built-in design presets (11 themes)
+│   ├── palette_extractor.py                    ← image → 10-slot semantic palette
+│   ├── desktop_state_audit.py                  ← full desktop state snapshot
+│   ├── desktop_utils.py                        ← shared WM/DE detection
+│   ├── session_manager.py                      ← session state CLI
+│   ├── session_helpers.py                      ← session phases 0–3
+│   ├── session_phases.py                       ← session phases 4–6
+│   ├── deterministic_ricing_session.py         ← scripted apply protocol
+│   ├── icon_theme_gen.py                       ← icon theme recoloring / generation
+│   ├── capture_theme_references.py / capture_apply.py / capture_constants.py / capture_helpers.py
+│   ├── reference_capture_window.py / generate_panel_svg.py
+│   ├── setup.sh / requirements.txt
+│   ├── core/                                   ← shared utilities
+│   │   ├── colors.py                           ← hex↔RGB, hue rotation, lightness, YIQ (single source of truth)
+│   │   ├── palette_primitives.py               ← re-exports from colors.py under private names
+│   │   ├── palette_engine.py                   ← image quantisation, swatch classification, slot assignment
+│   │   ├── process.py                          ← subprocess helpers, cmd_exists, _kread
+│   │   ├── backup.py                           ← file backup and injection removal
+│   │   ├── discovery.py                        ← app detection (KDE, GNOME, Hyprland, terminals, bars…)
+│   │   ├── snapshots.py                        ← pre-flight KDE/Konsole state capture
+│   │   ├── templates.py                        ← Jinja2 / simple {{key}} renderer
+│   │   ├── constants.py                        ← paths, palette schema
+│   │   ├── config_parsers.py                   ← INI/appletsrc/hyprland config parsing
+│   │   ├── session_io.py / session_md_utils.py ← session markdown I/O
+│   │   ├── state_capture.py / audit_utils.py   ← desktop audit helpers
+│   │   ├── icon_scoring.py                     ← SVG colour sampling and Breeze recoloring
+│   │   └── undo_describe.py                    ← human-readable undo preview
+│   └── materializers/                          ← per-app theme writers
+│       ├── kde.py / kde_extras.py              ← colorscheme, kvantum, plasma theme, cursor, icons, lockscreen
+│       ├── terminals.py / terminal_colors.py   ← kitty, alacritty, konsole
+│       ├── bars.py                             ← waybar, polybar
+│       ├── launchers.py                        ← rofi, wofi
+│       ├── notifications.py                    ← dunst, mako, swaync
+│       ├── hyprland.py                         ← borders, hyprlock
+│       ├── gnome.py                            ← gnome-shell theme, lock screen
+│       ├── system.py                           ← gtk, picom, fastfetch, starship
+│       └── wallpaper.py                        ← multi-backend wallpaper setter
 │
-├── shared/                                     ← cross-env docs (design system, wallpaper, apps...)
-│   ├── braille-art.md / catalog-capture.md / design-system.md
-│   ├── dunst.md / fastfetch.md / gtk.md / hermes-skin.md
-│   ├── mako.md / palette-extraction.md / picom.md / polybar.md
-│   ├── rofi.md / rollback.md / shell-prompt.md / swaync.md
-│   └── templates.md / terminal.md / wallpaper-generation.md / waybar.md / widgets.md / wofi.md
+├── shared/                                     ← cross-env docs
 ├── KDE/                                        ← KDE Plasma specific docs
-│   ├── colorscheme.md / cursor.md / konsole.md / kvantum.md
-│   └── plasma-panel.md / setup.md / splash-screen.md / wallpaper.md / widgets.md
 ├── Hyprland/                                   ← Hyprland specific docs
-│   └── borders-animations.md / dunst.md / fastfetch.md / hyprlock.md
-│       rofi.md / setup.md / wallpaper.md / waybar.md / widgets.md
+├── templates/                                  ← Jinja2 config templates (13 apps)
+├── assets/                                     ← catalog, palettes, previews, wallpapers
+├── dev/                                        ← design philosophy, handoff notes, research
+├── references/                                 ← color-extractor architecture, ecosystem research
+├── examples/                                   ← example skin YAML (dragonfable)
 │
-├── templates/                                  ← Jinja2 config templates
-│   └── alacritty/ dunst/ gtk/ hyprland/ kde/ kitty/ mako/ picom/ polybar/ rofi/ swaync/ waybar/ wofi/
-├── assets/
-│   ├── catalog/         ← curated bars, cursors, kvantum, launchers, notifications, palettes, terminals, themes
-│   ├── previews/        ← marathon2025-themes.png, toolbar_*.png
-│   ├── wallpapers/marathon/seedance2/   ← chrysalis.mp4 / cortex.mp4 / extraction.mp4
-│   ├── references/      ← style references
-│   └── palettes/
-├── references/
-│   └── color-extractor-architecture.md
-└── tests/
-    ├── test_bug_reproducers.py          ← live KDE integration tests (P0–P3)
-    ├── test_capture_theme_references.py
-    ├── test_cleanup_reloader.py
-    ├── test_desktop_recipes.py
-    ├── test_implement_spec.py
-    ├── test_install_resolver.py
-    ├── test_palette_extractor.py
-    ├── test_ricer_cli_routing.py
-    └── test_workflow_audit.py
-
-skills/                                         ← sub-skills (legacy, kept for reference)
-├── hermes-cli-skin/    ← terminal/CLI skinning (colors, banner art)
-├── hermes-ricer/       ← legacy: deterministic KDE theming engine
-├── hyprland-rice-from-scratch/  ← legacy: full Hyprland tiling WM setup
-├── ricer-apps/         ← legacy: app-level materializers
-├── ricer-catalog-capture/  ← legacy: screenshot catalog
-├── ricer-gtk/          ← legacy: GTK theming layer
-├── ricer-kde/          ← legacy: KDE Plasma deep-dive
-├── ricer-rollback/     ← legacy: rollback architecture
-└── ricer-wallpaper/    ← legacy: wallpaper generation
+├── tests/
+│   ├── test_kde_materializers.py               ← KDE colorscheme, kvantum, cursor, plasma, konsole, icon, snapshot
+│   ├── test_kde_lockscreen_materializer.py     ← lock screen LnF selection, kreadconfig fallback, routing
+│   ├── test_kde_undo.py                        ← rollback correctness
+│   ├── test_starship_materializer.py           ← starship prompt theming
+│   ├── test_palette_extractor.py               ← palette extraction pipeline
+│   ├── test_bug_reproducers.py                 ← live KDE integration tests (P0–P3)
+│   ├── test_capture_theme_references.py
+│   ├── test_cleanup_reloader.py                ← daemon reload error propagation
+│   ├── test_desktop_recipes.py                 ← recipe detection and per-recipe validation
+│   ├── test_implement_spec.py                  ← ElementSpec structured output
+│   ├── test_install_resolver.py                ← pacman/yay timeout and fallback
+│   ├── test_ricer_cli_routing.py               ← CLI fail-closed routing
+│   └── test_workflow_audit.py                  ← audit state, recipe classification
+│
+└── skills/                                     ← sub-skills (legacy, kept for reference)
+    ├── hermes-cli-skin/    ← terminal/CLI skinning (colors, banner art)
+    ├── hermes-ricer/       ← legacy: deterministic KDE theming engine
+    ├── hyprland-rice-from-scratch/
+    ├── ricer-apps/ / ricer-catalog-capture/ / ricer-gtk/
+    ├── ricer-kde/ / ricer-rollback/ / ricer-wallpaper/
 ```
 
 > **`linux-ricing` (v3) is the current consolidated skill** and the recommended
@@ -317,7 +335,7 @@ python3 "$SKILL_DST/workflow/run.py" --resume <thread-id>
 Then trigger the skill from a Hermes session:
 > *"Load the linux-ricing skill and rice my desktop."*
 
-For the fast path, see `skills/linux-ricing/QUICKSTART.md`.
+For the fast path, see `QUICKSTART.md`.
 
 ### What Gets Themed
 
@@ -343,16 +361,18 @@ For the fast path, see `skills/linux-ricing/QUICKSTART.md`.
 | `tokyo-night` | Dark cyberpunk |
 | `rose-pine` | Soft nature pastels |
 | `solarized-dark` | Low-contrast warm |
-| `doom-knight` | Gothic gold and crimson |
+| `doom-knight` | Gothic gold and crimson (DragonFable) |
 | `void-dragon` | Void sky, cyan blade, gold filigree |
+| `shiva-temple` | Cosmic void, third-eye indigo, vermillion sindoor |
+| `bareblood` | Gothic maximalist — blood reds, wine blacks, amber accents |
 
 ### Example — Marathon 2025 Themes
 
 Three themes generated live during a full desktop ricing session (Hyprland, April 2026).
 Each has a matching animated wallpaper at
-`skills/linux-ricing/assets/wallpapers/marathon/seedance2/`.
+`assets/wallpapers/marathon/seedance2/`.
 
-![Marathon 2025 Themes](skills/linux-ricing/assets/previews/marathon2025-themes.png)
+![Marathon 2025 Themes](assets/previews/marathon2025-themes.png)
 
 | Theme | Palette character | Wallpaper |
 |-------|-------------------|-----------|
@@ -362,42 +382,38 @@ Each has a matching animated wallpaper at
 
 ### Inside `linux-ricing` (deep reference)
 
-Everything is in one skill — load `linux-ricing/SKILL.md` and pull in the
-file you need:
+Everything is in one skill — load `SKILL.md` and pull in the file you need:
 
 **Workflow engine** (`workflow/`)
-- `graph.py` — the full pipeline: all 8 steps, their order, and every routing condition in one file
+- `graph.py` — the full pipeline: all 8 steps, their order, and every routing condition
 - `run.py` — CLI entry: `python3 workflow/run.py` to start, `--resume <id>` to continue, `--list` to show sessions
 - `state.py` — `RiceSessionState` TypedDict; append-only keys (`impl_log`, `errors`, `messages`) use LangGraph reducers
-- `validators.py` — gate conditions: `direction_confirmed`, `design_complete`, `plan_ready`, `implement_done`
+- `routing.py` — conditional edge functions with loop-limit safety guards
+- `validators.py` — gate functions: `direction_confirmed`, `design_complete`, `plan_ready`, `implement_done`
 - `config.py` — recipe schemas; KDE requires `kvantum_theme` + `plasma_theme`, GNOME/Hyprland require only GTK + cursor + icon
+- `utils.py` — CSS brace balancing, JSONC comment stripping
 - `nodes/` — one module per step: `audit/`, `explore`, `refine`, `plan`, `baseline`, `install/`, `implement/`, `cleanup/`, `handoff`
 
 **Materializer CLI** (`scripts/`)
-- `ricer.py` — 20+ app materializers; use `--only=<target>` or `--app=<target>` for single-target apply
-- `palette_extractor.py` — extracts 10-slot semantic palette from any image
+- `ricer.py` — 23 app materializers; use `--only=<target>` or `--app=<target>` for single-target apply
+- `presets.py` — 11 built-in design presets (catppuccin-mocha through bareblood)
+- `ricer_undo.py` — full rollback engine with per-app undo handlers
+- `palette_extractor.py` — image → 10-slot semantic palette with mood tags and theme-name defaults
 - `desktop_state_audit.py` — full desktop state snapshot for immutable baselines
-- `session_manager.py`, `capture_theme_references.py`, `generate_panel_svg.py`, `setup.sh`
+- `desktop_utils.py` — shared WM/DE detection (single source of truth for scripts + workflow)
+- `core/` — shared utilities: color math, subprocess helpers, backup, discovery, templates, session I/O
+- `materializers/` — per-app theme writers: KDE (6 sub-targets), terminals (3), bars (2), launchers (2), notifications (3), GNOME (2), Hyprland (2), system (4), wallpaper (5 backends)
 
 **Reference docs**
 - `SKILL.md` — entry point, 8-step workflow, master index
 - `QUICKSTART.md` — zero-to-themed-desktop in 5 minutes
-- `KDE/` — Kvantum widget styles, panel SVG rules, Qt renderer limitations, colorscheme, cursor, konsole, splash screen, wallpaper, widgets
-- `Hyprland/` — borders/animations, hyprlock, waybar, rofi, dunst, fastfetch, wallpaper, widgets, full setup
+- `KDE/` — colorscheme, kvantum, plasma-panel, cursor, konsole, splash screen, wallpaper, widgets, setup
+- `Hyprland/` — borders/animations, hyprlock, waybar, rofi, dunst, fastfetch, wallpaper, widgets, setup
 - `shared/` — design system, palette extraction, wallpaper generation, GTK, terminal, shell prompt, polybar, picom, mako, swaync, wofi, rollback, catalog capture, braille art, templates
-- `templates/` — Jinja2 config templates for alacritty, dunst, gtk, hyprland, kde, kitty, mako, picom, polybar, rofi, swaync, waybar, wofi
+- `templates/` — Jinja2 config templates for 13 apps
 - `assets/catalog/` — curated bars, cursors, kvantum themes, launchers, notifications, palettes, terminals, themes
-- `references/color-extractor-architecture.md` — palette extractor design notes
-
-**Tests** (`tests/`)
-- `test_workflow_audit.py` — audit state, recipe classification, unsupported desktop routing
-- `test_desktop_recipes.py` — recipe detection and per-recipe validation
-- `test_implement_spec.py` — ElementSpec structured output and apply timeout handling
-- `test_cleanup_reloader.py` — daemon reload error propagation
-- `test_install_resolver.py` — pacman/yay timeout and fallback behaviour
-- `test_ricer_cli_routing.py` — CLI fail-closed routing and `--only` enforcement
-- `test_bug_reproducers.py` — live KDE integration tests (P0–P3, requires live desktop)
-- `test_capture_theme_references.py`, `test_palette_extractor.py` — pipeline unit tests
+- `references/` — color-extractor architecture, ricing ecosystem research
+- `dev/` — design philosophy, handoff notes, research (corporate design, counterculture, game UI, usability)
 
 ### Legacy Skills (kept for reference)
 
@@ -456,17 +472,17 @@ where it stopped — not the beginning. Already-applied elements are never re-pr
 
 PRs welcome:
 - Add your skin YAML to `examples/`
-- Add new presets to `skills/linux-ricing/templates/` (and update the preset table)
+- Add new presets to `scripts/presets.py` (and update the preset table above)
+- Add Jinja2 config templates to `templates/`
 - Update any `SKILL.md` with new pitfalls you discover
-- Add sample images to `assets/sample_images/` (CC0 only)
+- Add sample images to `assets/` (CC0 only)
 
 ---
 
 ## Sources
 
-- `linux-ricing` skill (v3): consolidated from real-world KDE/Hyprland ricing sessions (this repo)
-- `hermes-cli-skin` skill: developed through real-world Hermes sessions (this repo)
-- `hermes-ricer` and split-skill suite: legacy iterations (this repo)
+- `linux-ricing` (v3): consolidated from real-world KDE/Hyprland/GNOME ricing sessions
+- `hermes-cli-skin`: terminal/CLI skinning skill
 - Hermes core + built-in skins: [NousResearch/hermes-agent](https://github.com/NousResearch/hermes-agent)
 - Braille Unicode encoding reference: [Braille Patterns (Wikipedia)](https://en.wikipedia.org/wiki/Braille_Patterns)
 - ASCII art ramps: [Paul Bourke's character ramp](http://paulbourke.net/dataformats/asciiart/)
