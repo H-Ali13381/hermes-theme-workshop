@@ -2,341 +2,867 @@
 
 ## Open Issues
 
-### Code Review — from Auggie review 2026-04-28
+### Architectural Concerns
 
-#### 🔴 High Severity (Broken Functionality)
+- [x] **[ARCH] Tight coupling between `scripts/ricer.py` and `workflow/` layer**
+  `workflow/nodes/implement/apply.py` shells out to `ricer.py` via `subprocess.run`.
+  The LangGraph workflow cannot access Python functions directly, losing type safety
+  and making error handling coarser (exit codes + stdout/stderr only).
+  **Fix:** Long-term — expose `ricer.py` materializers as a Python API that
+  `apply.py` can import and call directly.
+  **Done:** `apply.py` now imports `materialize`, `discover_apps`, and `APP_MATERIALIZERS`
+  directly from `scripts/`; subprocess, temp-file, and exit-code handling removed.
+  Tests updated in `test_implement_spec.py` and `test_ricer_cli_routing.py`.
 
-- [ ] **[BUG] Dunst fragment uses double-quoted color values — invalid INI syntax**
-  `scripts/ricer.py` `materialize_dunst` fragment uses `frame_color = "#89b4fa"` etc. Dunst's
-  INI parser expects raw hex values without quotes. These entries are silently ignored or error.
-  **Fix:** strip the surrounding `"..."` from all color values in the dunst fragment.
+- [x] **[ARCH] Dual session tracking systems**
+  Two parallel mechanisms: (1) `session_manager.py` + `~/.config/rice-sessions/.current`
+  symlink (legacy), and (2) LangGraph SQLite checkpointing in
+  `~/.local/share/linux-ricing/sessions.sqlite`. Different directory naming
+  conventions (`session-YYYYMMDD-HHMM` vs `rice-YYYYMMDD-HHMM-uuid`). Could confuse
+  resume behavior.
+  **Fix:** Consolidate to a single canonical session directory format.
+  **Done:** `session_manager.py cmd_init` now creates `rice-YYYYMMDD-HHMM-uuid6` dirs
+  (same format as `workflow/run.py`). `cmd_rename` regex unanchored to handle the new
+  format. `cmd_resume_check` queries SQLite first and skips filesystem dirs whose names
+  match a known workflow thread_id, eliminating duplicate entries. `workflow/run.py
+  _init_session_dir` now updates `.current` symlink and writes a `session.md` header
+  aligned with `SESSION_HEADER_TEMPLATE` (adds `Session dir:` line and `---` separator).
 
-- [ ] **[BUG] Dunst `include` directive injected inside `[global]` section**
-  `scripts/ricer.py` ~L1076–1083: when `[global]` is found, the `include =` line is injected as
-  the first key inside the section. Dunst's `include` is a top-level directive that must appear
-  outside any `[section]` block — inside `[global]` it is treated as an unknown key and silently
-  ignored. **Fix:** inject the `include` line before the `[global]` header, not after it.
+### Bugs
 
-- [ ] **[BUG] Infinite retry loop in `implement_node` — no retry counter**
-  `workflow/nodes/implement/__init__.py` L72–75: when the user selects `"retry"` at the score
-  gate the element is prepended back to the queue with no counter. If it consistently scores below
-  the threshold the session loops indefinitely. **Fix:** add a per-element retry count to the
-  state or record; interrupt with a hard `"skip"` after N retries.
+- [x] **[BUG] `cleanup/__init__.py`: Bar reload hardcoded to waybar**
+  When `bar:polybar` is in the impl_log, `cleanup_node` still calls `reload_waybar()`
+  instead of reloading polybar. The notification path correctly checks which provider
+  was implemented; the bar path should do the same.
+  **Fix:** Mirror the notification provider-lookup pattern: inspect the actual bar
+  element (`bar:waybar` vs `bar:polybar`) and dispatch to the correct reload function.
+  Add a `reload_polybar` helper to `reloader.py`.
 
-#### 🟠 Medium Severity (Incorrect Behaviour in Edge Cases)
+- [x] **[BUG] `implement/__init__.py`: Hard-skip after max retries doesn't append to `errors`**
+  Every other SKIP path (apply failure, user-skip) appends a string to the `errors`
+  reducer.  The max-retries hard-skip return is missing `"errors": [...]`, so the
+  deviation goes unrecorded in the session error log.
+  **Fix:** Add `"errors": [f"{element}: {verdict}"]` to the hard-skip return dict.
 
-- [ ] **[BUG] `kdeglobals` ColorScheme regex can match across INI sections**
-  `scripts/ricer.py` ~L215–220: `re.search(r"^\[General\].*?^ColorScheme=(.+)$", text,
-  re.MULTILINE | re.DOTALL)` — `re.DOTALL` lets `.*?` cross section boundaries. A
-  `ColorScheme=` key in any section after `[General]` can produce a false match.
-  **Fix:** use a section-aware parser (e.g. `configparser`) or a tighter single-section regex.
+- [x] **[BUG] `install/__init__.py`: Any non-"cancel"/non-"skip" input silently installs packages**
+  The interrupt message tells the user to type `'install'`, but the code only checks
+  for `"cancel"` and `"skip"` — any other string (including typos or an empty reply)
+  falls through and triggers installation.
+  **Fix:** Require the user to type exactly `"install"` to proceed; treat any other
+  unrecognised input as a re-prompt (or skip) rather than implicit confirmation.
 
-- [ ] **[BUG] KDE force-toggle only checks stdout for `"already set"`**
-  `scripts/ricer.py` L554: some `plasma-apply-colorscheme` versions emit this string to stderr.
-  The code checks only `out_pre` (stdout), so the BreezeClassic bounce is skipped and the theme
-  may not re-apply. **Fix:** check both stdout and stderr for the sentinel string.
+- [x] **[BUG] `baseline.py`: Returns `current_step: 5`, conflicting with `install_node`**
+  Both `baseline_node` and `install_node` return `{"current_step": 5}`.  After
+  baseline completes, the session state falsely claims step 5 (Install) is done before
+  Install has even run.
+  **Fix:** `baseline_node` should not advance `current_step` (leave it at 4, set by
+  `plan_node`); only `install_node` should claim step 5.
 
-- [ ] **[BUG] `ChatAnthropic` never receives the API key from Hermes config**
-  `workflow/config.py` L90–94: `api_key` is resolved from `~/.hermes/config.yaml` / `.env` but
-  never forwarded to `ChatAnthropic(...)`. Falls back to `ANTHROPIC_API_KEY` env var; if unset,
-  all LLM calls fail silently. **Fix:** pass `api_key=api_key` to `ChatAnthropic` when non-empty.
+### Code Quality
 
-- [ ] **[BUG] Package installer is Arch-only with no distro detection or fallback**
-  `workflow/nodes/install/resolver.py` `install_packages()` only tries `pacman` and `yay`. The
-  skill supports KDE and GNOME, both common on Debian/Ubuntu/Fedora. Non-Arch users get silent
-  install failures. **Fix:** detect distro (`/etc/os-release`) and dispatch to `apt-get` /
-  `dnf` / `zypper` as appropriate, or warn explicitly that only Arch is supported.
+- [x] **[QUALITY] `session.py` line 78: unnecessary f-string prefix**
+  `print(f"[session] append_item: session_dir is empty — skipping", file=sys.stderr)`
+  has an `f` prefix with no format placeholders.  This is dead syntax.
+  **Fix:** Remove the `f` prefix.
 
-- [ ] **[BUG] `_remove_injected_block` leaves a stray blank line on undo**
-  `scripts/ricer.py` L2571–2598: injection prepends `marker\nimport_line\n\n` (trailing blank
-  line). The removal strips only the marker line and the next line — the blank line is left
-  behind. Repeated apply/undo cycles accumulate blank lines at the top of the config.
-  **Fix:** extend removal to also consume a trailing blank line after the injected directive.
+- [x] **[QUALITY] `config.py`: `MODEL` constant defined after `get_llm()` that references it**
+  `get_llm()` is defined at line 65 and references `MODEL` at line 74; `MODEL` is
+  defined at line 114.  While valid Python, constants should precede the functions that
+  use them for readability and grep-ability.
+  **Fix:** Move the module-level constants (`MODEL`, `SKILL_DIR`, etc.) to the top of
+  the file, before `get_llm()`.
 
-- [ ] **[BUG] YIQ threshold inconsistency between GTK dark-mode detection and lock screen**
-  `scripts/ricer.py` L2229 (`materialize_gtk`) uses `luminance < 128` to detect dark themes.
-  `_lockscreen_lnf_for_palette` (L1650) calls `yiq_text_color` which uses `< 200` (designed for
-  text readability, not theme classification). Backgrounds with YIQ 128–200 are misclassified as
-  dark for the lock screen. **Fix:** use the same `< 128` threshold consistently, or extract a
-  dedicated `is_dark_palette()` helper.
+- [x] **[QUALITY] `explore.py`: warning printed to stdout instead of stderr**
+  `_parse_direction()` prints `[Explore][WARN]…` to stdout via bare `print()`.
+  Warning and error messages should go to `stderr`.
+  **Fix:** Import `sys` and use `print(…, file=sys.stderr)`.
 
-- [ ] **[BUG] `refine.py` silently falls back to KDE recipe for unsupported desktops**
-  `workflow/nodes/refine.py` L26: `recipe = recipe if recipe in SUPPORTED_DESKTOP_RECIPES else "kde"`.
-  Any unrecognised recipe silently produces a design with KDE-specific fields irrelevant to the
-  actual environment. The audit node routes unsupported desktops to `END`, but if this fallback
-  fires (e.g. during a resume), the LLM gets misleading instructions.
-  **Fix:** raise an explicit error or return an error state rather than silently defaulting.
+- [x] **[QUALITY] `detectors.py`: single-letter variable `l` in list comprehensions**
+  `detect_screens` and `detect_gpu` use `l` (lowercase L) as the loop variable.
+  PEP 8 prohibits `l`, `O`, and `I` as single-character names due to visual ambiguity
+  with `1`, `0`, and `|`.
+  **Fix:** Rename to `line` in both comprehensions.
 
-#### 🟡 Low Severity / Code Quality
+- [x] **[QUALITY] `score.py`: `shape` scores 1 when no targets were declared**
+  When `spec["targets"]` is empty (e.g. LLM spec failure), both `files_written` and
+  `files_missing` are 0.  The `else` branch of the `shape` scoring block gives 1,
+  inflating the score for an element that wrote nothing.
+  **Fix:** Add an explicit `elif files_missing == 0 and files_written == 0` branch
+  that sets `sc["shape"] = 0`.
 
-- [ ] **[QUALITY] Mid-module `import` violates PEP 8 E402**
-  `scripts/ricer.py` L98: `from desktop_utils import discover_desktop` appears after module-level
-  constants and function definitions. Move it to the top of the file with other imports and remove
-  the `# noqa: E402` comment.
+- [x] **[QUALITY] `handoff.py` and `plan.py`: trailing extra blank lines**
+  Both files end with two blank lines instead of the standard single trailing newline.
+  **Fix:** Remove the extra blank line from the end of each file.
 
-- [ ] **[QUALITY] `_strip_jsonc_comments` is duplicated verbatim in two files**
-  Identical 30-line function exists in both `workflow/nodes/implement/score.py` and
-  `workflow/nodes/cleanup/reloader.py`. Extract to a shared utility module (e.g.
-  `workflow/utils.py`) and import from both.
+### Scripts Layer Bugs & Quality Issues
 
-- [ ] **[QUALITY] `detect_chassis()` spawns a `cat` subprocess for a simple file read**
-  `workflow/nodes/audit/detectors.py` L48: `run(["cat", "/sys/class/dmi/id/chassis_type"])`.
-  **Fix:** use `Path("/sys/class/dmi/id/chassis_type").read_text()` directly — more portable,
-  no subprocess overhead.
+- [x] **[BUG] `materializers/hyprland.py`: backup path discarded, undo cannot restore `hyprland.conf`**
+  `backup_file(hyprland_conf, ...)` return value is thrown away at line 44; the
+  resulting `set_borders` change dict has no `"backup"` key.  `ricer.undo()` iterates
+  `backup` keys to find files to restore — missing the key means `hyprland.conf` is
+  never restored after an undo.
+  **Fix:** Capture the return value and add `"backup": backup_path` to the changes dict.
 
-- [ ] **[QUALITY] `detect_apps()` uses external `which` instead of `shutil.which()`**
-  `workflow/nodes/audit/detectors.py` L84: spawns `which` per-app. `shutil.which()` is the
-  stdlib equivalent (already used in `ricer.py`'s `cmd_exists`). **Fix:** replace the
-  `run(["which", app])` calls with `shutil.which(app) is not None`.
+- [x] **[BUG] `materializers/kde_extras.py`: icon theme generation runs during `dry_run`**
+  `materialize_icon_theme` calls `icon_theme_gen.create_palette_icon_theme` and
+  `icon_theme_gen.generate_icon_via_fal` before it checks `if dry_run:`.  A dry-run
+  must not write icon files to disk.
+  **Fix:** Move the `dry_run` guard before the icon-generation block (or pass
+  `dry_run` into the generation helpers).
 
-- [ ] **[QUALITY] `implement_node` doesn't guard against an empty element queue**
-  `workflow/nodes/implement/__init__.py` L20: `element = queue[0]` raises `IndexError` if
-  the queue is empty. **Fix:** add a guard — `if not queue: return {}` — before indexing.
+- [x] **[QUALITY] `core/colors.py`: no 3-digit hex normalization**
+  `hex_to_rgb` and `hex_to_rgb_tuple` assume exactly 6 hex digits after `#`.
+  If an LLM returns a 3-digit shorthand (`#abc`) the slice `h[0:2]` returns `"ab"` and
+  `h[4:6]` silently reads junk or raises `ValueError`.
+  **Fix:** Expand 3-digit hex to 6-digit in both functions (e.g. `"abc"` → `"aabbcc"`).
 
-- [ ] **[QUALITY] `_run_loop` catches `StopIteration` — masks real errors**
-  `workflow/run.py` L87–88: in Python 3.7+ `StopIteration` escaping a generator becomes
-  `RuntimeError`. Catching it explicitly here can mask legitimate errors from `graph.stream()`.
-  **Fix:** remove the bare `except StopIteration: pass` branch; `GraphInterrupt` is the correct
-  mechanism.
+- [x] **[QUALITY] `core/templates.py`: Jinja2 `Environment` without `StrictUndefined`**
+  `jinja2.Environment()` uses the default `Undefined` class, which silently renders
+  missing variables as empty strings.  A typo in a template key (`{{priamry}}`) would
+  produce a broken config with no error.
+  **Fix:** Use `undefined=jinja2.StrictUndefined` so missing variables raise immediately.
 
-- [ ] **[QUALITY] `discover_desktop()` called independently by each Hyprland materializer**
-  `scripts/ricer.py` L1117 and L1208: both `materialize_hyprland` and `materialize_hyprlock`
-  call `discover_desktop()` (which runs `ps aux`) on each invocation. **Fix:** cache the result
-  or pass it as a parameter from `materialize()`.
+- [x] **[QUALITY] `materializers/system.py`: `materialize_gtk` hardcodes font, ignores design typography**
+  `font_name` in the GTK context is always `"JetBrains Mono 10"` regardless of what
+  `design["typography"]` contains.  Every other materializer reads from the design
+  typography dict.
+  **Fix:** Derive font from `design.get("typography", {}).get("ui_font", "JetBrains Mono")`.
 
-- [ ] **[QUALITY] Brace-counting heuristic for `.conf`/`.ini` syntax validation is fragile**
-  `workflow/nodes/implement/score.py` L122–126 and `workflow/nodes/cleanup/reloader.py` L65–69:
-  counting `{` + `[` vs `}` + `]` produces false failures when config values contain bracket
-  characters (e.g. Pango markup in dunst, array syntax). **Fix:** drop the heuristic for
-  `.conf`/`.ini` files, or explicitly limit it only to formats where it is reliable (CSS).
+- [x] **[QUALITY] `materializers/bars.py`: `import sys` inside function body**
+  `materialize_polybar` has `import sys` buried inside a conditional branch (line 98).
+  Module-level imports are the Python convention and eliminate repeated import overhead.
+  **Fix:** Move `import sys` to the module-level imports.
+
+- [x] **[QUALITY] `materializers/kde_extras.py`: unused `import os` in `materialize_kvantum`**
+  `materialize_kvantum` imports `os` at the top of its body but never uses `os`.  The
+  import is dead code.
+  **Fix:** Remove the unused `import os` from `materialize_kvantum`.
+
+### New Bugs & Quality Issues
+
+- [x] **[BUG] `materializers/wallpaper.py`: hyprpaper backup path discarded, undo cannot restore `hyprpaper.conf`**
+  `backup_file(hyprpaper_conf, ...)` return value is thrown away (line 127) and
+  no `config_backup` key is added to the change dict.  `undo()` has a comment
+  saying "the generic file-restore loop above" handles it, but that loop checks
+  for `backup`, `config_backup`, etc. — none of which exist in the hyprpaper
+  change dict.  `hyprpaper.conf` is therefore never restored after `ricer undo`.
+  **Fix:** Capture the return value and store it as `"config_backup"` in the
+  change dict so the generic restore loop can find and use it.
+
+- [x] **[BUG] `materializers/terminals.py`: `materialize_alacritty` uses `jinja2.Environment()` without `StrictUndefined`**
+  Line 181 creates `jinja2.Environment()` with the default `Undefined` class,
+  which silently renders missing variables as empty strings.  Every other template
+  path (`render_template`) already uses `StrictUndefined`.  A typo in a bright-
+  color key would produce a corrupt colors.toml with no error.
+  **Fix:** Use `jinja2.Environment(undefined=jinja2.StrictUndefined)` here.
+
+- [x] **[BUG] `baseline.py`: `datetime.now()` called without timezone**
+  Line 16 uses `datetime.now()` (naive local time) while every other timestamp
+  in the codebase uses `datetime.now(timezone.utc)`.  The resulting `baseline_ts`
+  is ambiguous and could sort incorrectly relative to UTC `backup_ts` stamps when
+  the host timezone is not UTC.
+  **Fix:** Import `timezone` from `datetime` and use `datetime.now(timezone.utc)`.
+
+- [x] **[QUALITY] `implement/spec.py`: duplicate dead-code branch in `write_spec`**
+  Lines 46-48:
+  ```python
+  if isinstance(spec, dict):
+      return ElementSpec.model_validate(spec).model_dump()
+  return ElementSpec.model_validate(spec).model_dump()
+  ```
+  Both branches are identical — the `if isinstance(spec, dict)` check is dead
+  because the unconditional `return` below it does the same thing regardless of
+  type.
+  **Fix:** Remove the redundant `if isinstance(spec, dict)` branch.
+
+- [x] **[QUALITY] `handoff.py`: ambiguous single-char variable `l` in `_convert_table`**
+  Lines 91-92 use `l` (lowercase L) as the loop variable in two list
+  comprehensions.  PEP 8 prohibits `l`, `O`, and `I` as single-character names
+  due to visual ambiguity with `1`, `0`, and `|`.
+  **Fix:** Rename `l` to `line` in both comprehensions.
+
+- [x] **[QUALITY] `plan.py`: `import re` inside `_extract_html` function body**
+  `re` is imported at line 103 inside the function body.  Module-level imports
+  are the Python convention and improve readability and import-time clarity.
+  **Fix:** Move `import re` to the module-level imports at the top of `plan.py`.
+
+- [x] **[QUALITY] `materializers/kde_extras.py`: `import os` inside `materialize_icon_theme` function body**
+  `os` is imported on line 142 inside `materialize_icon_theme`.  Unlike the
+  previously-fixed dead import in `materialize_kvantum`, this one IS used
+  (`os.environ.get("FAL_KEY", "")`), but it still belongs at module level.
+  **Fix:** Move `import os` to the module-level imports.
+
+- [x] **[QUALITY] `materializers/wallpaper.py`: `from pathlib import Path` inside function body**
+  `materialize_wallpaper` imports `Path` at line 70 inside the function body.
+  `Path` is not imported at the module level despite being used throughout.
+  **Fix:** Move `from pathlib import Path` to the module-level imports.
+
+- [x] **[QUALITY] `implement/score.py`: redundant `elif` condition in `shape` scoring**
+  The `shape` block reads:
+  ```python
+  if files_written == 0:
+      sc["shape"] = 0
+  elif files_written > 0:   # always True when the 'if' is False
+      ...
+  ```
+  Because `files_written = len(...)` is always ≥ 0, the `elif files_written > 0`
+  branch is always entered when the `if` is False.  The condition is dead logic.
+  **Fix:** Replace `elif files_written > 0:` with a plain `else:`.
+
+- [x] **[ARCH] Tight coupling between `scripts/ricer.py` and `workflow/` layer**
+  `scripts/desktop_utils.py:discover_desktop()` and
+  `workflow/nodes/audit/detectors.py:detect_wm()` are separate and can drift.
+  `desktop_utils.py` checks `ps aux` + `XDG_CURRENT_DESKTOP` more thoroughly;
+  `detect_wm()` checks `XDG_CURRENT_DESKTOP` / `DESKTOP_SESSION` + `wmctrl` +
+  `plasmashell --version`. They should share a single utility module.
+  **Done:** `discover_desktop()` is now the canonical implementation. It gained
+  `DESKTOP_SESSION` fallback, `gnome-shell` in the ps scan, and XDG fallbacks for
+  gnome and hyprland (matching what the old `detect_wm()` covered). `detect_wm()` is
+  now a one-line delegation: `return discover_desktop()["wm"]`. `import os` removed
+  from `detectors.py` (was only used in the deleted body).
+
+### Newly Found Bugs & Quality Issues
+
+- [x] **[BUG] `audit/detectors.py`: swww/awww wallpaper path parsing returns garbage**
+  Lines 164-165 and 170-172 parse `swww query` / `awww query` output with
+  `line.split(":", 1)[-1].strip()`.  The actual output format is
+  `<monitor>: image: /path/to/wallpaper.jpg` — splitting on the **first** colon
+  gives `" image: /path/to/wallpaper.jpg"` instead of the bare path.
+  `materializers/wallpaper.py` correctly uses `re.search(r"image:\s*(\S.*)$", line)`
+  for the same data; `detectors.py` must match.
+  **Fix:** Replace the split-based extraction with the same regex used in
+  `wallpaper.py`.
+
+- [x] **[QUALITY] `materializers/notifications.py`: unused import `yiq_text_color`**
+  Line 5 imports `yiq_text_color` from `core.colors` but the function is never
+  called anywhere in the file.  Dead imports increase cognitive load and confuse
+  static analysers.
+  **Fix:** Remove the unused import.
+
+- [x] **[QUALITY] `core/snapshots.py`: redundant `import re as _re` inside `snapshot_konsole_state`**
+  Line 97 imports `re as _re` inside the function body, but line 103 uses
+  `_re.search()` while the `re.MULTILINE` flag on the same line is read from the
+  module-level `re` import.  The function-level alias is unnecessary and mixes two
+  references to the same module.
+  **Fix:** Remove the `import re as _re` line and replace `_re.search` with `re.search`
+  (module-level `re` is already imported).
+
+- [x] **[QUALITY] `scripts/ricer.py`: three `read_text()` calls missing `encoding="utf-8"`**
+  Lines 92, 595, and 690 read `manifest.json` with `manifest_path.read_text()`
+  (no encoding argument).  All write paths already pass `encoding="utf-8"`.
+  On non-UTF-8 locales the reads could raise `UnicodeDecodeError` or silently
+  mis-decode content.
+  **Fix:** Add `encoding="utf-8"` to all three `read_text()` calls.
+
+- [x] **[QUALITY] `workflow/nodes/refine.py`: `write_text()` missing `encoding="utf-8"` in `_write_design_json`**
+  Line 161: `path.write_text(json.dumps(design, indent=2))` omits the encoding
+  argument.  `design.json` may contain non-ASCII characters (theme names, descriptions)
+  that would be mis-encoded on non-UTF-8 systems.
+  **Fix:** Add `encoding="utf-8"`.
+
+- [x] **[QUALITY] `workflow/session.py`: all `read_text()`/`write_text()` calls missing `encoding="utf-8"`**
+  Six calls (lines 45, 64, 85, 110, 122, 124) operate on `session.md` without an
+  explicit encoding.  `session.md` may contain theme names with non-ASCII characters.
+  **Fix:** Add `encoding="utf-8"` to every `read_text()` and `write_text()` call.
+
+- [x] **[QUALITY] `scripts/session_manager.py`: `read_text()`/`write_text()` calls missing `encoding="utf-8"`**
+  `update_status_line`, `update_header_theme`, `update_header_session_dir`, and
+  `cmd_append_item` all read/write `session.md` without specifying encoding.
+  **Fix:** Add `encoding="utf-8"` to every `read_text()` and `write_text()` call in
+  those four functions.
+
+### Newly Found Bugs & Quality Issues (2026-04-29)
+
+- [x] **[BUG] `materializers/notifications.py`: `yiq_text_color` called but never imported**
+  Lines 124–125 call `yiq_text_color(palette["primary"])` and
+  `yiq_text_color(palette["danger"])`, but the function is not in the module's
+  import list (imports only `HOME`, `TEMPLATES_DIR`, `run_cmd`, `backup_file`,
+  `render_template`).  Any call to `materialize_swaync()` will raise `NameError`
+  at runtime.  A previous TODO entry incorrectly described it as an "unused import"
+  and the import was removed while the call sites were left intact.
+  **Fix:** Add `from core.colors import yiq_text_color` to the import block.
+
+- [x] **[QUALITY] `generate_panel_svg.py` and `icon_theme_gen.py`: deprecated `Image.LANCZOS`**
+  Both files use `Image.LANCZOS` directly (line 35 in `generate_panel_svg.py`,
+  line 436 in `icon_theme_gen.py`).  Pillow 10.0 moved this constant to
+  `Image.Resampling.LANCZOS` and removed the top-level alias, raising
+  `AttributeError` on modern Pillow installs.
+  **Fix:** Use `Image.Resampling.LANCZOS` in both files (Pillow ≥ 9.1 supports it;
+  keep a compat shim if older Pillow must be supported).
+
+- [x] **[BUG] `install/resolver.py`: `subprocess.TimeoutExpired` not caught in `can_sudo_noninteractive()`**
+  Line 70: `subprocess.run(["sudo", "-n", "true"], capture_output=True, timeout=5)`
+  sets a 5-second timeout but never catches `subprocess.TimeoutExpired`.  On a
+  slow or locked sudo, the exception propagates to the caller uncaught, crashing
+  the install node instead of gracefully returning `False`.
+  **Fix:** Wrap the call in `try/except subprocess.TimeoutExpired` and return `False`.
+
+- [x] **[QUALITY] `workflow/config.py`: bare `except Exception` in `_load_hermes_config` swallows YAML errors silently**
+  Line 93: `except Exception: return {}` catches all exceptions — including
+  `ModuleNotFoundError` when `yaml` is not installed and `yaml.YAMLError` for
+  malformed config — without any diagnostic output.  Operators get no indication
+  why the config was silently ignored.
+  **Fix:** Log the exception to stderr before returning `{}` so failures are visible.
+
+### Comprehensive Audit Findings (2026-04-29)
+
+#### Deprecated API / Resource Leaks
+
+- [x] **[BUG] `scripts/capture_theme_references.py:555`: `Image.LANCZOS` deprecated in Pillow 10+**
+  `cropped.resize((1920, 1080), Image.LANCZOS)` uses the old top-level constant
+  removed in Pillow 10.0.  This file was missed when the same fix was applied to
+  `generate_panel_svg.py` and `icon_theme_gen.py` in the previous pass.
+  **Fix:** Replace with `Image.Resampling.LANCZOS`.
+
+- [x] **[BUG] `scripts/palette_extractor.py:95`: `Image.open()` without context manager causes resource leak**
+  `img = Image.open(image_path)` opens a file handle that is never explicitly
+  closed.  If an exception occurs during colour-space conversion or thumbnailing,
+  the handle leaks.  Pillow documents that images should be used as context
+  managers or closed explicitly.
+  **Fix:** Wrap with `with Image.open(image_path) as img:` and restructure the
+  conversion block accordingly.
+
+- [x] **[QUALITY] `scripts/deterministic_ricing_session.py:448,82,510`: `sys._session_log_path` private attribute abuse**
+  `main()` assigns `sys._session_log_path = str(...)` (line 448) and `log()`
+  reads it back via `getattr(sys, "_session_log_path", None)` (line 82).
+  Injecting custom attributes into the `sys` module is fragile: future Python
+  versions may treat leading-underscore names on `sys` specially, and the
+  pattern obscures control flow.
+  **Fix:** Replace with a module-level `_session_log_path: str | None = None`
+  variable updated by `main()` and read directly by `log()`.
+
+- [x] **[QUALITY] `workflow/nodes/cleanup/reloader.py:49,58,67,80,93`: `subprocess.Popen` without stdio redirection leaks handles**
+  Five `Popen(["waybar"])`, `Popen(["polybar"])`, `Popen(["dunst"])`,
+  `Popen(["mako"])`, and `Popen(["swaync"])` calls launch background daemons
+  without redirecting `stdin`/`stdout`/`stderr` to `DEVNULL`.  This means (a) the
+  daemon inherits the parent's file descriptors and can corrupt terminal output,
+  and (b) Python emits `ResourceWarning` when the un-waited `Popen` objects are
+  garbage-collected.
+  **Fix:** Add `stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
+  stderr=subprocess.DEVNULL` to all five calls so the daemon is fully detached.
+
+#### Missing `encoding=` Arguments
+
+- [x] **[QUALITY] `workflow/config.py:64`: `read_text()` without `encoding="utf-8"` in `_parse_dotenv`**
+  `path.read_text().splitlines()` in `_parse_dotenv()` omits the encoding
+  argument.  `.env` files may contain non-ASCII values (e.g. themed prompts),
+  causing `UnicodeDecodeError` on non-UTF-8 systems.
+  **Fix:** Add `encoding="utf-8"` to the `read_text()` call.
+
+- [x] **[QUALITY] `workflow/run.py:239`: `write_text()` without `encoding="utf-8"` in `_init_session_dir`**
+  `(session_dir / "session.md").write_text(header)` omits `encoding="utf-8"`.
+  The header may contain non-ASCII theme names; omitting encoding risks
+  `UnicodeEncodeError` on non-UTF-8 locales.
+  **Fix:** Add `encoding="utf-8"`.
+
+- [x] **[QUALITY] `scripts/materializers/wallpaper.py:38,106`: two `read_text()` calls without `encoding="utf-8"`**
+  Lines 38 and 106 both read `hyprpaper.conf` with
+  `hyprpaper_conf.read_text().splitlines()` — no encoding argument.  The same
+  file is *written* on line 133 with `encoding="utf-8"` already.
+  **Fix:** Add `encoding="utf-8"` to both `read_text()` calls for symmetry and
+  safety on non-UTF-8 systems.
+
+- [x] **[QUALITY] `scripts/materializers/hyprland.py:46,112`: `read_text()` calls missing `encoding="utf-8"`**
+  Line 46 reads `hyprland.conf` with `errors="replace"` but no encoding.
+  Line 112 reads `hyprlock.conf` the same way.  Both files are written with
+  `encoding="utf-8"` (lines 64, 148).
+  **Fix:** Add `encoding="utf-8"` alongside `errors="replace"` on both reads.
+
+#### Silent Exception Swallowing
+
+- [x] **[QUALITY] `workflow/config.py:69-70`: bare `except Exception: pass` in `_parse_dotenv` swallows parse errors**
+  When reading or parsing the `.env` file fails (e.g. a permission error or a
+  malformed line that slips past the guard), the exception is silently ignored
+  and `result` may be incomplete.  Unlike `_load_hermes_config` (already fixed to
+  log), this sibling function still uses `except Exception: pass`.
+  **Fix:** Change to `except Exception as e: print(f"[config] Warning: ...", file=sys.stderr)`.
+
+- [x] **[QUALITY] `workflow/nodes/explore.py:119`: bare `except` drops actual JSON parse error**
+  `except Exception: pass` in `_parse_direction` catches but discards the
+  specific `json.JSONDecodeError`.  The warning printed after the block is
+  generic; including `str(e)` would show *why* parsing failed.
+  **Fix:** Change to `except Exception as e:` and include `e` in the warning
+  string: `f"... — {e}"`.
+
+- [x] **[QUALITY] `workflow/nodes/refine.py:142`: bare `except` drops JSON parse error detail**
+  Same pattern as `explore.py:119`: `except Exception: pass` in
+  `_extract_design_json` silently discards the specific decode error.
+  **Fix:** Change to `except Exception as e:` and log `e` to stderr.
+
+- [x] **[QUALITY] `workflow/nodes/implement/apply.py:33`: exception caught but never logged**
+  `except Exception as e: return {"success": False, "error": str(e)}` captures
+  the error in the return dict but writes nothing to stderr.  When the implement
+  node fails, there is no visible trace in the terminal output.
+  **Fix:** Add `print(f"[apply] materializer error: {e}", file=sys.stderr)` before
+  the return.
+
+#### Logic / Correctness
+
+- [x] **[BUG] `workflow/nodes/implement/verify.py:34`: `errors="ignore"` silently drops undecodable bytes**
+  `Path(written).read_text(errors="ignore")` discards any bytes that cannot be
+  decoded, potentially hiding encoding corruption in written config files.  Every
+  other file read in the codebase uses `errors="replace"`.
+  **Fix:** Change `errors="ignore"` to `errors="replace"` for consistency and
+  to surface corruption as replacement characters rather than silent data loss.
+
+#### Test Quality
+
+- [x] **[QUALITY] `tests/test_kde_materializers.py:432,436`: `assertFalse([list])` is non-idiomatic and fragile**
+  `self.assertFalse([c for c in calls if "kwriteconfig6" in c])` checks that the
+  filtered list is falsy (empty), which works but reads as "assert this list is
+  False" — confusing to reviewers.  The preferred form is
+  `self.assertEqual([c for c in calls if ...], [])`.
+  **Fix:** Replace both `assertFalse([list])` instances with `assertEqual([...], [])`.
+
+- [x] **[QUALITY] `tests/test_palette_extractor.py:239`: `tempfile.mkdtemp()` without cleanup in `_fake_dir`**
+  `_fake_dir()` creates a temp directory with `tempfile.mkdtemp()` but never
+  cleans it up.  Every test that calls `_fake_dir` leaks a directory under
+  `/tmp`, accumulating over repeated test runs.
+  **Fix:** Use `tempfile.TemporaryDirectory()` as a class-level or per-test
+  context manager and add cleanup via `self.addCleanup`.
+
+- [x] **[QUALITY] `tests/test_kde_lockscreen_materializer.py:71,87,114,129,142,158`: six `tempfile.mkdtemp()` calls without cleanup**
+  All six test methods create a temp directory with `mkdtemp()` and never delete
+  it.  Each test run leaves up to six orphaned directories.
+  **Fix:** Convert each `tmpdir = Path(tempfile.mkdtemp())` to use an
+  `addCleanup(shutil.rmtree, tmpdir)` call immediately after creation.
+
+- [x] **[QUALITY] `tests/test_starship_materializer.py:87,98,107,119,133`: five `tempfile.mkdtemp()` calls without cleanup**
+  Same pattern as the lockscreen tests: five test methods create temp
+  directories that are never removed.
+  **Fix:** Same as above — add `addCleanup` or use `TemporaryDirectory`.
+
+- [x] **[QUALITY] `tests/test_kde_undo.py:48`: `read_text()` without `encoding="utf-8"`**
+  `manifest_path.read_text()` in `UndoTests.test_undo_*` reads the JSON
+  manifest without specifying encoding.  The same path is *written* with
+  `encoding="utf-8"` (line 26).
+  **Fix:** Add `encoding="utf-8"` to the `read_text()` call.
+
+### Deep Audit Findings (2026-04-29, Round 2)
+
+#### Crash-Risk Bugs
+
+- [x] **[BUG] `workflow/nodes/refine.py`: missing `import sys` causes NameError on JSON parse failure**
+  `_extract_design_json()` prints to `sys.stderr` in its exception handler (added in
+  the previous fix pass) but `sys` is never imported in this module.  Any JSON
+  decode error during refine will therefore raise `NameError: name 'sys' is not
+  defined` on top of the original parse failure, completely hiding the real error.
+  **Fix:** Add `import sys` to the import block at the top of the file.
+
+- [x] **[BUG] `workflow/nodes/handoff.py:62`: `response.content` may be `None`, causing `AttributeError`**
+  `md_content = response.content.strip()` is called without checking whether the
+  LLM returned a non-null response.  If the model's response body is empty or the
+  API returns a finish-reason that leaves `content` as `None`, this raises
+  `AttributeError: 'NoneType' object has no attribute 'strip'`, crashing the
+  handoff node and leaving the session without a summary document.
+  **Fix:** Guard with `md_content = (response.content or "").strip()`.
+
+#### Logic Bugs
+
+- [x] **[BUG] `workflow/nodes/implement/score.py:36-41`: `all()` on empty generator returns `True` → inflated `shape` score**
+  When `files_written > 0` (files were listed as written) but every listed file has
+  since been deleted, the generator `(Path(f).expanduser().stat().st_size > 20 for f
+  in ... if Path(f).expanduser().exists())` yields nothing.  `all()` on an empty
+  iterable returns `True` by Python definition, so `sc["shape"]` is set to `2`
+  (excellent) even though zero files remain on disk.
+  **Fix:** Collect the existing-file sizes into an explicit list; if the list is empty
+  treat the result as failed:
+  ```python
+  existing_sizes = [
+      Path(f).expanduser().stat().st_size
+      for f in verify.get("files_written", [])
+      if Path(f).expanduser().exists()
+  ]
+  all_ok = bool(existing_sizes) and all(s > 20 for s in existing_sizes)
+  sc["shape"] = 2 if all_ok else 1
+  ```
+
+- [x] **[BUG] `scripts/core/snapshots.py:30,34`: broken INI-section regex silently returns `None`**
+  The fallback regex patterns `r"^\[General\][^\[]*^ColorScheme=(.+)$"` and
+  `r"^\[KDE\][^\[]*^LookAndFeelPackage=(.+)$"` are broken:  `[^\[]*` matches any
+  character except `[`, including newlines, so it greedily consumes entire lines
+  before the `^` anchor can match.  With `re.MULTILINE` this pattern almost never
+  matches, meaning the fallback to file-based snapshot silently returns `None` for
+  the colour scheme and look-and-feel, potentially leaving the snapshot incomplete.
+  The same `read_text()` call on line 28 also lacks `encoding="utf-8"`.
+  **Fix:** Replace with a two-step section-then-key search:
+  ```python
+  sec = re.search(r"^\[General\](.*?)(?=^\[|\Z)", text, re.MULTILINE | re.DOTALL)
+  if sec:
+      m = re.search(r"^ColorScheme\s*=\s*(.+)$", sec.group(1), re.MULTILINE)
+      if m: scheme = m.group(1).strip()
+  ```
+  Apply the same pattern for the `[KDE]` / `LookAndFeelPackage` lookup.
+  Also add `encoding="utf-8"` to the `read_text()` call on line 28.
+
+#### Silent Exception Swallowing
+
+- [x] **[QUALITY] `scripts/session_manager.py:82-83,85-88`: two silent `except Exception: return []` blocks**
+  `_list_workflow_sessions()` silently swallows both subprocess failure and JSON
+  decode errors.  When the workflow runner exits unexpectedly or prints non-JSON
+  output, callers receive an empty list with no diagnostic information.
+  **Fix:** Change to `except Exception as e:` and print to stderr with context, e.g.
+  `print(f"[session_manager] Warning: ...: {e}", file=sys.stderr)`.
+
+- [x] **[QUALITY] `scripts/icon_theme_gen.py:423-424,441-442`: two silent `except Exception: return False` blocks**
+  The fal-ai icon generation function catches all API and download/resize exceptions
+  without logging.  Callers can only detect failure (return `False`) but cannot
+  distinguish network errors, API quota exhaustion, or image-processing failures.
+  **Fix:** Add `print(f"[icon_theme_gen] ...: {e}", file=sys.stderr)` before each
+  `return False` in the two `except Exception` blocks.
+
+#### Missing `encoding=` Arguments
+
+- [x] **[QUALITY] `workflow/config.py:93`: `read_text()` without `encoding="utf-8"` in `_load_hermes_config`**
+  `yaml.safe_load(config_path.read_text())` reads `~/.hermes/config.yaml` without
+  specifying encoding.  If the YAML file contains non-ASCII characters (e.g. a
+  model name with an accent), this raises `UnicodeDecodeError` on non-UTF-8 locales.
+  **Fix:** Change to `config_path.read_text(encoding="utf-8")`.
+
+#### LLM Response Robustness
+
+- [x] **[QUALITY] `workflow/nodes/plan.py:120`: `_extract_html()` returns raw non-HTML content as fallback**
+  When the LLM response contains no `<!DOCTYPE` or `<html` marker at all, the
+  function falls through to `return content` — returning the raw, possibly
+  explanatory text to the caller.  `plan_node()` then writes this verbatim to
+  `plan.html`, producing an unrenderable preview file with no warning.
+  **Fix:** Return `""` instead of `content` on the final fallback, and print a
+  warning to stderr so failures are surfaced:
+  ```python
+  print("[Plan][WARN] No HTML marker found in LLM response — plan.html will be empty", file=sys.stderr)
+  return ""
+  ```
+
+#### Test Quality
+
+- [x] **[QUALITY] `tests/test_kde_lockscreen_materializer.py` + `tests/test_starship_materializer.py`: non-idiomatic `__import__("shutil")` pattern**
+  Every `addCleanup` call uses `__import__("shutil").rmtree` because `shutil` is not
+  imported at the module level.  This works but is non-idiomatic, harder to read,
+  and triggers linters.
+  **Fix:** Add `import shutil` to the import block of each file and replace all
+  `__import__("shutil").rmtree` occurrences with `shutil.rmtree`.
+
+- [x] **[QUALITY] `tests/test_palette_extractor.py:241`: inline `import tempfile, shutil` inside `_fake_dir`**
+  `import tempfile, shutil` is done inside the test helper method rather than at
+  the module level.  Python re-imports are cheap but the inline `import` hides
+  the dependency and violates the project's style (all other test files import at
+  module level).
+  **Fix:** Move both imports to the top of the file.
+
+- [x] **[QUALITY] `tests/test_kde_materializers.py:368,372`: `write_text()` without `encoding="utf-8"`**
+  Two `write_text()` calls in `SnapshotKdeStateTests._run()` write fixture data
+  (`kvantum.kvconfig` and `plasma-org…appletsrc`) without specifying encoding.
+  **Fix:** Add `encoding="utf-8"` to both calls.
+
+- [x] **[QUALITY] `tests/test_kde_lockscreen_materializer.py:169,181`: `write_text()` / `read_text()` without `encoding="utf-8"`**
+  Line 169: `config_path.write_text("[Daemon]\nTimeout=15\n")` writes a fixture
+  without encoding.  Line 181: `backup_path.read_text()` reads it back without
+  encoding.
+  **Fix:** Add `encoding="utf-8"` to both calls.
+
+- [x] **[QUALITY] `tests/test_starship_materializer.py:144,153`: `write_text()` / `read_text()` without `encoding="utf-8"`**
+  Line 144: `config_path.write_text("# old config\n")` and line 153:
+  `backup_path.read_text()` both omit the encoding argument.
+  **Fix:** Add `encoding="utf-8"` to both calls.
+
+- [x] **[QUALITY] `tests/test_bug_reproducers.py:42,203`: two `read_text()` calls without `encoding="utf-8"`**
+  Line 42 reads `plasma-org…appletsrc` with `errors="replace"` but no encoding.
+  Line 203 reads `manifest.json` without any encoding argument.
+  **Fix:** Add `encoding="utf-8"` to both `read_text()` calls.
+
+### Deep Audit Findings (2026-04-29, Round 3)
+
+#### Crash-Risk Bugs
+
+- [x] **[BUG] `scripts/icon_theme_gen.py`: missing `import sys` causes NameError when exceptions fire**
+  Lines 424 and 443 both call `print(..., file=sys.stderr)` inside exception handlers that
+  were added in a previous fix pass — but `sys` is never imported in this module (only
+  `os`, `re`, `shutil`, `subprocess`, and `urllib.request` appear in the import block).
+  Any fal-ai API failure or icon download failure will raise `NameError: name 'sys' is not
+  defined` on top of the original error, hiding the real cause entirely.
+  **Fix:** Add `import sys` to the import block.
+
+#### Resource Leaks
+
+- [x] **[BUG] `scripts/capture_theme_references.py:552`: `Image.open()` without context manager**
+  ```python
+  img = Image.open(image_path)
+  cropped = img.crop((0, 0, 3840, 2160))
+  resized = cropped.resize((1920, 1080), Image.Resampling.LANCZOS)
+  resized.save(image_path)
+  ```
+  The PIL file handle is never explicitly closed.  If `crop()` or `resize()` raises, the
+  handle leaks until the GC collects it — delaying file unlocks on Windows and making
+  the code harder to reason about on all platforms.
+  **Fix:** Wrap in a `with Image.open(image_path) as img:` context manager.
+
+- [x] **[BUG] `scripts/generate_panel_svg.py:30`: `Image.open()` chained without context manager**
+  ```python
+  img = Image.open(mockup_path).convert("RGB")
+  ```
+  The chained `.convert()` call returns a new image object while the original
+  `Image.open()` handle is never closed.  This leaks one file descriptor per call.
+  **Fix:** Use a `with` block:
+  ```python
+  with Image.open(mockup_path) as raw:
+      img = raw.convert("RGB")
+  ```
+
+- [x] **[QUALITY] `scripts/materializers/wallpaper.py:95-96,136`: two `Popen` calls missing `stdin=subprocess.DEVNULL`**
+  Both daemon-launch calls specify `stdout` and `stderr` as `DEVNULL` but omit `stdin`.
+  The spawned daemons inherit the parent's stdin; if they attempt to read from it they
+  will block or consume input intended for the parent process.
+  **Fix:** Add `stdin=subprocess.DEVNULL` to both `Popen` calls.
+
+#### Missing `encoding=` Arguments
+
+- [x] **[QUALITY] `scripts/materializers/wallpaper.py:20,56`: two `read_text(errors=…)` calls without `encoding="utf-8"`**
+  Line 20: `appletsrc.read_text(errors="replace")` and line 56:
+  `fehbg.read_text(errors="replace")` both specify `errors` but omit `encoding`.
+  On non-UTF-8 locales the system default codec is used, corrupting non-ASCII paths.
+  **Fix:** Change both to `read_text(encoding="utf-8", errors="replace")`.
+
+- [x] **[QUALITY] `workflow/nodes/install/resolver.py:39`: `read_text(errors=…)` without `encoding="utf-8"`**
+  `Path("/etc/os-release").read_text(errors="replace")` omits `encoding`.  `/etc/os-release`
+  is defined to be UTF-8 by the systemd spec; omitting the argument relies on the locale.
+  **Fix:** Add `encoding="utf-8"`.
+
+- [x] **[QUALITY] `workflow/nodes/audit/detectors.py:56,127,142,154`: four `read_text(errors=…)` calls without `encoding="utf-8"`**
+  Four separate `read_text(errors="replace")` calls — at line 56 (`/sys/class/dmi/id/chassis_type`),
+  line 127 (`hyprpaper.conf`), line 142 (`~/.fehbg`), and line 154 (`nitrogen bg-saved.cfg`) —
+  all omit `encoding`.  Paths with non-ASCII characters in wallpaper configs will be
+  decoded incorrectly on non-UTF-8 locales.
+  **Fix:** Add `encoding="utf-8"` to all four calls.
+
+- [x] **[QUALITY] `workflow/nodes/implement/verify.py:34`: `read_text(errors=…)` without `encoding="utf-8"`**
+  `Path(written).read_text(errors="replace")` in the palette-match loop omits encoding.
+  Config files written by the materializers always use UTF-8; mismatched decoding
+  means color hex strings may not be found in the decoded text.
+  **Fix:** Add `encoding="utf-8"`.
+
+- [x] **[QUALITY] `workflow/nodes/implement/score.py:74`: `read_text(errors=…)` without `encoding="utf-8"`**
+  `p.read_text(errors="replace")` in `_is_syntactically_valid()` omits encoding.
+  **Fix:** Add `encoding="utf-8"`.
+
+- [x] **[QUALITY] `workflow/nodes/cleanup/reloader.py:16`: `read_text(errors=…)` without `encoding="utf-8"`**
+  `path.read_text(errors="replace")` in `validate_file()` omits encoding.
+  **Fix:** Add `encoding="utf-8"`.
+
+- [x] **[QUALITY] `workflow/session.py:90`: `md.open("a")` without `encoding="utf-8"`**
+  In `append_item()`, the append-mode `open()` call at line 90 omits `encoding`.
+  All other writes in this file correctly specify `encoding="utf-8"` — this one is
+  inconsistent and will use the system locale on the append path.
+  **Fix:** Change to `md.open("a", encoding="utf-8")`.
+
+#### Robustness
+
+- [x] **[QUALITY] `workflow/nodes/install/resolver.py:148-154`: four `subprocess.run()` calls without `timeout=`**
+  The package-verification loop checks whether each required package is installed via
+  `pacman -Q`, `dpkg -s`, or `rpm -q`.  None of these four calls passes `timeout=`,
+  so a hung package manager (e.g. a locked dpkg database) will block the entire
+  install node indefinitely.
+  **Fix:** Add `timeout=30` to each call.
+
+#### Test Quality
+
+- [x] **[QUALITY] `tests/test_kde_lockscreen_materializer.py:170,182`: `write_text()`/`read_text()` without `encoding="utf-8"` (re-open — not applied in previous round)**
+  Previous fix attempt targeted incorrect line numbers (before `import shutil` shifted
+  the file).  The calls at current lines 170 and 182 still lack `encoding="utf-8"`.
+  **Fix:** Add `encoding="utf-8"` to both calls.
+
+- [x] **[QUALITY] `tests/test_starship_materializer.py:145,154`: `write_text()`/`read_text()` without `encoding="utf-8"` (re-open — not applied in previous round)**
+  Same root cause as above — line numbers shifted after `import shutil` insertion; the
+  encoding arguments were never written to the file.
+  **Fix:** Add `encoding="utf-8"` to both calls.
+
+- [x] **[QUALITY] `tests/test_implement_spec.py:21-22`: class-level `_FakeLLM` state shared across tests**
+  `_FakeLLM.requested_schema` and `_FakeLLM.structured_response` are class-level
+  variables mutated directly by each test method (e.g. lines 38, 45, 58).  Tests run
+  in alphabetical order by default, so the class variables carry over from one test to
+  the next.  A failing early test can leave stale state that masks failures in later ones.
+  **Fix:** Add a `setUp()` method to `ImplementSpecTests` that resets both class
+  variables to `None` before each test.
 
 ---
 
-### Workflow Wiring — from Auggie review 2026-04-28
+### Round 4 — 2026-04-29
 
-- [x] **[WIRING] `session_manager.py resume-check` is blind to LangGraph sessions**
-  `scripts/session_manager.py:cmd_resume_check` only scans `~/.config/rice-sessions/` for
-  `session.md` files. Sessions started via `workflow/run.py` use a separate SQLite checkpoint
-  store (`~/.local/share/linux-ricing/sessions.sqlite`) and their session dirs are named by
-  LangGraph thread IDs (e.g. `rice-20260428-1234-abc123`). The Pre-flight check in `SKILL.md`
-  therefore never surfaces an in-progress LangGraph session to the user.
-  **Fix applied:** `_query_workflow_sessions()` calls `workflow/run.py --list` as a subprocess
-  and merges the results into `resume-check` output (each entry gains a `"source"` field:
-  `"agent"` or `"workflow"`). New `workflow-run [THREAD_ID]` command added. `SKILL.md`
-  Pre-flight updated to handle both source types and offer mode selection.
+#### Atomic File Operations
 
-- [x] **[DOC] `manifest.json` `structure.workflow/` says `"verifiers/"` — should be `"validators.py"`**
-  The description for the `workflow/` key in `manifest.json:36` lists `"verifiers/"` as a
-  subdirectory, but the actual file is `workflow/validators.py` (a flat module, not a package).
-  No `verifiers/` directory exists. Cosmetic doc error only — no runtime impact.
+- [x] **[BUG] `workflow/nodes/refine.py:159-162`: non-atomic write of `design.json`**
+  `_write_design_json` calls `path.write_text(...)` directly.  A crash mid-write
+  leaves a truncated `design.json`, breaking the entire refine→plan→baseline→install
+  pipeline on resume.
+  **Fix:** Write to a `NamedTemporaryFile` in the same directory, then
+  `Path(tmp.name).replace(path)`.
 
-- [x] **[DOC] `manifest.json` `requirements.workflow_packages` missing `langchain-openai`**
-  `workflow/config.py:get_llm()` imports `langchain_openai.ChatOpenAI` for any non-Anthropic-native
-  provider. `workflow/requirements.txt` correctly includes `langchain-openai>=0.3.0`, but
-  `manifest.json:42-46` (`workflow_packages` list) omits it. A user following the manifest to
-  install deps would miss this package and get an `ImportError` on non-Anthropic providers.
+- [x] **[BUG] `workflow/nodes/plan.py:56-57`: non-atomic write of `plan.html`**
+  `html_path.write_text(html_content, encoding="utf-8")` writes directly.  A
+  crash during the LLM-generated HTML write leaves a partial file; the
+  `html_path.stat().st_size < 500` gate may then pass or fail spuriously.
+  **Fix:** Same temp-file-then-rename pattern.
 
----
+- [x] **[BUG] `workflow/nodes/handoff.py:69-70`: non-atomic writes of `handoff.md` / `handoff.html`**
+  Both final session documents are written directly.  A crash after `md_path`
+  but before `html_path` leaves the session half-documented.
+  **Fix:** Atomic write pattern for both files.
 
-### KDE Element Validation — from Auggie review 2026-04-27
+#### LLM Response Robustness
 
-Full plan: `dev/kde-validation-plan.md`
+- [x] **[BUG] `workflow/nodes/explore.py:69`: `response.content` accessed without None guard**
+  `if DIRECTION_SENTINEL in response.content:` raises `TypeError` when the LLM
+  returns `content=None` (e.g. on API error or finish_reason).
+  **Fix:** Change to `if response.content and DIRECTION_SENTINEL in response.content:`.
 
+- [x] **[BUG] `workflow/nodes/plan.py:55`: `response.content` passed to `_extract_html()` without None guard**
+  `_extract_html(response.content)` calls `.strip()` on the first line, which raises
+  `AttributeError: 'NoneType' object has no attribute 'strip'` when content is None.
+  **Fix:** Change to `_extract_html(response.content or "")`.
 
-########### claude --resume b2cb686a-7c16-4107-8ae2-fef93b595a69
+- [x] **[BUG] `workflow/nodes/refine.py:100`: `response.content` accessed without None guard**
+  `if DESIGN_SENTINEL in response.content:` raises `TypeError` on None content.
+  **Fix:** Change to `if response.content and DESIGN_SENTINEL in response.content:`.
 
+#### Encoding
 
+- [x] **[QUALITY] `tests/test_palette_extractor.py:248`: `write_text()` without `encoding="utf-8"`**
+  `(sub / "index.theme").write_text(f"[Icon Theme]\\nName={name}\\n")` in
+  `_fake_dir()` fixture helper lacks explicit encoding.
+  **Fix:** Add `encoding="utf-8"`.
 
+- [x] **[QUALITY] `tests/test_kde_materializers.py:258,521`: two `read_text()` calls without `encoding="utf-8"`**
+  `_run_real()` at line 258 and the list comprehension at line 521 both call
+  `read_text()` without encoding, risking `UnicodeDecodeError` on non-UTF-8 locales.
+  **Fix:** Add `encoding="utf-8"` to both.
 
+- [x] **[QUALITY] `tests/test_starship_materializer.py:120`: `read_text()` without `encoding="utf-8"`**
+  `content = config_path.read_text()` in `test_writes_toml_file` lacks explicit
+  encoding.  **Fix:** Add `encoding="utf-8"`.
 
-#### Bugs to fix
+#### Test Quality
 
-- [x] **[BUG] materialize_kvantum fallback writes "kvantum-dark" as Kvantum theme name**
-  `ricer.py ~L1368`: when design has no `kvantum_theme` key, falls back to the string
-  `"kvantum-dark"` as the Kvantum theme name (not a valid installed theme — Kvantum silently
-  ignores it). `widgetStyle` is correctly set to `"kvantum"` separately, so the
-  silent-Breeze-fallback bug doesn't trigger, but the kvantum.kvconfig is left pointing at
-  a nonexistent theme. **Fix:** early-return empty list when `kvantum_theme` is absent.
+- [x] **[QUALITY] `tests/test_kde_materializers.py:263,265`: non-idiomatic `assertFalse`/`assertTrue` on `re.findall` results**
+  `assertFalse(re.findall(...))` and `assertTrue(re.findall(...))` are less
+  descriptive than `assertEqual(..., [])` / `assertNotEqual(..., [])`.
+  **Fix:** Replace with assertEqual/assertNotEqual.
 
-- [x] **[BUG] kde_lockscreen `break` fires before checking if kreadconfig returned a value**
-  `ricer.py ~L1571`: the `break` is inside the `cmd_exists` block but outside the `if rc == 0 and out`
-  check. If kreadconfig6 is installed but the key is unset (empty output), kreadconfig5 is never tried.
-  Inconsistent with `snapshot_kde_state` pattern which only breaks when a value is found.
-  Low practical risk on Plasma 6 (kreadconfig6 is always present and always responds), but should
-  be made consistent for correctness.
-
-- [x] **[GAP] `icon_theme` is schema-required for KDE but has no materializer**
-  `DEFAULT_DESIGN_SYSTEM` and all presets declare `icon_theme`. `discover_apps()` does NOT register
-  an `icon_theme` key. `APP_MATERIALIZERS` has no `icon_theme` entry. Silent no-op — users setting
-  this field get nothing.
-  **Fix options:** (A) implement `materialize_icon_theme` via `kwriteconfig6 --file kdeglobals --group Icons --key Theme <name>` + KWin reconfigure; (B) explicitly document as SKIP in Quality Bar §11.
-
-- [ ] **[FEATURE][DEFERRED] Generative icon theme via fal.ai style transfer**
-  When no suitable installed theme matches the palette, offer to generate a customized icon
-  set by style-transferring the palette colors onto a base icon pack (e.g. Papirus) using
-  fal.ai image-gen tools. Would live as a new stage in the implement/ pipeline: enumerate
-  installed → if best match score is low → call fal.ai with palette + base icons → write
-  generated icons to `~/.local/share/icons/<theme-name>/`. Out of scope for the selection
-  flow; tracked here for future implementation.
-
-#### Tests to write
-
-- [x] **tests/test_kde_materializers.py** — no dedicated unit tests exist for:
-  - `materialize_kde` (colorscheme): decimal RGB check, plasma-apply-colorscheme call, BreezeClassic bounce, kdeglobals backup ordering
-  - `materialize_kvantum`: widgetStyle="kvantum" regression guard, fallback behavior, qdbus reconfigure call order, kvconfig-only backup
-  - `snapshot_kde_state`: all 7 fields, LookAndFeelPackage fallback, missing kvantum.kvconfig, wallpaper_plugin capture
-  - `materialize_cursor`: kcminputrc write, plasma-apply-cursortheme call, skip when no cursor_theme, previous value capture
-  - `materialize_plasma_theme`: plasmarc group+key correctness, plasma-apply-desktoptheme call, skip when absent, backup is plasmarc not kdeglobals
-  - `materialize_konsole`: colorscheme file location, required sections present, default profile update
-  - `discover_apps`: all 4 KDE sub-systems (kvantum, plasma_theme, cursor, kde_lockscreen) registered when KDE detected, absent when not
-
-- [x] **tests/test_kde_undo.py** — no unit tests for KDE-specific undo restore paths:
-  - previous colorscheme re-applied via plasma-apply-colorscheme
-  - widgetStyle restored via `--delete` not empty string
-  - cursor theme restored via plasma-apply-cursortheme
-  - plasma theme restored
-  - lock screen theme restored
-  - manifest marked `undone: True` after success
-
-#### Skill doc to update
-
-- [x] **skills/ricer-kde/SKILL.md** `discover_apps` block is missing `kde_lockscreen`
-  The "always ensure this block exists" example shows only 3 keys (kvantum, plasma_theme, cursor).
-  Real code at `ricer.py ~L159` registers a 4th: `kde_lockscreen`. Update the example.
+- [x] **[QUALITY] `tests/test_cleanup_reloader.py:22,31,41,51`: bare `errors` list as assertion message**
+  Four calls use `self.assertTrue(any("app" in e for e in errors), errors)` where
+  the second argument is the raw list object.  When an assertion fails, the message
+  shows an unhelpful `repr(list)`.
+  **Fix:** Wrap with `f"Expected 'app' error, got: {errors}"`.
 
 ---
 
+### Round 5 — 2026-04-29
 
-## ✅ DONE (2026-04-24)
+#### Resource Leaks — Subprocess stdin
 
-- **`scripts/session_manager.py`** — built and wired into SKILL.md §2. All 9 step directives now invoke real commands. Tested end-to-end: init → append-step 1–8 → rename → append-item → complete → resume-check.
-- **`QUICKSTART.md` rewrite** — replaced old single-prompt command reference with 8-step session overview, Seven Stances table, animated wallpaper teaser, and honest prerequisites.
-- **§15 Supported Targets** — replaced flat bullet list with annotated table (✅ full / ⚠ partial / 🔲 no doc) for all WMs and apps. No more silent undocumented entries.
-- **`shared/wallpaper-generation.md`** — added full Animated Wallpaper Pipeline section at top (FAL + Seedance, 4 variants, cron scheduling, fallback). Static content preserved below.
-- **Template `hermes-ricer` → `linux-ricing`** — fixed comment headers in all 13 templates.
-- **5 new guide docs** — `shared/polybar.md`, `shared/wofi.md`, `shared/mako.md`, `shared/swaync.md`, `shared/picom.md`. §13 index + §15 coverage table updated (5 apps promoted from ⚠ partial → ✅ full).
-- **wezterm + foot deep-dives** added to `shared/terminal.md`. Both promoted to ✅ full in §15. Total ⚠ partial now just: feh/nitrogen.
-- **`manifest.json`** — written for skill packaging at `linux-ricing/manifest.json`.
-- **Prose quality review (Claude Code)** — 12 issues found and fixed:
-  - `Hyprland/setup.md`: fixed rofi-wayland note (AUR, not Arch repos), `otf-firamono-nerd` → `ttf-firacode-nerd`, added `cliphist` to package list, split AUR packages to `yay` line, fastfetch `.json` → `.jsonc`, `pkill plasmashell` → `|| true` guard.
-  - `KDE/setup.md`: `plasma-desktop kwriteconfig6 kreadconfig6` → `plasma-desktop kconfig`.
-  - `KDE/colorscheme.md`: `inactiveForeground` contrast bug fixed (dark brown → readable gray `98,102,114`).
-  - `Hyprland/hyprlock.md`: all `rgba(r, g, b, a)` decimal → `rgba(rrggbbaa)` hex format + pitfall callout added.
-  - `shared/rollback.md`: void-dragon preset dict missing `icon_theme` — added. Icon/cursor theme verify commands added.
+- [x] **[BUG] `scripts/capture_theme_references.py:249`: `restart_plasmashell` Popen missing `stdin=DEVNULL`**
+  `subprocess.Popen(["plasmashell", "--replace"], stdout=DEVNULL, stderr=DEVNULL)` does
+  not redirect stdin.  The daemon inherits the parent process's stdin, which can block
+  on terminal reads or consume interactive input.
+  **Fix:** Add `stdin=subprocess.DEVNULL`.
 
----
+- [x] **[BUG] `scripts/capture_theme_references.py:523`: `launch_reference_window` Popen missing `stdin=DEVNULL`**
+  `subprocess.Popen(build_reference_window_command(...), stdout=DEVNULL, stderr=DEVNULL)`
+  also inherits stdin from the parent.
+  **Fix:** Add `stdin=subprocess.DEVNULL`.
 
-## Live KDE Integration Test — Findings (2026-04-24)
+#### Encoding
 
-End-to-end test on KDE Plasma 6 / Wayland: `ricer apply --wallpaper X --extract` → `ricer undo`. Baseline at `~/.cache/linux-ricing/baselines/20260424_030101_*`. All code-level findings from that run are below. Color extractor itself worked deterministically and round-trips cleanly. The bugs are downstream in the materializer/undo layer.
+- [x] **[BUG] `scripts/deterministic_ricing_session.py:316`: `read_text(errors="replace")` without `encoding="utf-8"`**
+  `appletsrc.read_text(errors="replace")` in `_get_wallpaper_from_appletsrc()` (or
+  equivalent) uses the platform default encoding, so non-ASCII wallpaper paths will be
+  mis-decoded on non-UTF-8 locales.
+  **Fix:** Change to `read_text(encoding="utf-8", errors="replace")`.
 
-### [BUG P0 — FIXED 2026-04-24] `materialize_wallpaper` doesn't register undo info → `ricer undo` leaves the test wallpaper in place
+#### Code Quality — Imports
 
-- `scripts/ricer.py:1572-1678` (`materialize_wallpaper`) calls `plasma-apply-wallpaperimage` (and the Hypr/feh/swww variants) but does NOT snapshot the pre-apply wallpaper path. Manifest change entry has no `previous_wallpaper` field.
-- `scripts/ricer.py:2316+` (`undo()`) has no `app == "wallpaper"` branch. It silently skips wallpaper restoration.
-- Verified live: after apply + undo, `~/.config/plasma-org.kde.plasma.desktop-appletsrc` still points at the test wallpaper.
-- Note: `scripts/deterministic_ricing_session.py:309-326` handles wallpaper snapshot manually (reads `Image=` from appletsrc before apply, appends a `previous_wallpaper` change entry with `manual: True`). That logic should move into `materialize_wallpaper` so plain `ricer apply` gets it too.
-- **Fix applied:** new helper `_snapshot_current_wallpaper(desktop)` covers KDE (appletsrc regex), awww (`--get last-image`), hyprpaper (conf parse), swww (`swww query`), feh (`~/.fehbg`). Every branch of `materialize_wallpaper` now records `previous_wallpaper`. New `app == "wallpaper"` branch in `undo()` dispatches by `method`. Reproducer `test_p0_wallpaper_restored_on_undo` goes green.
+- [x] **[QUALITY] `workflow/nodes/plan.py:125`: `import sys` inside function body**
+  The `_extract_html()` function imports `sys` inline at the point of use.  All other
+  imports in this file are at module level; the inline import is inconsistent and adds
+  a small per-call overhead.
+  **Fix:** Move `import sys` to the module-level imports block.
 
-### [BUG P1 — FIXED 2026-04-24] `materialize_plasma_theme` and `materialize_cursor` silently no-op on extractor output
+#### LLM Response Robustness
 
-- Extractor JSON has `palette`, `name`, `description`, `mood_tags` only. No `plasma_theme` / `cursor_theme` / `icon_theme` / `gtk_theme` keys.
-- `scripts/ricer.py:1474-1475` (plasma_theme): `if not plasma_theme: return changes` — silent skip.
-- `scripts/ricer.py:1528-1529` (cursor): `if not cursor_theme: return changes` — silent skip.
-- Contrast: `materialize_kvantum:1402-1405` defaults to `"kvantum-dark"` and `materialize_gtk:2046-2048` defaults to `Adwaita-dark/Papirus-Dark/default` — inconsistent contract.
-- Result: on `ricer apply --extract`, Plasma panel chrome and cursor stay on whatever was previously set — no visible update for those layers. The skill's 10-layer promise silently collapses to 8.
-- **Fix (pick one):**
-  - (a) **Extractor emits defaults**: `palette_extractor.extract_palette` appends `plasma_theme: "default"`, `cursor_theme: "breeze_cursors"`, `icon_theme: "Papirus-Dark"/"Papirus"` (by YIQ of bg), `gtk_theme: "Adwaita-dark"/"Adwaita"`, `kvantum_theme: "kvantum-dark"/"kvantum"`. Keeps materializer contracts strict.
-  - (b) **Materializers default in-place**: `materialize_plasma_theme` and `materialize_cursor` pick sensible defaults from palette when keys are missing (mirror `materialize_gtk` / `materialize_kvantum`). Keeps design JSON minimal.
-  - (a) is cleaner — the design_system JSON is the canonical description, and it should be complete.
-- **Fix applied:** `palette_extractor._default_theme_names()` now emits `kvantum_theme`, `cursor_theme`, `icon_theme`, `gtk_theme`, `plasma_theme` defaults based on YIQ luma of `palette["background"]`. Reproducer `test_p1_extract_apply_covers_plasma_theme_and_cursor` goes green; manifests now contain entries for plasma_theme + cursor materializers.
+- [x] **[BUG] `workflow/nodes/explore.py:83`: `response.content` passed to `interrupt()` without None guard**
+  When the LLM returns `content=None` (API error, finish_reason, etc.) the dict
+  `{"message": response.content}` passes `None` to `interrupt()`, which attempts to
+  serialize it.  This can raise a `TypeError` inside LangGraph's serializer.
+  **Fix:** Change to `"message": response.content or ""`.
 
-### [BUG P2 — FIXED 2026-04-24] Kvantum's kdeglobals backup is the *only* kdeglobals backup (and it's stale)
+#### Atomic Write Safety — Temp-file Leak on `replace()` failure
 
-- Reproducer `test_p2_kvantum_backs_up_kdeglobals_before_kde_mutates_it` revealed that `materialize_kde` doesn't actually back up kdeglobals to a file — it snapshots the *current colorscheme name* via `snapshot_kde_state()` so undo re-applies the old colorscheme via `plasma-apply-colorscheme`, which rewrites kdeglobals from scratch.
-- That's why `kvantum/kdeglobals` is the only kdeglobals backup in the manifest, and it's stale (post-kde-write).
-- Today this works because `plasma-apply-colorscheme` is idempotent and reliably re-writes kdeglobals. But it's fragile: if `plasma-apply-colorscheme` fails, the previous colorscheme file is missing, or a user's kdeglobals has hand-edited sections outside `[Colors:*]`, undo leaves kdeglobals partially corrupted.
-- **Fix applied:** `materialize_kde` now backs up kdeglobals pre-apply as `kde/kdeglobals` (change entry field `kdeglobals_backup`). `materialize_kvantum` no longer re-captures kdeglobals (kvantum's only contribution is the widgetStyle key, already recorded via `previous_widget_style`). `undo()` generic loop adds `kdeglobals_backup` → `~/.config/kdeglobals` restoration as a file-level fallback. Reproducer `test_p2_kdeglobals_backed_up_once_and_matches_pre_apply` goes green.
+- [x] **[BUG] `workflow/nodes/refine.py:169`: tmp file leaks if `Path.replace()` raises**
+  After the `NamedTemporaryFile` context manager exits, `Path(tmp_path).replace(path)`
+  is called bare.  If it raises (e.g. permission error, cross-device link), the `.tmp`
+  file is left on disk permanently.
+  **Fix:** Wrap the `replace()` in try/except; call `Path(tmp_path).unlink(missing_ok=True)` in the except branch before re-raising.
 
-### [MINOR P3 — FIXED 2026-04-24] Baseline audit misses `fastfetch/config.json`
+- [x] **[BUG] `workflow/nodes/plan.py:62`: tmp file leaks if `Path.replace()` raises**
+  Same pattern as `refine.py` — `plan.html`'s temp file is not cleaned up on error.
+  **Fix:** Same try/except+unlink pattern.
 
-- Reproducer `test_p3a_desktop_state_audit_covers_gtk_and_fastfetch` showed: `fastfetch/config.json` is NOT captured by `desktop_state_audit.py`. GTK settings.ini IS captured but under a flattened name (`gtk-3.0-settings`, not `settings.ini`) — test refined to check for that.
-- Means baseline-vs-post-undo fidelity checks can't verify fastfetch config rolled back.
-- **Fix applied:** added `gtk-4.0-settings`, `fastfetch.config.json`, `dunstrc`, `rofi.config.rasi`, `waybar.style.css` to `desktop_state_audit.py:backup_all_config_files`. Reproducer now checks labels (not filename leaves) and covers every file whose source exists.
+- [x] **[BUG] `workflow/nodes/handoff.py:76`: tmp files leak if `Path.replace()` raises in loop**
+  The loop over `(md_path, html_path)` calls `replace()` unguarded.  A failure on the
+  second file leaves that file's `.tmp` on disk; a failure on the first leaves the
+  session half-written with no cleanup.
+  **Fix:** Wrap each `replace()` in try/except+unlink inside the loop.
 
-### [NON-BUG] DeprecationWarning claim from initial test was a false alarm
+#### Error Handling
 
-- `scripts/ricer.py:193` does call `datetime.utcnow()` which is deprecated in Python 3.12+.
-- But Python emits the warning to **stderr**, not stdout. Pipelines like `ricer extract | jq` work fine as long as stderr isn't merged in with `2>&1`.
-- Still worth cleaning up (`datetime.now(timezone.utc)`) but NOT a pipe-breaking bug.
-- Reproducer `test_p3b_ricer_stdout_is_clean_json` confirms this — currently passes.
+- [x] **[QUALITY] `workflow/run.py:89`: exception handler prints message but not traceback**
+  `except Exception as e: print(f"\n[ERROR] {e}")` only prints the exception message.
+  For unexpected runtime errors the full traceback is lost, making post-mortem
+  debugging very difficult.
+  **Fix:** Add `import traceback; traceback.print_exc(file=sys.stderr)` before the
+  `raise`.
 
-### Successes from this run
-
-- Color extractor: 10 slots filled, contrast-correct, deterministic across two runs (byte-identical stdout). Round-trips through `apply --extract --dry-run` → `apply --extract` → `undo` cleanly for all files except wallpaper.
-- `materialize_kde`, `materialize_kvantum`, `materialize_gtk`, `materialize_konsole`, `materialize_kitty`, `materialize_rofi`, `materialize_dunst`, `materialize_fastfetch`, `materialize_waybar` all wrote+backed up+reloaded without errors.
-- Post-undo fidelity: `kdeglobals`, `kvantum.kvconfig`, `plasmarc`, `kcminputrc` byte-identical to baseline.
 
 ---
 
-## Color Extractor (image → 10-key palette)
+### Round 6 -- 2026-04-29
 
-Goal: close the gap between documented capability ("Image/Wallpaper → Extract dominant colors → Apply everywhere") and real code. Currently the extractor exists only as pseudo-code in `ricer/ricer-wallpaper/SKILL.md:358-396`; nothing in `scripts/ricer.py` imports PIL, colorthief, or any clustering library.
+#### Missing encoding= Arguments
 
-### Findings from review
+- [x] **[QUALITY] scripts/core/snapshots.py:81: appletsrc.read_text(errors="replace") without encoding="utf-8"**
+  appletsrc.read_text(errors="replace") in snapshot_kde_state() omits the encoding
+  argument while already specifying errors="replace". The appletsrc file contains
+  wallpaper paths and plugin names that may include non-ASCII characters; on non-UTF-8
+  locales the system codec is used, corrupting the snapshot data.
+  **Fix:** Change to appletsrc.read_text(encoding="utf-8", errors="replace").
 
-- [x] `ricer-wallpaper/SKILL.md:394` — `danger <- rotate_hue(Vibrant, 0)` no-op: fixed. Real extractor finds nearest-hue swatch.
-- [x] No fallback cascade: implemented in `palette_extractor.py` for all 6 swatch classes.
-- [x] No palette-level collision detection: `validate_palette()` enforces uniqueness + contrast.
-- [x] `setup.sh` Pillow vs colorthief mismatch: resolved — Pillow-only implementation, no colorthief.
-- [x] No alpha handling: `load_and_normalize()` alpha-composites over `#808080` before quantization.
-- [x] Determinism guarantee: swatches sorted by `(-frequency, hex_string)` — documented in module.
+- [x] **[QUALITY] scripts/core/snapshots.py:104: konsolerc.read_text(errors="replace") without encoding="utf-8"**
+  konsolerc.read_text(errors="replace") in snapshot_konsole_state() has the same
+  issue -- encoding omitted while errors are handled.
+  **Fix:** Change to konsolerc.read_text(encoding="utf-8", errors="replace").
 
-### What to build
+- [x] **[QUALITY] scripts/session_manager.py:193: write_text(header) without encoding="utf-8" in cmd_init**
+  session_md(session_dir).write_text(header) writes the session header (which contains
+  the theme name and timestamps) without specifying encoding. Theme names may contain
+  non-ASCII characters.
+  **Fix:** Change to write_text(header, encoding="utf-8").
 
-- [x] Create `scripts/palette_extractor.py` — complete: `load_and_normalize`, `quantize_swatches`, `_classify_swatch`, `assign_slots`, `validate_palette`, `infer_mood_tags`, `extract_palette`, `_default_theme_names`.
-- [x] Wire to CLI: `ricer extract --image PATH [--out FILE] [--name NAME]` — done.
-- [x] `ricer apply --extract` flag — done; derives design_system in-memory from wallpaper.
-- [x] Docs alignment: SKILL.md updated with real CLI commands.
+- [x] **[QUALITY] scripts/session_manager.py:228: md.read_text() without encoding="utf-8" in cmd_resume_check**
+  text = md.read_text() reads session metadata without encoding.
+  **Fix:** Change to md.read_text(encoding="utf-8").
 
-### Tests
+- [x] **[QUALITY] scripts/session_manager.py:379: session_md().read_text() without encoding="utf-8" in cmd_status**
+  text = session_md(session_dir).read_text() omits encoding.
+  **Fix:** Change to session_md(session_dir).read_text(encoding="utf-8").
 
-- [x] `tests/test_palette_extractor.py` — complete. Covers: determinism, 10-slot completeness, contrast, uniqueness, semantic hue, classify thresholds, dark_scenic accent capture.
-- [x] Fixtures: synthesized in-memory (no committed binaries) — vibrant, monochrome, dark_scenic.
+- [x] **[QUALITY] scripts/session_manager.py:386: session_md().read_text() without encoding="utf-8" in cmd_read**
+  print(session_md(session_dir).read_text()) omits encoding.
+  **Fix:** Change to print(session_md(session_dir).read_text(encoding="utf-8")).
 
-### End-to-end verification (reversible, on KDE sandbox)
+#### LLM Response Robustness
 
-```bash
-# Unit tests
-python3 -m pytest tests/test_palette_extractor.py -v
-
-# Extract-only — no desktop change
-ricer extract --image ~/Pictures/maplestory_bg.png
-
-# Extract + dry-run apply — no desktop change
-ricer apply --wallpaper ~/Pictures/maplestory_bg.png --extract --dry-run
-
-# Real apply (reversible)
-ricer apply --wallpaper ~/Pictures/maplestory_bg.png --extract
-ricer status
-# visual check: colorscheme, konsole, kvantum, panel
-ricer undo
-ricer status
-```
-
-Pass criteria: tests green, extraction deterministic on rerun, apply+undo round-trip leaves kdeglobals/kvantum/wallpaper/konsole byte-identical to pre-apply.
-
-### Reused utilities (already in `scripts/ricer.py`)
-
-- `hex_to_rgb_tuple`, `rgb_tuple_to_hex` — line 347-356
-- `yiq_text_color` — line 358 (contrast validation)
-- `rotate_hue` — line 371 (fallback hue derivation)
-- `adjust_lightness` — line 384 (contrast + fallback lightness)
-- `simple_render` — line 401 (Jinja2-compatible fallback renderer)
-
-### Out of scope
-
-- Vision-subagent extraction (semantic image understanding beyond clustering) — roadmap.
-- OKLab / Lch perceptual color spaces — revisit if extractor quality proves insufficient.
-- WCAG AAA contrast — AA-equivalent (YIQ Δ ≥ 128) is sufficient for theming.
-- Text-prompt → palette via LLM — separate subskill.
+- [x] **[BUG] workflow/nodes/refine.py:119: response.content passed to interrupt() without None guard**
+  "message": response.content inside the interrupt() call passes None to
+  LangGraph's serializer when the LLM returns content=None (e.g. on API error or
+  finish_reason="stop" with no body), raising TypeError inside the serializer.
+  The sibling guard on line 101 already handles the sentinel-check case; this one
+  covers the fallback path.
+  **Fix:** Change to "message": response.content or "".

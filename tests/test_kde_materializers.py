@@ -70,11 +70,12 @@ class TestMaterializeKvantumFallback(unittest.TestCase):
         def fake_backup(path, ts, rel):
             return None
 
+        # materialize_kvantum lives in materializers.kde_extras — patch there.
         with (
-            patch.object(ricer, "run_cmd", side_effect=fake_run_cmd),
-            patch.object(ricer, "backup_file", side_effect=fake_backup),
-            patch.object(ricer, "_get_kwrite", return_value="kwriteconfig6"),
-            patch.object(ricer, "cmd_exists", return_value=False),
+            patch("materializers.kde_extras.run_cmd", side_effect=fake_run_cmd),
+            patch("materializers.kde_extras.backup_file", side_effect=fake_backup),
+            patch("materializers.kde_extras._get_kwrite", return_value="kwriteconfig6"),
+            patch("materializers.kde_extras.cmd_exists", return_value=False),
         ):
             ricer.materialize_kvantum(
                 {"kvantum_theme": "KvDark"}, backup_ts="20260427T000000"
@@ -110,6 +111,9 @@ class TestMaterializeIconTheme(unittest.TestCase):
         self.assertEqual(result[0]["action"], "dry-run")
         self.assertEqual(result[0]["theme"], "Papirus-Dark")
 
+    # materialize_icon_theme lives in materializers.kde_extras
+    _ICON_MOD = "materializers.kde_extras"
+
     def test_writes_icons_group_theme_key(self):
         """kdeglobals [Icons] Theme must be set, not a cursor or widget-style key."""
         written_args = []
@@ -119,9 +123,9 @@ class TestMaterializeIconTheme(unittest.TestCase):
             return (0, "", "")
 
         with (
-            patch.object(ricer, "run_cmd", side_effect=fake_run_cmd),
-            patch.object(ricer, "_get_kwrite", return_value="kwriteconfig6"),
-            patch.object(ricer, "cmd_exists", return_value=False),
+            patch(f"{self._ICON_MOD}.run_cmd", side_effect=fake_run_cmd),
+            patch(f"{self._ICON_MOD}._get_kwrite", return_value="kwriteconfig6"),
+            patch(f"{self._ICON_MOD}.cmd_exists", return_value=False),
         ):
             result = ricer.materialize_icon_theme(
                 {"icon_theme": "Papirus-Dark"}, backup_ts="20260427T000000"
@@ -142,9 +146,9 @@ class TestMaterializeIconTheme(unittest.TestCase):
             return (0, "", "")
 
         with (
-            patch.object(ricer, "run_cmd", side_effect=fake_run_cmd),
-            patch.object(ricer, "_get_kwrite", return_value="kwriteconfig6"),
-            patch.object(ricer, "cmd_exists", side_effect=lambda n: n == "kreadconfig6"),
+            patch(f"{self._ICON_MOD}.run_cmd", side_effect=fake_run_cmd),
+            patch(f"{self._ICON_MOD}._get_kwrite", return_value="kwriteconfig6"),
+            patch(f"{self._ICON_MOD}.cmd_exists", side_effect=lambda n: n == "kreadconfig6"),
         ):
             result = ricer.materialize_icon_theme(
                 {"icon_theme": "Papirus-Dark"}, backup_ts="20260427T000000"
@@ -156,6 +160,9 @@ class TestMaterializeIconTheme(unittest.TestCase):
 
 class TestMaterializeKdeLockscreenReadconfig(unittest.TestCase):
     """materialize_kde_lockscreen: kreadconfig fallback loop must match snapshot_kde_state pattern."""
+
+    # materialize_kde_lockscreen lives in materializers.kde_extras
+    _MOD = "materializers.kde_extras"
 
     def _run_with_read_sequence(self, tool_outputs: dict[str, tuple[int, str, str]]):
         """Run materialize_kde_lockscreen with faked cmd_exists and run_cmd.
@@ -178,10 +185,10 @@ class TestMaterializeKdeLockscreenReadconfig(unittest.TestCase):
 
         design = {"palette": {"background": "#1e1e2e"}}
         with (
-            patch.object(ricer, "cmd_exists", side_effect=fake_cmd_exists),
-            patch.object(ricer, "run_cmd", side_effect=fake_run_cmd),
-            patch.object(ricer, "backup_file", side_effect=fake_backup),
-            patch.object(ricer, "_get_kwrite", return_value=None),
+            patch(f"{self._MOD}.cmd_exists", side_effect=fake_cmd_exists),
+            patch(f"{self._MOD}.run_cmd", side_effect=fake_run_cmd),
+            patch(f"{self._MOD}.backup_file", side_effect=fake_backup),
+            patch(f"{self._MOD}._get_kwrite", return_value=None),
         ):
             result = ricer.materialize_kde_lockscreen(design, backup_ts="20260427T000000")
 
@@ -213,6 +220,9 @@ class TestMaterializeKdeLockscreenReadconfig(unittest.TestCase):
 class TestMaterializeKde(unittest.TestCase):
     """materialize_kde: colorscheme file format, apply logic, backup ordering."""
 
+    # materialize_kde lives in materializers.kde
+    _KDE = "materializers.kde"
+
     def _run(self, design=None, dry_run=False, snap_scheme="BreezeClassic",
              apply_output="applied"):
         """Run materialize_kde with all I/O mocked; return (changes, run_cmd_calls)."""
@@ -221,12 +231,12 @@ class TestMaterializeKde(unittest.TestCase):
         calls = []
         with (
             tempfile.TemporaryDirectory() as tmp,
-            patch.object(ricer, "HOME", Path(tmp)),
-            patch.object(ricer, "snapshot_kde_state",
-                         return_value={**_NULL_STATE, "active_colorscheme": snap_scheme}),
-            patch.object(ricer, "run_cmd", side_effect=lambda cmd, **kw: calls.append(list(cmd)) or (0, apply_output, "")),
-            patch.object(ricer, "backup_file", return_value="/tmp/backup"),
-            patch.object(ricer, "cmd_exists", return_value=True),
+            patch(f"{self._KDE}.HOME", Path(tmp)),
+            patch(f"{self._KDE}.snapshot_kde_state",
+                  return_value={**_NULL_STATE, "active_colorscheme": snap_scheme}),
+            patch(f"{self._KDE}.run_cmd", side_effect=lambda cmd, **kw: calls.append(list(cmd)) or (0, apply_output, "")),
+            patch(f"{self._KDE}.backup_file", return_value="/tmp/backup"),
+            patch(f"{self._KDE}.cmd_exists", return_value=True),
         ):
             changes = ricer.materialize_kde(design, backup_ts="ts", dry_run=dry_run)
         return changes, calls
@@ -237,23 +247,23 @@ class TestMaterializeKde(unittest.TestCase):
             design = dict(_MINIMAL_DESIGN)
         with (
             tempfile.TemporaryDirectory() as tmp,
-            patch.object(ricer, "HOME", Path(tmp)),
-            patch.object(ricer, "snapshot_kde_state", return_value=_NULL_STATE),
-            patch.object(ricer, "run_cmd", return_value=(0, "", "")),
-            patch.object(ricer, "backup_file", return_value=None),
-            patch.object(ricer, "cmd_exists", return_value=False),
+            patch(f"{self._KDE}.HOME", Path(tmp)),
+            patch(f"{self._KDE}.snapshot_kde_state", return_value=_NULL_STATE),
+            patch(f"{self._KDE}.run_cmd", return_value=(0, "", "")),
+            patch(f"{self._KDE}.backup_file", return_value=None),
+            patch(f"{self._KDE}.cmd_exists", return_value=False),
         ):
             ricer.materialize_kde(design, backup_ts="ts")
             files = list((Path(tmp) / ".local" / "share" / "color-schemes").glob("*.colors"))
-            return files[0].read_text() if files else ""
+            return files[0].read_text(encoding="utf-8") if files else ""
 
     def test_generated_colors_file_uses_decimal_rgb_not_hex(self):
         """KDE .colors format requires 'r,g,b' — no '#rrggbb' strings allowed."""
         content = self._run_real()
-        self.assertFalse(re.findall(r"Color\s*=\s*#[0-9a-fA-F]{6}", content),
+        self.assertEqual(re.findall(r"Color\s*=\s*#[0-9a-fA-F]{6}", content), [],
                          "Found hex values in .colors")
-        self.assertTrue(re.findall(r"Color\s*=\s*\d+,\d+,\d+", content),
-                        "No decimal RGB values found in .colors")
+        self.assertNotEqual(re.findall(r"Color\s*=\s*\d+,\d+,\d+", content), [],
+                            "No decimal RGB values found in .colors")
 
     def test_plasma_apply_colorscheme_called(self):
         changes, calls = self._run()
@@ -295,15 +305,18 @@ class TestMaterializeKde(unittest.TestCase):
 
 class TestMaterializeKvantumAdditional(unittest.TestCase):
 
+    # materialize_kvantum lives in materializers.kde_extras
+    _KE = "materializers.kde_extras"
+
     def _run(self):
         calls = []
         with (
             tempfile.TemporaryDirectory() as tmp,
-            patch.object(ricer, "HOME", Path(tmp)),
-            patch.object(ricer, "run_cmd", side_effect=lambda cmd, **kw: calls.append(list(cmd)) or (0, "", "")),
-            patch.object(ricer, "backup_file", return_value=None),
-            patch.object(ricer, "_get_kwrite", return_value="kwriteconfig6"),
-            patch.object(ricer, "cmd_exists", side_effect=lambda n: n == "qdbus6"),
+            patch(f"{self._KE}.HOME", Path(tmp)),
+            patch(f"{self._KE}.run_cmd", side_effect=lambda cmd, **kw: calls.append(list(cmd)) or (0, "", "")),
+            patch(f"{self._KE}.backup_file", return_value=None),
+            patch(f"{self._KE}._get_kwrite", return_value="kwriteconfig6"),
+            patch(f"{self._KE}.cmd_exists", side_effect=lambda n: n == "qdbus6"),
         ):
             ricer.materialize_kvantum({"kvantum_theme": "KvDark"}, backup_ts="ts")
         return calls
@@ -322,11 +335,11 @@ class TestMaterializeKvantumAdditional(unittest.TestCase):
         backed = []
         with (
             tempfile.TemporaryDirectory() as tmp,
-            patch.object(ricer, "HOME", Path(tmp)),
-            patch.object(ricer, "run_cmd", return_value=(0, "", "")),
-            patch.object(ricer, "backup_file", side_effect=lambda p, ts, rel: backed.append(rel)),
-            patch.object(ricer, "_get_kwrite", return_value="kwriteconfig6"),
-            patch.object(ricer, "cmd_exists", return_value=False),
+            patch(f"{self._KE}.HOME", Path(tmp)),
+            patch(f"{self._KE}.run_cmd", return_value=(0, "", "")),
+            patch(f"{self._KE}.backup_file", side_effect=lambda p, ts, rel: backed.append(rel)),
+            patch(f"{self._KE}._get_kwrite", return_value="kwriteconfig6"),
+            patch(f"{self._KE}.cmd_exists", return_value=False),
         ):
             ricer.materialize_kvantum({"kvantum_theme": "KvDark"}, backup_ts="ts")
         self.assertTrue(any("kvantum" in r for r in backed), "kvantum.kvconfig not backed up")
@@ -341,6 +354,9 @@ class TestSnapshotKdeState(unittest.TestCase):
         "plasma_theme", "cursor_theme", "icon_theme", "wallpaper", "wallpaper_plugin",
     )
 
+    # snapshot_kde_state lives in core.snapshots
+    _SNAP = "core.snapshots"
+
     def _snap(self, outputs: dict[str, str],
               kvconfig: str | None = None, appletsrc: str | None = None):
         """Run snapshot_kde_state inside a fresh tmpdir; return the result dict."""
@@ -349,16 +365,16 @@ class TestSnapshotKdeState(unittest.TestCase):
             if kvconfig is not None:
                 kv = home / ".config" / "Kvantum" / "kvantum.kvconfig"
                 kv.parent.mkdir(parents=True, exist_ok=True)
-                kv.write_text(kvconfig)
+                kv.write_text(kvconfig, encoding="utf-8")
             if appletsrc is not None:
                 src = home / ".config" / "plasma-org.kde.plasma.desktop-appletsrc"
                 src.parent.mkdir(parents=True, exist_ok=True)
-                src.write_text(appletsrc)
+                src.write_text(appletsrc, encoding="utf-8")
             with (
-                patch.object(ricer, "HOME", home),
-                patch.object(ricer, "cmd_exists", side_effect=lambda n: n == "kreadconfig6"),
-                patch.object(ricer, "run_cmd",
-                             side_effect=lambda cmd, **kw: (0, outputs.get(cmd[-1] if cmd else "", ""), "")),
+                patch(f"{self._SNAP}.HOME", home),
+                patch(f"{self._SNAP}.cmd_exists", side_effect=lambda n: n == "kreadconfig6"),
+                patch(f"{self._SNAP}.run_cmd",
+                      side_effect=lambda cmd, **kw: (0, outputs.get(cmd[-1] if cmd else "", ""), "")),
             ):
                 return ricer.snapshot_kde_state()
 
@@ -389,17 +405,20 @@ class TestSnapshotKdeState(unittest.TestCase):
 
 class TestMaterializeCursor(unittest.TestCase):
 
+    # materialize_cursor lives in materializers.kde_extras
+    _KE = "materializers.kde_extras"
+
     def _run(self, design, dry_run=False, prev_cursor="breeze_cursors"):
         calls = []
         with (
-            patch.object(ricer, "HOME", Path("/tmp/fake-home")),
-            patch.object(ricer, "run_cmd",
-                         side_effect=lambda cmd, **kw: calls.append(list(cmd)) or
-                         (0, prev_cursor if "cursorTheme" in cmd else "", "")),
-            patch.object(ricer, "backup_file", return_value="/tmp/backup"),
-            patch.object(ricer, "_get_kwrite", return_value="kwriteconfig6"),
-            patch.object(ricer, "cmd_exists",
-                         side_effect=lambda n: n in ("kreadconfig6", "plasma-apply-cursortheme")),
+            patch(f"{self._KE}.HOME", Path("/tmp/fake-home")),
+            patch(f"{self._KE}.run_cmd",
+                  side_effect=lambda cmd, **kw: calls.append(list(cmd)) or
+                  (0, prev_cursor if "cursorTheme" in cmd else "", "")),
+            patch(f"{self._KE}.backup_file", return_value="/tmp/backup"),
+            patch(f"{self._KE}._get_kwrite", return_value="kwriteconfig6"),
+            patch(f"{self._KE}.cmd_exists",
+                  side_effect=lambda n: n in ("kreadconfig6", "plasma-apply-cursortheme")),
         ):
             changes = ricer.materialize_cursor(design, backup_ts="ts", dry_run=dry_run)
         return changes, calls
@@ -410,7 +429,7 @@ class TestMaterializeCursor(unittest.TestCase):
     def test_dry_run_no_writes(self):
         changes, calls = self._run({"cursor_theme": "Breeze"}, dry_run=True)
         self.assertEqual(changes[0]["action"], "dry-run")
-        self.assertFalse([c for c in calls if "kwriteconfig6" in c])
+        self.assertEqual([c for c in calls if "kwriteconfig6" in c], [])
 
     def test_kcminputrc_written_with_theme_name(self):
         _, calls = self._run({"cursor_theme": "Breeze"})
@@ -430,17 +449,20 @@ class TestMaterializeCursor(unittest.TestCase):
 
 class TestMaterializePlasmaTheme(unittest.TestCase):
 
+    # materialize_plasma_theme lives in materializers.kde_extras
+    _KE = "materializers.kde_extras"
+
     def _run(self, design, dry_run=False, prev_theme="default"):
         calls, backed = [], []
         with (
-            patch.object(ricer, "run_cmd",
-                         side_effect=lambda cmd, **kw: calls.append(list(cmd)) or
-                         (0, prev_theme if "name" in cmd else "", "")),
-            patch.object(ricer, "backup_file",
-                         side_effect=lambda p, ts, rel: backed.append(rel)),
-            patch.object(ricer, "_get_kwrite", return_value="kwriteconfig6"),
-            patch.object(ricer, "cmd_exists",
-                         side_effect=lambda n: n in ("kreadconfig6", "plasma-apply-desktoptheme")),
+            patch(f"{self._KE}.run_cmd",
+                  side_effect=lambda cmd, **kw: calls.append(list(cmd)) or
+                  (0, prev_theme if "name" in cmd else "", "")),
+            patch(f"{self._KE}.backup_file",
+                  side_effect=lambda p, ts, rel: backed.append(rel)),
+            patch(f"{self._KE}._get_kwrite", return_value="kwriteconfig6"),
+            patch(f"{self._KE}.cmd_exists",
+                  side_effect=lambda n: n in ("kreadconfig6", "plasma-apply-desktoptheme")),
         ):
             changes = ricer.materialize_plasma_theme(design, backup_ts="ts", dry_run=dry_run)
         return changes, calls, backed
@@ -478,22 +500,25 @@ class TestMaterializePlasmaTheme(unittest.TestCase):
 
 class TestMaterializeKonsole(unittest.TestCase):
 
+    # materialize_konsole lives in materializers.terminals
+    _TERM = "materializers.terminals"
+
     def _run(self, dry_run=False):
         """Return (changes, colorscheme_contents) — contents read before tmpdir is deleted."""
         with tempfile.TemporaryDirectory() as tmp:
             home = Path(tmp)
             with (
-                patch.object(ricer, "HOME", home),
-                patch.object(ricer, "run_cmd", return_value=(0, "", "")),
-                patch.object(ricer, "backup_file", return_value=None),
-                patch.object(ricer, "_get_kwrite", return_value="kwriteconfig6"),
-                patch.object(ricer, "cmd_exists", return_value=False),
-                patch.object(ricer, "snapshot_konsole_state",
-                             return_value={"default_profile": "Default.profile"}),
+                patch(f"{self._TERM}.HOME", home),
+                patch(f"{self._TERM}.run_cmd", return_value=(0, "", "")),
+                patch(f"{self._TERM}.backup_file", return_value=None),
+                patch(f"{self._TERM}._get_kwrite", return_value="kwriteconfig6"),
+                patch(f"{self._TERM}.cmd_exists", return_value=False),
+                patch(f"{self._TERM}.snapshot_konsole_state",
+                      return_value={"default_profile": "Default.profile"}),
             ):
                 changes = ricer.materialize_konsole(_MINIMAL_DESIGN, backup_ts="ts", dry_run=dry_run)
             konsole_dir = home / ".local" / "share" / "konsole"
-            contents = [f.read_text() for f in konsole_dir.glob("*.colorscheme")] if konsole_dir.exists() else []
+            contents = [f.read_text(encoding="utf-8") for f in konsole_dir.glob("*.colorscheme")] if konsole_dir.exists() else []
         return changes, contents
 
     def test_colorscheme_file_written_to_local_share_konsole(self):
@@ -521,10 +546,13 @@ class TestMaterializeKonsole(unittest.TestCase):
 
 class TestDiscoverAppsKde(unittest.TestCase):
 
+    # discover_apps lives in core.discovery
+    _DISC = "core.discovery"
+
     def test_all_four_kde_subsystems_registered_when_kde_detected(self):
         with (
-            patch.object(ricer, "cmd_exists", side_effect=lambda n: n in ("plasmashell", "kwriteconfig6")),
-            patch.object(ricer, "_get_kwrite", return_value="kwriteconfig6"),
+            patch(f"{self._DISC}.cmd_exists", side_effect=lambda n: n in ("plasmashell", "kwriteconfig6")),
+            patch(f"{self._DISC}._get_kwrite", return_value="kwriteconfig6"),
         ):
             apps = ricer.discover_apps()
         for key in ("kvantum", "plasma_theme", "cursor", "kde_lockscreen"):
@@ -532,8 +560,9 @@ class TestDiscoverAppsKde(unittest.TestCase):
 
     def test_kde_subsystems_absent_without_kde(self):
         with (
-            patch.object(ricer, "cmd_exists", return_value=False),
-            patch.object(ricer, "_get_kwrite", return_value=None),
+            patch(f"{self._DISC}.cmd_exists", return_value=False),
+            patch(f"{self._DISC}._get_kwrite", return_value=None),
+            patch(f"{self._DISC}.os.environ.get", return_value=""),
         ):
             apps = ricer.discover_apps()
         for key in ("kvantum", "plasma_theme", "cursor", "kde_lockscreen"):

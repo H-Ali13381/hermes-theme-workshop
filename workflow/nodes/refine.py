@@ -3,14 +3,21 @@ from __future__ import annotations
 
 import json
 import re
+import sys
+import tempfile
 from pathlib import Path
 
-from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
-from langgraph.types import interrupt
+try:
+    from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
+    from langgraph.types import interrupt
+except ImportError:  # LangGraph not installed (e.g. during unit tests)
+    AIMessage = HumanMessage = SystemMessage = None  # type: ignore[assignment,misc]
+    interrupt = None  # type: ignore[assignment]
 
 from ..config import (
     BASE_REQUIRED_KEYS,
     get_llm,
+    MAX_LOOP_ITERATIONS,
     PALETTE_SLOTS,
     RECIPE_PROMPT_FIELDS,
     RECIPE_REQUIRED_KEYS,
@@ -22,8 +29,17 @@ DESIGN_SENTINEL = "<<DESIGN_READY>>"
 
 
 def build_system_prompt(recipe: str) -> str:
-    """Build the design-system prompt for the detected desktop recipe."""
-    recipe = recipe if recipe in SUPPORTED_DESKTOP_RECIPES else "kde"
+    """Build the design-system prompt for the detected desktop recipe.
+
+    Raises ValueError for unrecognised recipes so callers get an explicit
+    error rather than silently generating a KDE-flavoured prompt for a
+    non-KDE environment.
+    """
+    if recipe not in SUPPORTED_DESKTOP_RECIPES:
+        raise ValueError(
+            f"Unsupported desktop recipe '{recipe}'. "
+            f"Supported: {sorted(SUPPORTED_DESKTOP_RECIPES)}"
+        )
     recipe_fields = "\n".join(RECIPE_PROMPT_FIELDS[recipe])
     return f"""\
 You are a Linux desktop theme designer. Your task is to produce a complete design_system JSON \
@@ -73,6 +89,10 @@ def refine_node(state: RiceSessionState) -> dict:
     recipe = profile.get("desktop_recipe", "kde")
     system_prompt = build_system_prompt(recipe)
 
+    # Track invocations so routing.after_refine can abort if the loop diverges.
+    loop_counts = dict(state.get("loop_counts") or {})
+    loop_counts["refine"] = loop_counts.get("refine", 0) + 1
+
     new_messages: list = []
     if not messages:
         # Seed with system + direction context
@@ -87,7 +107,7 @@ def refine_node(state: RiceSessionState) -> dict:
 
     response = llm.invoke(messages)
 
-    if DESIGN_SENTINEL in response.content:
+    if response.content and DESIGN_SENTINEL in response.content:
         design = _extract_design_json(response.content, recipe)
         if design:
             session_dir = state.get("session_dir", "")
@@ -98,6 +118,7 @@ def refine_node(state: RiceSessionState) -> dict:
                 "messages": new_messages + [AIMessage(content=response.content.split(DESIGN_SENTINEL)[0].strip())],
                 "design": design,
                 "current_step": 3,
+                "loop_counts": loop_counts,
             }
         print("[Refine][WARN] Sentinel found but design JSON could not be parsed — asking for retry.")
 
@@ -105,11 +126,12 @@ def refine_node(state: RiceSessionState) -> dict:
     user_reply = interrupt({
         "step": 3,
         "type": "conversation",
-        "message": response.content,
+        "message": response.content or "",
     })
 
     return {
         "messages": new_messages + [response, HumanMessage(content=str(user_reply))],
+        "loop_counts": loop_counts,
     }
 
 
@@ -119,17 +141,19 @@ def _extract_design_json(content: str, recipe: str = "kde") -> dict | None:
     if len(parts) < 2:
         return None
     after = parts[1].strip()
-    # Strip markdown fences
-    after = re.sub(r"^```json\s*", "", after)
-    after = re.sub(r"```\s*$", "", after.strip())
+    # Extract JSON from markdown fences using a block-extraction pattern so any
+    # preamble text before the opening fence is handled correctly (matches plan.py).
+    fence_m = re.search(r"```(?:json)?\s*([\s\S]*?)```", after)
+    if fence_m:
+        after = fence_m.group(1).strip()
     decoder = json.JSONDecoder()
     idx = after.find("{")
     if idx >= 0:
         try:
             obj, _ = decoder.raw_decode(after, idx)
             return obj if _validate_design(obj, recipe) else None
-        except Exception:
-            pass
+        except Exception as e:
+            print(f"[Refine][WARN] JSON parse error: {e}", file=sys.stderr, flush=True)
     return None
 
 
@@ -147,4 +171,16 @@ def _validate_design(d: dict, recipe: str = "kde") -> bool:
 def _write_design_json(session_dir: str, design: dict) -> None:
     path = Path(session_dir) / "design.json"
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(design, indent=2))
+    json_content = json.dumps(design, indent=2)
+    tmp_path = None
+    try:
+        with tempfile.NamedTemporaryFile(
+            mode="w", dir=path.parent, encoding="utf-8", delete=False, suffix=".tmp"
+        ) as tmp:
+            tmp.write(json_content)
+            tmp_path = tmp.name
+        Path(tmp_path).replace(path)
+    except Exception:
+        if tmp_path:
+            Path(tmp_path).unlink(missing_ok=True)
+        raise

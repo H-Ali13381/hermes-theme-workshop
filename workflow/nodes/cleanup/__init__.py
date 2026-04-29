@@ -4,7 +4,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from ...state import RiceSessionState
-from .reloader import validate_file, reload_waybar, reload_dunst, reload_mako, reload_swaync, reload_hyprland
+from .reloader import validate_file, reload_waybar, reload_polybar, reload_dunst, reload_mako, reload_swaync, reload_hyprland
 
 
 def cleanup_node(state: RiceSessionState) -> dict:
@@ -34,7 +34,17 @@ def cleanup_node(state: RiceSessionState) -> dict:
     # Reload only the services that were actually changed
     elements = {r.get("element", "").split(":")[0] for r in impl_log}
 
-    if "bar" in elements: reload_waybar(reloaded, errors)
+    if "bar" in elements:
+        bar_element = next(
+            (r.get("element", "") for r in impl_log
+             if r.get("element", "").split(":")[0] == "bar"),
+            "bar:waybar",
+        )
+        bar_provider = bar_element.split(":")[-1] if ":" in bar_element else "waybar"
+        if bar_provider == "polybar":
+            reload_polybar(reloaded, errors)
+        else:
+            reload_waybar(reloaded, errors)
     if "notifications" in elements:
         # Determine which notifier was actually implemented; default to dunst.
         notif_element = next(

@@ -1,7 +1,9 @@
 """install/resolver.py — Maps design choices to package names and installs them."""
 from __future__ import annotations
 
+import shutil
 import subprocess
+from pathlib import Path
 
 _KVANTUM_PACKAGES = {
     "catppuccin": "kvantum-theme-catppuccin",
@@ -28,47 +30,81 @@ def resolve_packages(design: dict, profile: dict) -> list[str]:
     return sorted(pkgs)
 
 
+def detect_distro() -> str:
+    """Return a normalised distro family string from /etc/os-release.
+
+    Returns one of: 'arch', 'debian', 'fedora', 'suse', 'unknown'.
+    """
+    try:
+        text = Path("/etc/os-release").read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return "unknown"
+    ids: list[str] = []
+    for line in text.splitlines():
+        if line.startswith("ID=") or line.startswith("ID_LIKE="):
+            val = line.split("=", 1)[1].strip().strip('"').lower()
+            ids.extend(val.split())
+    for d in ids:
+        if d in {"arch", "manjaro", "endeavouros", "garuda"}:
+            return "arch"
+        if d in {"debian", "ubuntu", "linuxmint", "pop", "elementary"}:
+            return "debian"
+        if d in {"fedora", "rhel", "centos", "rocky", "alma"}:
+            return "fedora"
+        if d in {"opensuse", "suse", "opensuse-leap", "opensuse-tumbleweed"}:
+            return "suse"
+    return "unknown"
+
+
 def install_packages(packages: list[str], errors: list[str], sudo_password: str = "") -> None:
-    """Install packages. Uses sudo_password if provided, else sudo -n (cached), then yay."""
+    """Install packages. Dispatches to the appropriate package manager for the running distro."""
+    distro = detect_distro()
     for pkg in packages:
-        if not _try_install_pkg(pkg, sudo_password):
+        if not _try_install_pkg(pkg, sudo_password, distro):
             errors.append(pkg)
 
 
 def can_sudo_noninteractive() -> bool:
     """Return True if sudo -n true succeeds (cached credentials in this session)."""
-    return subprocess.run(
-        ["sudo", "-n", "true"], capture_output=True, timeout=5
-    ).returncode == 0
-
-
-def _try_install_pkg(pkg: str, sudo_password: str) -> bool:
-    """Try pacman (with password or -n), then yay. Returns True if installed."""
-    if sudo_password:
-        try:
-            r = subprocess.run(
-                ["sudo", "-S", "-p", "", "-k", "pacman", "-S", "--noconfirm", "--needed", pkg],
-                input=sudo_password + "\n",
-                capture_output=True, text=True, timeout=300,
-            )
-            if r.returncode == 0:
-                return True
-        except subprocess.TimeoutExpired:
-            return False
-
     try:
-        r = subprocess.run(
-            ["sudo", "-n", "pacman", "-S", "--noconfirm", "--needed", pkg],
-            capture_output=True, text=True, timeout=300,
-        )
-        if r.returncode == 0:
-            return True
+        return subprocess.run(
+            ["sudo", "-n", "true"], capture_output=True, timeout=5
+        ).returncode == 0
     except subprocess.TimeoutExpired:
         return False
 
+
+def _try_install_pkg(pkg: str, sudo_password: str, distro: str) -> bool:
+    """Try to install *pkg* using the distro-appropriate package manager."""
+    if distro == "arch":
+        return _try_arch(pkg, sudo_password)
+    if distro == "debian":
+        return _try_apt(pkg, sudo_password)
+    if distro == "fedora":
+        return _try_dnf(pkg, sudo_password)
+    if distro == "suse":
+        return _try_zypper(pkg, sudo_password)
+    # Unknown distro — log and bail
+    print(f"[install] Unknown distro; cannot install '{pkg}'. "
+          "Only Arch, Debian/Ubuntu, Fedora, and openSUSE are supported.")
+    return False
+
+
+def _sudo_run(cmd: list[str], sudo_password: str) -> bool:
+    """Run a sudo command, injecting password via stdin when provided."""
+    if sudo_password:
+        try:
+            r = subprocess.run(
+                ["sudo", "-S", "-p", "", "-k"] + cmd,
+                input=sudo_password + "\n",
+                capture_output=True, text=True, timeout=300,
+            )
+            return r.returncode == 0
+        except subprocess.TimeoutExpired:
+            return False
     try:
         r = subprocess.run(
-            ["yay", "-S", "--noconfirm", "--needed", pkg],
+            ["sudo", "-n"] + cmd,
             capture_output=True, text=True, timeout=300,
         )
         return r.returncode == 0
@@ -76,12 +112,51 @@ def _try_install_pkg(pkg: str, sudo_password: str) -> bool:
         return False
 
 
+def _try_arch(pkg: str, sudo_password: str) -> bool:
+    if _sudo_run(["pacman", "-S", "--noconfirm", "--needed", pkg], sudo_password):
+        return True
+    if shutil.which("yay"):
+        try:
+            return subprocess.run(
+                ["yay", "-S", "--noconfirm", "--needed", pkg],
+                capture_output=True, text=True, timeout=300,
+            ).returncode == 0
+        except subprocess.TimeoutExpired:
+            pass
+    return False
+
+
+def _try_apt(pkg: str, sudo_password: str) -> bool:
+    return _sudo_run(["apt-get", "install", "-y", pkg], sudo_password)
+
+
+def _try_dnf(pkg: str, sudo_password: str) -> bool:
+    mgr = "dnf" if shutil.which("dnf") else "yum"
+    return _sudo_run([mgr, "install", "-y", pkg], sudo_password)
+
+
+def _try_zypper(pkg: str, sudo_password: str) -> bool:
+    return _sudo_run(["zypper", "--non-interactive", "install", pkg], sudo_password)
+
+
 def verify_installed(packages: list[str]) -> list[str]:
-    """Return packages not yet in the local pacman database (no sudo needed)."""
-    return [
-        p for p in packages
-        if subprocess.run(["pacman", "-Q", p], capture_output=True).returncode != 0
-    ]
+    """Return packages not yet installed (distro-aware check)."""
+    distro = detect_distro()
+    missing = []
+    for p in packages:
+        if distro == "arch":
+            ok = subprocess.run(["pacman", "-Q", p], capture_output=True, timeout=30).returncode == 0
+        elif distro == "debian":
+            ok = subprocess.run(["dpkg", "-s", p], capture_output=True, timeout=30).returncode == 0
+        elif distro == "fedora":
+            ok = subprocess.run(["rpm", "-q", p], capture_output=True, timeout=30).returncode == 0
+        elif distro == "suse":
+            ok = subprocess.run(["rpm", "-q", p], capture_output=True, timeout=30).returncode == 0
+        else:
+            ok = bool(shutil.which(p))
+        if not ok:
+            missing.append(p)
+    return missing
 
 
 def _match(value: str, table: dict[str, str], pkgs: set[str]) -> None:

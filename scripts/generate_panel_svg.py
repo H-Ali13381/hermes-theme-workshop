@@ -5,12 +5,12 @@ Palette extracted from the style-transfer mockup.
 Output: void-dragon Plasma theme panel-background.svg
 """
 import base64
-import os
+from pathlib import Path
 from PIL import Image
 
-ASSETS = os.path.dirname(os.path.abspath(__file__))
-THEME_DIR = os.path.expanduser("~/.local/share/plasma/desktoptheme/void-dragon")
-WIDGETS_DIR = os.path.join(THEME_DIR, "widgets")
+ASSETS = Path(__file__).resolve().parent
+THEME_DIR = Path.home() / ".local" / "share" / "plasma" / "desktoptheme" / "void-dragon"
+WIDGETS_DIR = THEME_DIR / "widgets"
 
 # --- Palette from mockup ---
 PARCHMENT_LIGHT = "#fef7d2"   # dominant bright cream
@@ -24,15 +24,16 @@ CORNER_DARK     = "#2a1a05"   # deepest corner
 
 # --- Crop a parchment texture patch from the mockup for embedding ---
 def get_parchment_patch_b64(size=128):
-    mockup_path = os.path.join(ASSETS, "toolbar_parchment_mockup.png")
-    if not os.path.exists(mockup_path):
+    mockup_path = ASSETS / "toolbar_parchment_mockup.png"
+    if not mockup_path.exists():
         return None
-    img = Image.open(mockup_path).convert("RGB")
+    with Image.open(mockup_path) as raw:
+        img = raw.convert("RGB")
     w, h = img.size
     # Crop a center patch avoiding edges
     cx, cy = w // 2, h // 2
     patch = img.crop((cx - size//2, cy - size//2, cx + size//2, cy + size//2))
-    patch = patch.resize((size, size), Image.LANCZOS)
+    patch = patch.resize((size, size), Image.Resampling.LANCZOS)
     import io
     buf = io.BytesIO()
     patch.save(buf, format="PNG", optimize=True)
@@ -252,17 +253,16 @@ if __name__ == "__main__":
     print("Generating SVG...")
     svg_content = generate_svg(patch_b64)
 
-    os.makedirs(WIDGETS_DIR, exist_ok=True)
-    out_path = os.path.join(WIDGETS_DIR, "panel-background.svg")
-    with open(out_path, "w") as f:
-        f.write(svg_content)
-    print(f"  Written: {out_path} ({os.path.getsize(out_path)//1024}KB)")
+    WIDGETS_DIR.mkdir(parents=True, exist_ok=True)
+    out_path = WIDGETS_DIR / "panel-background.svg"
+    out_path.write_text(svg_content, encoding="utf-8")
+    print(f"  Written: {out_path} ({out_path.stat().st_size // 1024}KB)")
 
     # Also write metadata.desktop for the theme
-    meta_path = os.path.join(THEME_DIR, "metadata.desktop")
-    if not os.path.exists(meta_path):
-        with open(meta_path, "w") as f:
-            f.write("""[Desktop Entry]
+    meta_path = THEME_DIR / "metadata.desktop"
+    if not meta_path.exists():
+        meta_path.write_text("""\
+[Desktop Entry]
 Name=Void Dragon
 Comment=DragonFable-inspired parchment panel theme for KDE Plasma
 X-KDE-PluginInfo-Name=void-dragon
@@ -275,7 +275,7 @@ X-KDE-PluginInfo-Depends=
 X-KDE-PluginInfo-License=GPL
 X-KDE-PluginInfo-EnabledByDefault=true
 X-Plasma-API=5.0
-""")
+""", encoding="utf-8")
         print(f"  Wrote: {meta_path}")
 
     print("\nDone. To apply:")

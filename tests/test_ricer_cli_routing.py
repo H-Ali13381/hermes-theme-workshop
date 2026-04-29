@@ -1,6 +1,7 @@
 """Regression tests for ricer CLI routing and workflow element aliases."""
 from __future__ import annotations
 
+import importlib.util
 import json
 import subprocess
 import sys
@@ -11,6 +12,17 @@ from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parent.parent
 RICER_PY = ROOT / "scripts" / "ricer.py"
+SESSION_IO_PY = ROOT / "scripts" / "core" / "session_io.py"
+
+
+def _load_session_io():
+    spec = importlib.util.spec_from_file_location("session_io", SESSION_IO_PY)
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
+session_io = _load_session_io()
 
 DESIGN = {
     "name": "routing-test",
@@ -77,64 +89,79 @@ class RicerCliRoutingTests(unittest.TestCase):
     def test_apply_element_maps_workflow_gtk_theme_to_gtk_materializer(self):
         from workflow.nodes.implement.apply import apply_element
 
-        fake_stdout = json.dumps({"changes": [{"app": "gtk", "action": "dry-run"}]})
+        fake_manifest = {"changes": [{"app": "gtk", "action": "dry-run"}]}
 
-        with patch("workflow.nodes.implement.apply.subprocess.run") as run:
-            run.return_value.returncode = 0
-            run.return_value.stdout = fake_stdout
-            run.return_value.stderr = ""
-
+        with patch("workflow.nodes.implement.apply.discover_apps", return_value={"gtk": "/usr/bin/gtk3-demo"}), \
+             patch("workflow.nodes.implement.apply.materialize", return_value=fake_manifest) as mat:
             result = apply_element("gtk_theme", DESIGN, session_dir="")
 
         self.assertTrue(result["success"], result)
-        cmd = run.call_args.args[0]
-        self.assertIn("--only=gtk", cmd)
-        self.assertNotIn("--only=gtk_theme", cmd)
+        called_apps = mat.call_args.kwargs.get("apps") or mat.call_args.args[1]
+        self.assertIn("gtk", called_apps)
+        self.assertNotIn("gtk_theme", called_apps)
 
     def test_apply_element_maps_provider_qualified_elements_to_provider(self):
         from workflow.nodes.implement.apply import apply_element
 
-        with patch("workflow.nodes.implement.apply.subprocess.run") as run:
-            run.return_value.returncode = 0
-            run.return_value.stdout = "{}"
-            run.return_value.stderr = ""
-
+        with patch("workflow.nodes.implement.apply.discover_apps", return_value={"rofi": "/usr/bin/rofi"}), \
+             patch("workflow.nodes.implement.apply.materialize", return_value={}) as mat:
             result = apply_element("launcher:rofi", DESIGN, session_dir="")
 
         self.assertTrue(result["success"], result)
-        cmd = run.call_args.args[0]
-        self.assertIn("--only=rofi", cmd)
-        self.assertNotIn("--only=launcher", cmd)
-        self.assertFalse(any(arg.startswith("--app=") for arg in cmd))
+        called_apps = mat.call_args.kwargs.get("apps") or mat.call_args.args[1]
+        self.assertIn("rofi", called_apps)
+        self.assertNotIn("launcher", called_apps)
 
     def test_apply_element_passes_shell_prompt_starship_to_ricer(self):
         from workflow.nodes.implement.apply import apply_element
 
-        with patch("workflow.nodes.implement.apply.subprocess.run") as run:
-            run.return_value.returncode = 0
-            run.return_value.stdout = "{}"
-            run.return_value.stderr = ""
-
+        with patch("workflow.nodes.implement.apply.discover_apps", return_value={"starship": "/usr/bin/starship"}), \
+             patch("workflow.nodes.implement.apply.materialize", return_value={}) as mat:
             result = apply_element("shell_prompt:starship", DESIGN, session_dir="")
 
         self.assertNotEqual(result.get("error", ""), "unsupported element: shell_prompt:starship")
-        cmd = run.call_args.args[0]
-        self.assertIn("--only=starship", cmd)
+        called_apps = mat.call_args.kwargs.get("apps") or mat.call_args.args[1]
+        self.assertIn("starship", called_apps)
 
     def test_apply_element_passes_lock_screen_kde_to_ricer(self):
         from workflow.nodes.implement.apply import apply_element
 
-        with patch("workflow.nodes.implement.apply.subprocess.run") as run:
-            run.return_value.returncode = 0
-            run.return_value.stdout = "{}"
-            run.return_value.stderr = ""
-
+        with patch("workflow.nodes.implement.apply.discover_apps", return_value={"kde_lockscreen": True}), \
+             patch("workflow.nodes.implement.apply.materialize", return_value={}) as mat:
             result = apply_element("lock_screen:kde", DESIGN, session_dir="")
 
         self.assertNotEqual(result.get("error", ""), "unsupported element: lock_screen:kde")
-        cmd = run.call_args.args[0]
-        self.assertIn("--only=kde_lockscreen", cmd)
-        self.assertNotIn("--only=kde", cmd)
+        called_apps = mat.call_args.kwargs.get("apps") or mat.call_args.args[1]
+        self.assertIn("kde_lockscreen", called_apps)
+        self.assertNotIn("kde", called_apps)
+
+
+class DesignFileLoaderTests(unittest.TestCase):
+    """Unit tests for load_design_file — JSON and YAML support."""
+
+    _SAMPLE = {"name": "yaml-test", "palette": {"background": "#000000"}}
+
+    def test_loads_json_design(self):
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as tf:
+            json.dump(self._SAMPLE, tf)
+            path = tf.name
+        try:
+            result = session_io.load_design_file(path)
+            self.assertEqual(result["name"], "yaml-test")
+            self.assertEqual(result["palette"]["background"], "#000000")
+        finally:
+            Path(path).unlink(missing_ok=True)
+
+    def test_loads_yaml_design(self):
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as tf:
+            tf.write("name: yaml-test\npalette:\n  background: '#000000'\n")
+            path = tf.name
+        try:
+            result = session_io.load_design_file(path)
+            self.assertEqual(result["name"], "yaml-test")
+            self.assertEqual(result["palette"]["background"], "#000000")
+        finally:
+            Path(path).unlink(missing_ok=True)
 
 
 if __name__ == "__main__":

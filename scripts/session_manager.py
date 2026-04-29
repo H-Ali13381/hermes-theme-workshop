@@ -53,11 +53,17 @@ import json
 import re
 import subprocess
 import sys
-from datetime import datetime
 from pathlib import Path
 
-SESSIONS_ROOT = Path.home() / ".config" / "rice-sessions"
-CURRENT_LINK = SESSIONS_ROOT / ".current"
+from core.session_io import (                             # noqa: E402
+    SESSIONS_ROOT, CURRENT_LINK,
+    ensure_sessions_root, session_md, set_current, get_current_session,
+    update_status_line, update_header_theme, update_header_session_dir,
+    cmd_init,
+)
+from core.session_md_utils import (                       # noqa: E402
+    cmd_append_step, cmd_append_item, cmd_rename,
+)
 
 # Path to workflow/run.py — used for querying and launching LangGraph sessions.
 SKILL_DIR = Path(__file__).parent.parent
@@ -65,32 +71,36 @@ WORKFLOW_RUN_PY = SKILL_DIR / "workflow" / "run.py"
 
 
 def _query_workflow_sessions() -> list[dict]:
-    """Return incomplete LangGraph sessions by invoking ``workflow/run.py --list``.
+    """Return incomplete LangGraph sessions by invoking ``workflow/run.py --list --json``.
 
-    Output format from run.py --list (one line per session):
-        rice-YYYYMMDD-HHMM-xxxxxx  (step N, TS)
-    Returns [] silently when workflow/run.py is absent or its deps are not installed.
+    Uses JSON output so the result is not tied to the human-readable text format
+    of ``--list``.  Returns [] silently when workflow/run.py is absent or its
+    deps are not installed.
     """
     if not WORKFLOW_RUN_PY.exists():
         return []
     try:
         result = subprocess.run(
-            [sys.executable, str(WORKFLOW_RUN_PY), "--list"],
+            [sys.executable, str(WORKFLOW_RUN_PY), "--list", "--json"],
             capture_output=True, text=True, timeout=15,
         )
-    except Exception:
+    except Exception as e:
+        print(f"[session_manager] Warning: could not query workflow sessions: {e}", file=sys.stderr)
+        return []
+
+    try:
+        records = json.loads(result.stdout)
+    except Exception as e:
+        print(f"[session_manager] Warning: could not parse workflow sessions JSON: {e}", file=sys.stderr)
         return []
 
     sessions: list[dict] = []
-    for line in result.stdout.splitlines():
-        line = line.strip()
-        # Match: rice-YYYYMMDD-HHMM-xxxxxx  (step N, TIMESTAMP)
-        m = re.match(r"(rice-\S+)\s+\(step\s+(\S+),\s*(.*)\)", line)
-        if not m:
+    for rec in records:
+        thread_id = rec.get("thread_id", "")
+        if not thread_id:
             continue
-        thread_id = m.group(1)
-        step = m.group(2).rstrip(",")
-        ts = m.group(3).strip()
+        step = rec.get("step", "?")
+        ts = rec.get("created_at", "")
         sessions.append({
             "source": "workflow",
             "thread_id": thread_id,
@@ -101,93 +111,10 @@ def _query_workflow_sessions() -> list[dict]:
         })
     return sessions
 
-STEP_NAMES = {
-    "1": "Audit",
-    "2": "Explore",
-    "3": "Refine",
-    "4": "Plan",
-    "4.5": "Rollback Checkpoint",
-    "5": "Install",
-    "6": "Implement",
-    "7": "Cleanup",
-    "8": "Handoff",
-}
-
-SESSION_HEADER_TEMPLATE = """\
-# Rice Session: {theme_name}
-Started: {started}
-Status: IN PROGRESS — Step 0 complete
-Session dir: {session_dir}
-
----
-"""
-
-
-def ensure_sessions_root():
-    SESSIONS_ROOT.mkdir(parents=True, exist_ok=True)
-
-
-def get_current_session() -> Path:
-    if not CURRENT_LINK.is_symlink():
-        print("ERROR: No active session. Run `init` first.", file=sys.stderr)
-        sys.exit(1)
-    target = CURRENT_LINK.resolve()
-    if not target.is_dir():
-        print(f"ERROR: Active session dir missing: {target}", file=sys.stderr)
-        sys.exit(1)
-    return target
-
-
-def session_md(session_dir: Path) -> Path:
-    return session_dir / "session.md"
-
-
-def set_current(session_dir: Path):
-    if CURRENT_LINK.is_symlink() or CURRENT_LINK.exists():
-        CURRENT_LINK.unlink()
-    CURRENT_LINK.symlink_to(session_dir)
-
-
-def update_status_line(session_dir: Path, new_status: str):
-    md = session_md(session_dir)
-    text = md.read_text()
-    updated = re.sub(r"^Status: .*$", f"Status: {new_status}", text, flags=re.MULTILINE)
-    md.write_text(updated)
-
-
-def update_header_theme(session_dir: Path, theme_name: str):
-    md = session_md(session_dir)
-    text = md.read_text()
-    updated = re.sub(r"^# Rice Session: .*$", f"# Rice Session: {theme_name}", text, flags=re.MULTILINE)
-    md.write_text(updated)
-
-
-def update_header_session_dir(session_dir: Path):
-    md = session_md(session_dir)
-    text = md.read_text()
-    updated = re.sub(
-        r"^Session dir: .*$",
-        f"Session dir: {session_dir}",
-        text,
-        flags=re.MULTILINE,
-    )
-    md.write_text(updated)
-
-
-def cmd_init():
-    ensure_sessions_root()
-    ts = datetime.now().strftime("%Y%m%d-%H%M")
-    slug = f"session-{ts}"
-    session_dir = SESSIONS_ROOT / slug
-    session_dir.mkdir(parents=True, exist_ok=False)
-    header = SESSION_HEADER_TEMPLATE.format(
-        theme_name="In Progress",
-        started=datetime.now().isoformat(timespec="seconds"),
-        session_dir=str(session_dir),
-    )
-    session_md(session_dir).write_text(header)
-    set_current(session_dir)
-    print(str(session_dir))
+# STEP_NAMES, SESSION_HEADER_TEMPLATE, ensure_sessions_root, session_md,
+# set_current, get_current_session, update_status_line, update_header_*,
+# and cmd_init are all imported from core.session_io above.
+# cmd_append_step, cmd_append_item, cmd_rename imported from core.session_md_utils.
 
 
 def cmd_resume_check():
@@ -199,18 +126,28 @@ def cmd_resume_check():
 
     Agent sessions include a ``"dir"`` key; workflow sessions include
     ``"thread_id"`` and ``"resume_cmd"``.
+
+    Workflow session dirs also live in SESSIONS_ROOT and contain session.md,
+    so we query SQLite first and skip any filesystem dir whose name matches a
+    known workflow thread_id — preventing duplicate entries.
     """
     ensure_sessions_root()
     results = []
+
+    # --- LangGraph workflow sessions (SQLite checkpoint) — query first ---
+    workflow_sessions = _query_workflow_sessions()
+    workflow_thread_ids = {s["thread_id"] for s in workflow_sessions}
 
     # --- agent-guided sessions (session.md files) ---
     for d in sorted(SESSIONS_ROOT.iterdir(), reverse=True):
         if not d.is_dir() or d.name.startswith("."):
             continue
+        if d.name in workflow_thread_ids:
+            continue  # already represented by SQLite entry — skip to avoid duplicate
         md = session_md(d)
         if not md.exists():
             continue
-        text = md.read_text()
+        text = md.read_text(encoding="utf-8")
         status_m = re.search(r"^Status: (.*)$", text, re.MULTILINE)
         theme_m = re.search(r"^# Rice Session: (.*)$", text, re.MULTILINE)
         started_m = re.search(r"^Started: (.*)$", text, re.MULTILINE)
@@ -224,9 +161,7 @@ def cmd_resume_check():
                 "status": status,
             })
 
-    # --- LangGraph workflow sessions (SQLite checkpoint) ---
-    results.extend(_query_workflow_sessions())
-
+    results.extend(workflow_sessions)
     print(json.dumps(results, indent=2))
 
 
@@ -242,132 +177,19 @@ def cmd_load(session_dir_str: str):
     print(f"Loaded session: {target}")
 
 
-def cmd_append_step(step_id: str, kvpairs: list[str]):
-    step_name = STEP_NAMES.get(step_id)
-    if not step_name:
-        print(f"ERROR: Unknown step_id '{step_id}'. Valid: {list(STEP_NAMES.keys())}", file=sys.stderr)
-        sys.exit(1)
-    session_dir = get_current_session()
-    md = session_md(session_dir)
-
-    # Build bullet content (shared for new section and step-6 addendum)
-    bullets = ""
-    for pair in kvpairs:
-        if "=" in pair:
-            key, _, val = pair.partition("=")
-            bullets += f"- {key.replace('_', ' ').capitalize()}: {val}\n"
-        else:
-            bullets += f"- {pair}\n"
-
-    # Step 6 is append-only — mark existing header ✓ rather than creating a new section
-    if step_id == "6":
-        content = md.read_text()
-        if "## Step 6 — Implement" in content:
-            updated = re.sub(
-                r"## Step 6 — Implement\b[^\n]*",
-                f"## Step 6 — Implement ✓",
-                content,
-            )
-            if bullets:
-                # Match content up to the next section header (lookahead) or end of string.
-                # Group 3 is a zero-width lookahead — m.group(3) is always "".
-                updated = re.sub(
-                    r"(## Step 6 — Implement ✓\n)(.*?)((?=\n## )|\Z)",
-                    lambda m: m.group(1) + m.group(2) + bullets + m.group(3),
-                    updated,
-                    flags=re.DOTALL,
-                )
-            md.write_text(updated)
-        else:
-            # No items yet — create section with ✓
-            with md.open("a") as f:
-                f.write(f"\n## Step 6 — Implement ✓\n{bullets}")
-    else:
-        content = md.read_text()
-        header_pattern = f"## Step {step_id} — {step_name}"
-        if header_pattern in content:
-            # Section already exists — mark ✓ and append any new bullets in-place
-            # rather than creating a duplicate header.
-            updated = re.sub(
-                rf"## Step {re.escape(step_id)} — {re.escape(step_name)}\b[^\n]*",
-                f"## Step {step_id} — {step_name} ✓",
-                content,
-            )
-            if bullets:
-                updated = re.sub(
-                    rf"(## Step {re.escape(step_id)} — {re.escape(step_name)} ✓\n)(.*?)((?=\n## )|\Z)",
-                    lambda m: m.group(1) + m.group(2) + bullets + m.group(3),
-                    updated,
-                    flags=re.DOTALL,
-                )
-            md.write_text(updated)
-        else:
-            section = f"\n## Step {step_id} — {step_name} ✓\n{bullets}"
-            with md.open("a") as f:
-                f.write(section)
-
-    # Update status header
-    update_status_line(session_dir, f"IN PROGRESS — Step {step_id} complete")
-    print(f"Appended Step {step_id} — {step_name} ✓  →  {md}")
-
-
-def cmd_append_item(text: str):
-    """Append a single implement item to the Step 6 section (or create it)."""
-    session_dir = get_current_session()
-    md = session_md(session_dir)
-    content = md.read_text()
-    item_line = f"- {text}\n"
-
-    if "## Step 6 — Implement" in content:
-        # Append item at the end of the Step 6 block, before the next ## header (if any)
-        # or at end-of-string. Group 3 is a zero-width lookahead — m.group(3) is always "".
-        updated = re.sub(
-            r"(## Step 6 — Implement[^\n]*\n)(.*?)((?=\n## )|\Z)",
-            lambda m: m.group(1) + m.group(2) + item_line + m.group(3),
-            content,
-            flags=re.DOTALL,
-        )
-        md.write_text(updated)
-    else:
-        # Create the section (no trailing blank line — items are dense)
-        with md.open("a") as f:
-            f.write(f"\n## Step 6 — Implement\n{item_line}")
-
-    print(f"Appended implement item to Step 6: {text}")
-
-
-def cmd_rename(theme_slug: str):
-    session_dir = get_current_session()
-    # Extract original timestamp from dir name (session-YYYYMMDD-HHMM or old-slug-YYYYMMDD-HHMM)
-    name = session_dir.name
-    ts_m = re.search(r"(\d{8}-\d{4})$", name)
-    if ts_m:
-        ts = ts_m.group(1)
-    else:
-        ts = datetime.now().strftime("%Y%m%d-%H%M")
-
-    new_name = f"{theme_slug}-{ts}"
-    new_dir = SESSIONS_ROOT / new_name
-    session_dir.rename(new_dir)
-    set_current(new_dir)
-
-    update_header_theme(new_dir, theme_slug.replace("-", " ").title())
-    update_header_session_dir(new_dir)
-
-    print(f"Renamed: {session_dir.name} → {new_name}")
-    print(f"Active session: {new_dir}")
+# cmd_append_step, cmd_append_item, cmd_rename imported from core.session_md_utils above.
 
 
 def cmd_status():
     session_dir = get_current_session()
-    text = session_md(session_dir).read_text()
+    text = session_md(session_dir).read_text(encoding="utf-8")
     m = re.search(r"^Status: (.*)$", text, re.MULTILINE)
     print(m.group(1).strip() if m else "Status: unknown")
 
 
 def cmd_read():
     session_dir = get_current_session()
-    print(session_md(session_dir).read_text())
+    print(session_md(session_dir).read_text(encoding="utf-8"))
 
 
 def cmd_complete():

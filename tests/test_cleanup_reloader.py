@@ -19,7 +19,7 @@ class ReloadErrorPropagationTests(unittest.TestCase):
             mock_run.return_value.returncode = 1
             reload_waybar(reloaded, errors)
 
-        self.assertTrue(any("waybar" in e for e in errors), errors)
+        self.assertTrue(any("waybar" in e for e in errors), f"Expected 'waybar' error, got: {errors}")
 
     def test_dunst_not_found_appends_to_errors(self):
         errors, reloaded = [], []
@@ -28,7 +28,7 @@ class ReloadErrorPropagationTests(unittest.TestCase):
                    side_effect=FileNotFoundError):
             reload_dunst(reloaded, errors)
 
-        self.assertTrue(any("dunst" in e for e in errors), errors)
+        self.assertTrue(any("dunst" in e for e in errors), f"Expected 'dunst' error, got: {errors}")
 
     def test_mako_not_found_appends_to_errors(self):
         errors, reloaded = [], []
@@ -38,7 +38,7 @@ class ReloadErrorPropagationTests(unittest.TestCase):
             mock_run.return_value.returncode = 1
             reload_mako(reloaded, errors)
 
-        self.assertTrue(any("mako" in e for e in errors), errors)
+        self.assertTrue(any("mako" in e for e in errors), f"Expected 'mako' error, got: {errors}")
 
     def test_swaync_not_found_appends_to_errors(self):
         errors, reloaded = [], []
@@ -48,7 +48,7 @@ class ReloadErrorPropagationTests(unittest.TestCase):
             mock_run.return_value.returncode = 1
             reload_swaync(reloaded, errors)
 
-        self.assertTrue(any("swaync" in e for e in errors), errors)
+        self.assertTrue(any("swaync" in e for e in errors), f"Expected 'swaync' error, got: {errors}")
 
     def test_successful_reload_no_errors(self):
         errors, reloaded = [], []

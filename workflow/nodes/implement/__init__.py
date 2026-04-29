@@ -3,9 +3,12 @@ from __future__ import annotations
 
 import json
 
-from langgraph.types import interrupt
+try:
+    from langgraph.types import interrupt
+except ImportError:  # LangGraph not installed (e.g. during unit tests)
+    interrupt = None  # type: ignore[assignment]
 
-from ...config import SCORE_PASS_THRESHOLD
+from ...config import SCORE_PASS_THRESHOLD, MAX_IMPLEMENT_RETRIES
 from ...session import append_item
 from ...state import RiceSessionState
 from .spec   import write_spec
@@ -17,10 +20,13 @@ from .score  import score_element, format_scorecard
 def implement_node(state: RiceSessionState) -> dict:
     """Process one element from element_queue per invocation."""
     queue = state.get("element_queue", [])
-    element     = queue[0]
-    remaining   = queue[1:]
-    design      = state.get("design", {})
-    session_dir = state.get("session_dir", "")
+    if not queue:
+        return {}
+    element       = queue[0]
+    remaining     = queue[1:]
+    design        = state.get("design", {})
+    session_dir   = state.get("session_dir", "")
+    retry_counts  = dict(state.get("impl_retry_counts") or {})
 
     print(f"[Step 6] Implementing: {element}", flush=True)
 
@@ -72,12 +78,27 @@ def implement_node(state: RiceSessionState) -> dict:
         if decision_str == "skip":
             verdict = f"SKIP (score {total}/10, user skipped)"
         elif decision_str == "retry":
-            return {"element_queue": [element] + remaining}
+            attempts = retry_counts.get(element, 0) + 1
+            if attempts >= MAX_IMPLEMENT_RETRIES:
+                verdict = f"SKIP (score {total}/10, max retries {MAX_IMPLEMENT_RETRIES} reached)"
+                print(f"  → hard skip after {attempts} retries\n")
+                record = {"element": element, "spec": spec, "scorecard": scorecard, "verdict": verdict}
+                append_item(session_dir, f"{element}: {verdict}")
+                retry_counts.pop(element, None)
+                return {
+                    "element_queue": remaining,
+                    "impl_log": [record],
+                    "impl_retry_counts": retry_counts,
+                    "errors": [f"{element}: {verdict}"],
+                }
+            retry_counts[element] = attempts
+            print(f"  → retry {attempts}/{MAX_IMPLEMENT_RETRIES}\n")
+            return {"element_queue": [element] + remaining, "impl_retry_counts": retry_counts}
         else:
             verdict = f"accepted-deviation (score {total}/10)"
 
     record = {"element": element, "spec": spec, "scorecard": scorecard, "verdict": verdict}
     append_item(session_dir, f"{element}: {verdict} score={total}/10")
     print(f"  → {verdict}\n")
-
-    return {"element_queue": remaining, "impl_log": [record]}
+    retry_counts.pop(element, None)
+    return {"element_queue": remaining, "impl_log": [record], "impl_retry_counts": retry_counts}

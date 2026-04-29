@@ -42,7 +42,7 @@ def append_step(session_dir: str, step: str | int, note: str = "") -> None:
         print(f"[session] append_step({step}): {md} not found — skipping", file=sys.stderr)
         return
 
-    content = md.read_text()
+    content = md.read_text(encoding="utf-8")
     header = f"## Step {step_id} — {step_name}"
     bullet = f"- {note}\n" if note else ""
 
@@ -61,7 +61,7 @@ def append_step(session_dir: str, step: str | int, note: str = "") -> None:
         content,
         flags=re.MULTILINE,
     )
-    md.write_text(content)
+    md.write_text(content, encoding="utf-8")
 
 
 def append_item(session_dir: str, text: str) -> None:
@@ -75,19 +75,19 @@ def append_item(session_dir: str, text: str) -> None:
     when the next section was preceded by a blank line (``\\n\\n## ``).
     """
     if not session_dir:
-        print(f"[session] append_item: session_dir is empty — skipping", file=sys.stderr)
+        print("[session] append_item: session_dir is empty — skipping", file=sys.stderr)
         return
     md = _md(session_dir)
     if not md.exists():
         print(f"[session] append_item: {md} not found — skipping", file=sys.stderr)
         return
 
-    content = md.read_text()
+    content = md.read_text(encoding="utf-8")
     item = f"- {text}\n"
     header = "## Step 6 — Implement"
 
     if header not in content:
-        with md.open("a") as f:
+        with md.open("a", encoding="utf-8") as f:
             f.write(f"\n{header}\n{item}")
         return
 
@@ -107,7 +107,7 @@ def append_item(session_dir: str, text: str) -> None:
     prefix = content[:insert_at]
     if not prefix.endswith("\n"):
         prefix += "\n"
-    md.write_text(prefix + item + content[insert_at:])
+    md.write_text(prefix + item + content[insert_at:], encoding="utf-8")
 
 
 def mark_complete(session_dir: str) -> None:
@@ -119,6 +119,6 @@ def mark_complete(session_dir: str) -> None:
     if not md.exists():
         print(f"[session] mark_complete: {md} not found — skipping", file=sys.stderr)
         return
-    content = md.read_text()
+    content = md.read_text(encoding="utf-8")
     content = re.sub(r"^Status: .*$", "Status: COMPLETE", content, flags=re.MULTILINE)
-    md.write_text(content)
+    md.write_text(content, encoding="utf-8")

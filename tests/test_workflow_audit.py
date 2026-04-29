@@ -43,9 +43,18 @@ class AuditNodeStateTests(unittest.TestCase):
         self.assertIn("gtk_theme", update["element_queue"])
 
     def test_resume_audit_does_not_overwrite_existing_element_queue(self):
-        update = self._run_audit({"element_queue": ["gtk_theme"]})
+        # Use a multi-item queue that is clearly non-empty so a returned
+        # empty list or a partial list would also fail the assertion.
+        original_queue = ["gtk_theme", "terminal:kitty", "window_decorations:kde"]
+        state = {"element_queue": original_queue}
+        update = self._run_audit(state)
 
-        self.assertNotIn("element_queue", update)
+        # audit_node must NOT emit a new element_queue when one already exists
+        self.assertNotIn("element_queue", update,
+                         "audit_node should not overwrite an existing element_queue")
+        # The original queue in the passed-in state must be untouched
+        self.assertEqual(original_queue, state["element_queue"],
+                         "audit_node must not mutate the caller's state dict")
         self.assertEqual("kde", update["device_profile"]["wm"])
 
 
@@ -73,6 +82,55 @@ class UnsupportedDesktopEarlyStopTests(unittest.TestCase):
     def test_supported_desktop_not_classified_as_other(self):
         state = self._audit_state_for_wm("kde")
         self.assertEqual(state.get("device_profile", {}).get("desktop_recipe"), "kde")
+
+    def test_gnome_desktop_classified_as_gnome(self):
+        state = self._audit_state_for_wm("gnome")
+        self.assertEqual(state.get("device_profile", {}).get("desktop_recipe"), "gnome")
+
+
+class GnomeElementQueueTests(unittest.TestCase):
+    """Verify that a GNOME session produces a non-empty, correct element queue."""
+
+    def _run_gnome_audit(self, apps: dict | None = None) -> dict:
+        merged = dict(_DETECTED_APPS)
+        if apps:
+            merged.update(apps)
+        with patch("workflow.nodes.audit.detect_wm", return_value="gnome"), \
+             patch("workflow.nodes.audit.detect_chassis", return_value="desktop"), \
+             patch("workflow.nodes.audit.detect_screens", return_value=1), \
+             patch("workflow.nodes.audit.detect_gpu", return_value={"name": "Test GPU", "vram_mb": 0}), \
+             patch("workflow.nodes.audit.detect_apps", return_value=merged), \
+             patch("workflow.nodes.audit.detect_touchpad", return_value=False), \
+             patch("workflow.nodes.audit.get_current_wallpaper", return_value=""):
+            return audit_node({"element_queue": []})
+
+    def test_gnome_queue_includes_window_decorations(self):
+        update = self._run_gnome_audit()
+        self.assertIn("window_decorations:gnome", update["element_queue"])
+
+    def test_gnome_queue_includes_lock_screen(self):
+        update = self._run_gnome_audit()
+        self.assertIn("lock_screen:gnome", update["element_queue"])
+
+    def test_gnome_queue_includes_gtk_theme(self):
+        update = self._run_gnome_audit()
+        self.assertIn("gtk_theme", update["element_queue"])
+
+    def test_gnome_queue_includes_terminal_when_kitty_installed(self):
+        update = self._run_gnome_audit({"kitty": True})
+        self.assertIn("terminal:kitty", update["element_queue"])
+
+    def test_gnome_queue_does_not_include_hyprland_elements(self):
+        update = self._run_gnome_audit()
+        queue = update["element_queue"]
+        self.assertNotIn("window_decorations:hyprland", queue)
+        self.assertNotIn("lock_screen:hyprlock", queue)
+
+    def test_gnome_queue_does_not_include_kde_elements(self):
+        update = self._run_gnome_audit()
+        queue = update["element_queue"]
+        self.assertNotIn("window_decorations:kde", queue)
+        self.assertNotIn("lock_screen:kde", queue)
 
 
 if __name__ == "__main__":

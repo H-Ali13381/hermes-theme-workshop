@@ -13,6 +13,7 @@ import argparse
 import json
 import os
 import sys
+import traceback
 import uuid
 from datetime import datetime
 from pathlib import Path
@@ -35,6 +36,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Linux Ricing Workflow")
     parser.add_argument("--resume", metavar="THREAD_ID", help="Resume a paused session")
     parser.add_argument("--list", action="store_true", help="List all sessions")
+    parser.add_argument("--json", action="store_true", help="Output --list results as a JSON array")
     args = parser.parse_args()
 
     # Ensure DB directory exists
@@ -44,7 +46,7 @@ def main() -> None:
         graph = build_graph(checkpointer)
 
         if args.list:
-            _list_sessions(checkpointer)
+            _list_sessions(checkpointer, as_json=args.json)
             return
 
         if args.resume:
@@ -84,10 +86,9 @@ def _run_loop(graph, config: dict, initial_input) -> None:
                 _print_chunk(chunk)
         except GraphInterrupt:
             pass  # Expected — handled below via get_state
-        except StopIteration:
-            pass
         except Exception as e:
-            print(f"\n[ERROR] {e}")
+            print(f"\n[ERROR] {e}", file=sys.stderr)
+            traceback.print_exc(file=sys.stderr)
             raise
 
         # Check graph state
@@ -179,28 +180,46 @@ def _display_interrupt(val) -> None:
     print()
 
 
-def _list_sessions(checkpointer) -> None:
-    """List all sessions in the checkpoint store."""
-    print("\nSessions:\n")
+def _list_sessions(checkpointer, as_json: bool = False) -> None:
+    """List all sessions in the checkpoint store.
+
+    When *as_json* is True the output is a JSON array so callers (e.g.
+    session_manager.py) can parse it without screen-scraping human text.
+    """
+    sessions: list[dict] = []
     try:
         # Pass None to list all checkpoints across every thread_id.
         # Passing {"configurable": {}} (no thread_id) may return nothing
         # in some SqliteSaver versions.
         configs = list(checkpointer.list(None))
-        if not configs:
-            print("  No sessions found.\n")
-            return
         seen: set[str] = set()
         for c in configs:
             thread_id = c.config["configurable"].get("thread_id", "?")
             if thread_id in seen:
                 continue  # show only the latest checkpoint per thread
             seen.add(thread_id)
-            ts = c.metadata.get("created_at", "unknown")
-            step = c.metadata.get("step", "?")
-            print(f"  {thread_id}  (step {step}, {ts})")
+            sessions.append({
+                "thread_id": thread_id,
+                "step": str(c.metadata.get("step", "?")),
+                "created_at": c.metadata.get("created_at", "unknown"),
+            })
     except Exception as e:
-        print(f"  Could not list sessions: {e}\n")
+        if as_json:
+            print(json.dumps([]))
+        else:
+            print(f"\n  Could not list sessions: {e}\n")
+        return
+
+    if as_json:
+        print(json.dumps(sessions))
+        return
+
+    print("\nSessions:\n")
+    if not sessions:
+        print("  No sessions found.\n")
+        return
+    for s in sessions:
+        print(f"  {s['thread_id']}  (step {s['step']}, {s['created_at']})")
     print()
 
 
@@ -212,9 +231,19 @@ def _new_thread_id() -> str:
 def _init_session_dir(thread_id: str) -> Path:
     session_dir = SESSIONS_DIR / thread_id
     session_dir.mkdir(parents=True, exist_ok=True)
-    # Write session header
-    header = f"# Rice Session: {thread_id}\nStarted: {datetime.now().isoformat()}\nStatus: IN PROGRESS — Step 0\n"
-    (session_dir / "session.md").write_text(header)
+    # Write session header — format aligned with session_manager.py SESSION_HEADER_TEMPLATE.
+    header = (
+        f"# Rice Session: {thread_id}\n"
+        f"Started: {datetime.now().isoformat(timespec='seconds')}\n"
+        f"Status: IN PROGRESS — Step 0 complete\n"
+        f"Session dir: {session_dir}\n\n---\n"
+    )
+    (session_dir / "session.md").write_text(header, encoding="utf-8")
+    # Update .current symlink so agent tools (session_manager.py) see this session.
+    current_link = SESSIONS_DIR / ".current"
+    if current_link.is_symlink() or current_link.exists():
+        current_link.unlink()
+    current_link.symlink_to(session_dir)
     return session_dir
 
 

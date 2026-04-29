@@ -2,12 +2,15 @@
 from __future__ import annotations
 
 import json
+import re
+import sys
+import tempfile
 from pathlib import Path
 
 from langchain_core.messages import HumanMessage, SystemMessage
 from langgraph.types import interrupt
 
-from ..config import get_llm
+from ..config import get_llm, MAX_LOOP_ITERATIONS
 from ..session import append_step
 from ..state import RiceSessionState
 
@@ -38,6 +41,10 @@ def plan_node(state: RiceSessionState) -> dict:
     session_dir = state.get("session_dir", "")
     messages = list(state.get("messages", []))
 
+    # Track invocations so routing.after_plan can abort if the loop diverges.
+    loop_counts = dict(state.get("loop_counts") or {})
+    loop_counts["plan"] = loop_counts.get("plan", 0) + 1
+
     # Generate HTML if not already done
     html_path = _get_html_path(session_dir)
 
@@ -50,9 +57,20 @@ def plan_node(state: RiceSessionState) -> dict:
             HumanMessage(content=f"Design system:\n```json\n{json.dumps(design, indent=2)}\n```"),
         ]
         response = llm.invoke(prompt_messages)
-        html_content = _extract_html(response.content)
+        html_content = _extract_html(response.content or "")
         html_path.parent.mkdir(parents=True, exist_ok=True)
-        html_path.write_text(html_content, encoding="utf-8")
+        tmp_path = None
+        try:
+            with tempfile.NamedTemporaryFile(
+                mode="w", dir=html_path.parent, encoding="utf-8", delete=False, suffix=".tmp"
+            ) as tmp:
+                tmp.write(html_content)
+                tmp_path = tmp.name
+            Path(tmp_path).replace(html_path)
+        except Exception:
+            if tmp_path:
+                Path(tmp_path).unlink(missing_ok=True)
+            raise
         print(f"  Preview written: {html_path}\n")
 
     # Interrupt: ask user to open and approve
@@ -75,29 +93,32 @@ def plan_node(state: RiceSessionState) -> dict:
         return {
             "plan_html_path": str(html_path),
             "current_step": 4,
+            "loop_counts": loop_counts,
         }
 
     if decision_str == "regenerate":
         html_path.unlink(missing_ok=True)
-        return {"plan_html_path": ""}
+        return {"plan_html_path": "", "loop_counts": loop_counts}
 
     # User wants changes — add feedback to messages and retry
     html_path.unlink(missing_ok=True)
     return {
         "plan_html_path": "",
         "messages": [HumanMessage(content=f"Regenerate the preview with these changes: {decision}")],
+        "loop_counts": loop_counts,
     }
 
 
 def _get_html_path(session_dir: str) -> Path:
     if session_dir:
         return Path(session_dir) / "plan.html"
-    return Path.home() / ".config" / "rice-sessions" / "_tmp_plan.html"
+    # No session directory yet — write to the OS temp dir so we don't pollute
+    # ~/.config/rice-sessions with a stray file.
+    return Path(tempfile.gettempdir()) / "linux-ricing-plan.html"
 
 
 def _extract_html(content: str) -> str:
     """Strip markdown fences if the model wrapped the HTML."""
-    import re
     content = content.strip()
     # Remove ```html ... ``` or ``` ... ``` wrapping.
     # The previous regex tried to match partial closing tags inside the pattern
@@ -114,7 +135,5 @@ def _extract_html(content: str) -> str:
         start = content.find(marker)
         if start != -1:
             return content[start:]
-    return content
-
-
-
+    print("[Plan][WARN] No HTML marker found in LLM response — plan.html will be empty", file=sys.stderr)
+    return ""

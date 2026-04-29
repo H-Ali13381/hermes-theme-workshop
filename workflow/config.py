@@ -1,17 +1,78 @@
 import os
+import sys
 from pathlib import Path
+
+# ── Module-level constants ────────────────────────────────────────────────────
+# Last-resort model fallback — only used when RICER_MODEL env var is unset
+# AND no Hermes config is present (h["model"] takes priority when available).
+# Must be a valid Anthropic API model identifier.
+# Short aliases like "claude-sonnet-4-6" are Hermes-internal; for a standalone
+# fallback use the full versioned string, e.g. "claude-3-5-sonnet-20241022".
+# Update this constant whenever the target model changes.
+MODEL = os.environ.get("RICER_MODEL", "claude-sonnet-4-5-20251029")
+
+SKILL_DIR = Path(__file__).parent.parent
+SCRIPTS_DIR = SKILL_DIR / "scripts"
+SESSIONS_DIR = Path.home() / ".config" / "rice-sessions"
+DB_PATH = str(Path.home() / ".local" / "share" / "linux-ricing" / "sessions.sqlite")
+
+PALETTE_SLOTS = [
+    "background", "foreground", "primary", "secondary",
+    "accent", "surface", "muted", "danger", "success", "warning",
+]
+BASE_REQUIRED_KEYS = ["name", "description", "palette", "mood_tags"]
+RECIPE_REQUIRED_KEYS = {
+    "kde": ["kvantum_theme", "plasma_theme", "cursor_theme", "icon_theme", "gtk_theme"],
+    "gnome": ["gtk_theme", "cursor_theme", "icon_theme"],
+    "hyprland": ["gtk_theme", "cursor_theme", "icon_theme"],
+}
+RECIPE_PROMPT_FIELDS = {
+    "kde": [
+        '- kvantum_theme: e.g. "KvDark"',
+        '- plasma_theme: e.g. "default"',
+        '- cursor_theme: e.g. "default"',
+        '- icon_theme: e.g. "Papirus-Dark"',
+        '- gtk_theme: e.g. "Adwaita-dark"',
+    ],
+    "gnome": [
+        '- gtk_theme: e.g. "Adwaita-dark"',
+        '- cursor_theme: e.g. "default"',
+        '- icon_theme: e.g. "Papirus-Dark"',
+    ],
+    "hyprland": [
+        '- gtk_theme: e.g. "Adwaita-dark"',
+        '- cursor_theme: e.g. "default"',
+        '- icon_theme: e.g. "Papirus-Dark"',
+    ],
+}
+SUPPORTED_DESKTOP_RECIPES = frozenset(RECIPE_REQUIRED_KEYS)
+UNSUPPORTED_DESKTOP_MESSAGE = (
+    "Unsupported desktop environment for linux-ricing workflow. "
+    "Currently supported recipes: KDE Plasma, GNOME, and Hyprland. "
+    "Please submit a GitHub ticket requesting support for your environment."
+)
+# Backward-compatible KDE recipe alias for older imports.
+DESIGN_REQUIRED_KEYS = BASE_REQUIRED_KEYS + RECIPE_REQUIRED_KEYS["kde"]
+SCORE_PASS_THRESHOLD = 8
+# Maximum number of times implement_node will re-process a single element after
+# the user selects "retry" at the score gate before forcing a hard skip.
+MAX_IMPLEMENT_RETRIES = 3
+# Maximum times a looping node (explore / refine / plan) may be re-entered before
+# the routing function aborts the workflow to END.  This prevents infinite LLM
+# loops when a sentinel appears in the response but JSON parsing consistently fails.
+MAX_LOOP_ITERATIONS = 10
 
 
 def _parse_dotenv(path: Path) -> dict:
     result = {}
     try:
-        for line in path.read_text().splitlines():
+        for line in path.read_text(encoding="utf-8").splitlines():
             line = line.strip()
             if line and not line.startswith("#") and "=" in line:
                 k, _, v = line.partition("=")
                 result[k.strip()] = v.strip()
-    except Exception:
-        pass
+    except Exception as e:
+        print(f"[config] Warning: could not parse {path}: {e}", file=sys.stderr)
     return result
 
 
@@ -33,8 +94,10 @@ def _load_hermes_config() -> dict:
         return {}
     try:
         import yaml
-        cfg = yaml.safe_load(config_path.read_text())
-    except Exception:
+        cfg = yaml.safe_load(config_path.read_text(encoding="utf-8"))
+    except Exception as e:
+        import sys
+        print(f"[config] Warning: could not load {config_path}: {e}", file=sys.stderr)
         return {}
 
     model_cfg  = cfg.get("model", {})
@@ -91,6 +154,7 @@ def get_llm(temperature: float = 0.7, max_tokens: int | None = None):
         from langchain_anthropic import ChatAnthropic
         kwargs: dict = {"model": model, "temperature": temperature}
         if max_tokens: kwargs["max_tokens"] = max_tokens
+        if api_key:    kwargs["api_key"]    = api_key
         return ChatAnthropic(**kwargs)
 
     from langchain_openai import ChatOpenAI
@@ -99,48 +163,3 @@ def get_llm(temperature: float = 0.7, max_tokens: int | None = None):
     if api_key:    kwargs["api_key"]    = api_key
     if max_tokens: kwargs["max_tokens"] = max_tokens
     return ChatOpenAI(**kwargs)
-
-SKILL_DIR = Path(__file__).parent.parent
-SCRIPTS_DIR = SKILL_DIR / "scripts"
-SESSIONS_DIR = Path.home() / ".config" / "rice-sessions"
-DB_PATH = str(Path.home() / ".local" / "share" / "linux-ricing" / "sessions.sqlite")
-MODEL = os.environ.get("RICER_MODEL", "claude-sonnet-4-6")
-
-PALETTE_SLOTS = [
-    "background", "foreground", "primary", "secondary",
-    "accent", "surface", "muted", "danger", "success", "warning",
-]
-BASE_REQUIRED_KEYS = ["name", "description", "palette", "mood_tags"]
-RECIPE_REQUIRED_KEYS = {
-    "kde": ["kvantum_theme", "plasma_theme", "cursor_theme", "icon_theme", "gtk_theme"],
-    "gnome": ["gtk_theme", "cursor_theme", "icon_theme"],
-    "hyprland": ["gtk_theme", "cursor_theme", "icon_theme"],
-}
-RECIPE_PROMPT_FIELDS = {
-    "kde": [
-        '- kvantum_theme: e.g. "KvDark"',
-        '- plasma_theme: e.g. "default"',
-        '- cursor_theme: e.g. "default"',
-        '- icon_theme: e.g. "Papirus-Dark"',
-        '- gtk_theme: e.g. "Adwaita-dark"',
-    ],
-    "gnome": [
-        '- gtk_theme: e.g. "Adwaita-dark"',
-        '- cursor_theme: e.g. "default"',
-        '- icon_theme: e.g. "Papirus-Dark"',
-    ],
-    "hyprland": [
-        '- gtk_theme: e.g. "Adwaita-dark"',
-        '- cursor_theme: e.g. "default"',
-        '- icon_theme: e.g. "Papirus-Dark"',
-    ],
-}
-SUPPORTED_DESKTOP_RECIPES = frozenset(RECIPE_REQUIRED_KEYS)
-UNSUPPORTED_DESKTOP_MESSAGE = (
-    "Unsupported desktop environment for linux-ricing workflow. "
-    "Currently supported recipes: KDE Plasma, GNOME, and Hyprland. "
-    "Please submit a GitHub ticket requesting support for your environment."
-)
-# Backward-compatible KDE recipe alias for older imports.
-DESIGN_REQUIRED_KEYS = BASE_REQUIRED_KEYS + RECIPE_REQUIRED_KEYS["kde"]
-SCORE_PASS_THRESHOLD = 8

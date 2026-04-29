@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import json
 import re
+import tempfile
 from pathlib import Path
 
 from langchain_core.messages import HumanMessage, SystemMessage
@@ -59,15 +60,26 @@ def handoff_node(state: RiceSessionState) -> dict:
         HumanMessage(content=f"Session data:\n```json\n{json.dumps(payload, indent=2)}\n```"),
     ])
 
-    md_content = response.content.strip()
+    md_content = (response.content or "").strip()
     html_content = _md_to_html(md_content, design)
 
     # Write files
     if session_dir:
         md_path = Path(session_dir) / "handoff.md"
         html_path = Path(session_dir) / "handoff.html"
-        md_path.write_text(md_content, encoding="utf-8")
-        html_path.write_text(html_content, encoding="utf-8")
+        for dest, content in ((md_path, md_content), (html_path, html_content)):
+            tmp_path = None
+            try:
+                with tempfile.NamedTemporaryFile(
+                    mode="w", dir=dest.parent, encoding="utf-8", delete=False, suffix=".tmp"
+                ) as tmp:
+                    tmp.write(content)
+                    tmp_path = tmp.name
+                Path(tmp_path).replace(dest)
+            except Exception:
+                if tmp_path:
+                    Path(tmp_path).unlink(missing_ok=True)
+                raise
         print(f"  handoff.md   → {md_path}")
         print(f"  handoff.html → {html_path}")
 
@@ -88,8 +100,8 @@ def _md_to_html(md: str, design: dict) -> str:
     # Minimal markdown→HTML conversion
     def _convert_table(match: re.Match) -> str:
         """Convert a Markdown pipe table block to an HTML <table>."""
-        lines = [l.strip() for l in match.group(0).strip().splitlines()]
-        rows = [l for l in lines if not re.match(r"^\|[-| :]+\|$", l)]
+        lines = [line.strip() for line in match.group(0).strip().splitlines()]
+        rows = [line for line in lines if not re.match(r"^\|[-| :]+\|$", line)]
         html_rows = []
         for i, row in enumerate(rows):
             cells = [c.strip() for c in row.strip("|").split("|")]
@@ -100,8 +112,14 @@ def _md_to_html(md: str, design: dict) -> str:
         return "<table>" + "".join(html_rows) + "</table>"
 
     body = md
-    # Tables: a block of lines each starting with |
-    body = re.sub(r"(\|.+\n)+", _convert_table, body)
+    # Tables: a block of consecutive |-lines that contains a separator row
+    # (|---|---|). Requiring the separator prevents matching code-block lines
+    # that happen to contain pipe characters (e.g. `cat foo | grep bar`).
+    body = re.sub(
+        r"(?:(?:\|.+\n)*\|[-| :]+\|\n(?:\|.+\n)*)+",
+        _convert_table,
+        body,
+    )
     body = re.sub(r"^# (.+)$", r"<h1>\1</h1>", body, flags=re.MULTILINE)
     body = re.sub(r"^## (.+)$", r"<h2>\1</h2>", body, flags=re.MULTILINE)
     body = re.sub(r"^### (.+)$", r"<h3>\1</h3>", body, flags=re.MULTILINE)
@@ -137,6 +155,3 @@ def _md_to_html(md: str, design: dict) -> str:
 {body}
 </body>
 </html>"""
-
-
-

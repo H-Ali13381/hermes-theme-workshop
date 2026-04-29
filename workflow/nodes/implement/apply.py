@@ -1,52 +1,45 @@
-"""implement/apply.py — Applies one element by calling ricer.py."""
+"""implement/apply.py — Applies one element by calling ricer.py materializers directly."""
 from __future__ import annotations
 
-import json
-import subprocess
 import sys
-import tempfile
-from pathlib import Path
 
 from ...config import SCRIPTS_DIR
 
+# Ensure scripts/ is importable regardless of cwd — same bootstrap ricer.py uses.
+if str(SCRIPTS_DIR) not in sys.path:
+    sys.path.insert(0, str(SCRIPTS_DIR))
+
+from ricer import materialize              # noqa: E402
+from core.discovery import discover_apps   # noqa: E402
+from materializers import APP_MATERIALIZERS  # noqa: E402
+
 
 def apply_element(element: str, design: dict, session_dir: str) -> dict:
-    """Map element name → ricer.py materializer subcommand and run it."""
-    ricer = SCRIPTS_DIR / "ricer.py"
-    if not ricer.exists():
-        return {"success": False, "error": "ricer.py not found"}
-
+    """Map element name → ricer.py materializer and call it directly as a Python API."""
     materializer = _element_to_materializer(element)
     if materializer is None:
         return {"success": False, "error": f"unsupported element: {element}"}
 
-    design_file = Path(session_dir) / "design.json" if session_dir else None
-    tmpfile: Path | None = None
-    if not design_file or not design_file.exists():
-        with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as tf:
-            json.dump(design, tf)
-            tf.flush()
-            design_file = Path(tf.name)
-        tmpfile = design_file  # remember to clean up
+    if materializer not in APP_MATERIALIZERS:
+        return {"success": False, "error": f"unknown materializer: {materializer}"}
 
-    cmd = [sys.executable, str(ricer), "apply", "--design", str(design_file), f"--only={materializer}"]
+    apps = discover_apps()
+    if materializer not in apps:
+        return {"success": False, "error": f"materializer not detected on this system: {materializer}"}
 
     try:
-        result = subprocess.run(cmd, capture_output=True, text=True, timeout=60)
-    except subprocess.TimeoutExpired:
-        return {"success": False, "error": "apply timed out after 60s"}
-    finally:
-        if tmpfile is not None:
-            tmpfile.unlink(missing_ok=True)
-
-    if result.returncode == 0:
-        return {"success": True, "stdout": result.stdout[:500]}
-    return {"success": False, "error": result.stderr[:300] or result.stdout[:300]}
+        manifest = materialize(design, apps={materializer: apps[materializer]})
+        return {"success": True, "manifest": manifest}
+    except Exception as e:  # noqa: BLE001
+        print(f"[apply] materializer error: {e}", file=sys.stderr)
+        return {"success": False, "error": str(e)}
 
 
 # Elements where category:provider doesn't map directly to the materializer key.
 _PROVIDER_REMAPS: dict[str, str] = {
-    "lock_screen:kde": "kde_lockscreen",
+    "lock_screen:kde":        "kde_lockscreen",
+    "window_decorations:gnome": "gnome_shell",
+    "lock_screen:gnome":      "gnome_lockscreen",
 }
 
 

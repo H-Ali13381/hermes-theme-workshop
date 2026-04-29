@@ -31,7 +31,7 @@ def verify_element(element: str, spec: dict, design: dict) -> dict:
     palette_match = True
     for written in files_written:
         try:
-            content = Path(written).read_text(errors="ignore")
+            content = Path(written).read_text(encoding="utf-8", errors="replace")
             for key in palette_keys:
                 color = design.get("palette", {}).get(key, "")
                 if color and color.lower() not in content.lower():

@@ -39,7 +39,7 @@ RICER_PY = _SCRIPTS / "ricer.py"
 def read_current_wallpaper() -> str | None:
     if not APPLETSRC.exists():
         return None
-    m = re.search(r"^Image\s*=\s*(.+)$", APPLETSRC.read_text(errors="replace"), re.MULTILINE)
+    m = re.search(r"^Image\s*=\s*(.+)$", APPLETSRC.read_text(encoding="utf-8", errors="replace"), re.MULTILINE)
     return m.group(1).strip() if m else None
 
 
@@ -200,7 +200,7 @@ class LiveBugReproducers(unittest.TestCase):
                  "--only", "kde", "--name", "p2-backup-order-repro"], timeout=60)
         self.assertEqual(r.returncode, 0, f"apply failed: {r.stderr}")
 
-        manifest = json.loads((HOME / ".cache" / "linux-ricing" / "current" / "manifest.json").read_text())
+        manifest = json.loads((HOME / ".cache" / "linux-ricing" / "current" / "manifest.json").read_text(encoding="utf-8"))
         backup_dir = Path(manifest["backup_dir"])
 
         kde_backup = backup_dir / "kde" / "kdeglobals"

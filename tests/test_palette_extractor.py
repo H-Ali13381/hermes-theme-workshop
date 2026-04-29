@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import colorsys
 import importlib.util
+import shutil
 import tempfile
 import unittest
 from pathlib import Path
@@ -238,13 +239,13 @@ class SelectIconThemeTests(unittest.TestCase):
 
     def _fake_dir(self, themes: dict[str, list[str]]) -> Path:
         """Build a tmp icon dir. themes maps name → list of category subdirs under 48x48/."""
-        import tempfile, os
         d = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, d, True)
         for name, cats in themes.items():
             sub = d / name
             size_dir = sub / "48x48"
             size_dir.mkdir(parents=True)
-            (sub / "index.theme").write_text(f"[Icon Theme]\nName={name}\n")
+            (sub / "index.theme").write_text(f"[Icon Theme]\nName={name}\n", encoding="utf-8")
             for cat in cats:
                 (size_dir / cat).mkdir()
         return d

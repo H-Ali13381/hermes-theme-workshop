@@ -1,0 +1,304 @@
+"""icon_theme_gen.py — Palette-aware icon theme selection and generation.
+
+Public API
+----------
+list_installed_themes()
+    Enumerate icon themes from standard system and user directories.
+
+score_theme_against_palette(theme_path, palette)
+    How well an SVG-based theme's colours match a design palette [0=perfect, 1=worst].
+
+find_best_installed_theme(palette, prefer_dark)
+    Return (theme_name, score) for the best installed colour match.
+
+create_palette_icon_theme(design, base_theme)
+    Copy a subset of a base theme's SVG icons, recolour them to match the palette,
+    write an index.theme that inherits the base for everything else, and return the
+    new theme name.  Works with Breeze-style ColorScheme CSS classes.
+
+generate_icon_via_fal(design, fal_key, output_path)
+    Generate a single 512×512 app-launcher PNG via fal-ai/flux/dev and resize it to
+    standard icon sizes.  Returns True on success.  Requires fal_client + Pillow.
+"""
+from __future__ import annotations
+
+import os
+import subprocess
+import sys
+import urllib.request
+from pathlib import Path
+
+from core.icon_scoring import (
+    score_theme_against_palette, recolor_svg, _recolor_size_dir,
+    _hex_to_rgb, _color_distance, sample_svg_colors,
+)
+
+# ---------------------------------------------------------------------------
+# Constants
+# ---------------------------------------------------------------------------
+
+ICON_DIRS: list[Path] = [
+    Path.home() / ".local" / "share" / "icons",
+    Path("/usr/share/icons"),
+    Path("/usr/local/share/icons"),
+]
+
+# Cursor-only themes contain *only* a cursors/ subdir — skip them.
+_APP_SUBDIRS = frozenset({"apps", "actions", "places", "devices", "status", "mimetypes"})
+
+# Icon sizes to generate/copy (in px).  22 and 48 are the two most visible.
+_TARGET_SIZES = (16, 22, 24, 32, 48, 64, 128)
+
+# Score above which we consider generating a custom theme.
+POOR_MATCH_THRESHOLD = 0.35
+
+
+# ---------------------------------------------------------------------------
+# Theme enumeration
+# ---------------------------------------------------------------------------
+
+def list_installed_themes() -> list[dict]:
+    """Return [{name, path, has_svgs}] for every icon theme found in standard dirs.
+
+    Cursor-only themes (no apps/actions/places/devices sub-directory) are excluded.
+    """
+    seen: set[str] = set()
+    themes: list[dict] = []
+    for base in ICON_DIRS:
+        if not base.exists():
+            continue
+        for entry in sorted(base.iterdir()):
+            if not entry.is_dir() or entry.name in seen:
+                continue
+            if not (entry / "index.theme").exists():
+                continue
+            has_app_dir = any(
+                (entry / sub).exists() for sub in _APP_SUBDIRS
+            )
+            if not has_app_dir:
+                continue
+            has_svgs = bool(next(entry.rglob("*.svg"), None))
+            seen.add(entry.name)
+            themes.append({"name": entry.name, "path": entry, "has_svgs": has_svgs})
+    return themes
+
+
+def _find_theme_path(theme_name: str) -> Path | None:
+    """Return the Path to a named theme directory, or None if not found."""
+    for base in ICON_DIRS:
+        candidate = base / theme_name
+        if candidate.is_dir() and (candidate / "index.theme").exists():
+            return candidate
+    return None
+
+
+# sample_svg_colors, score_theme_against_palette, recolor_svg, _recolor_size_dir
+# moved to core/icon_scoring.py and re-imported above.
+
+def find_best_installed_theme(
+    palette: dict,
+    prefer_dark: bool = True,
+) -> tuple[str, float]:
+    """Return *(theme_name, score)* for the best colour-matched installed theme."""
+    fallback = "breeze-dark" if prefer_dark else "breeze"
+    themes = list_installed_themes()
+    if not themes:
+        return fallback, 1.0
+
+    best_name = fallback
+    best_score = 1.0
+    for t in themes:
+        score = score_theme_against_palette(t["path"], palette)
+        if prefer_dark and "dark" in t["name"].lower():
+            score *= 0.9
+        if score < best_score:
+            best_score = score
+            best_name = t["name"]
+
+    return best_name, best_score
+
+
+# ---------------------------------------------------------------------------
+# Theme construction
+# ---------------------------------------------------------------------------
+
+def _write_index_theme(
+    output_dir: Path,
+    display_name: str,
+    inherits: str,
+    sizes: list[int],
+    context: str = "Applications",
+    category: str = "apps",
+) -> None:
+    """Write a minimal index.theme for a generated icon theme."""
+    dirs = ",".join(f"{category}/{s}" for s in sizes)
+    size_sections = "\n".join(
+        f"[{category}/{s}]\nSize={s}\nContext={context}\nType=Fixed"
+        for s in sizes
+    )
+    content = (
+        f"[Icon Theme]\n"
+        f"Name={display_name}\n"
+        f"Comment=Palette-matched icon theme generated by linux-ricing\n"
+        f"Inherits={inherits}\n"
+        f"Directories={dirs}\n\n"
+        f"{size_sections}\n"
+    )
+    (output_dir / "index.theme").write_text(content, encoding="utf-8")
+
+
+def _update_icon_cache(theme_dir: Path) -> None:
+    """Run gtk-update-icon-cache if available (silently ignored if not)."""
+    try:
+        subprocess.run(
+            ["gtk-update-icon-cache", "-f", "-t", str(theme_dir)],
+            capture_output=True, timeout=15,
+        )
+    except (FileNotFoundError, subprocess.TimeoutExpired):
+        pass
+
+
+def create_palette_icon_theme(
+    design: dict,
+    base_theme: str = "breeze-dark",
+) -> str | None:
+    """Create a palette-recoloured icon theme under ``~/.local/share/icons/``.
+
+    Targets the ``status/``, ``devices/``, and ``actions/`` subdirectories at
+    sizes 16 and 22 — these are the categories that use Breeze ColorScheme CSS
+    classes and are most visible in desktop status bars and panels.  The theme
+    inherits *base_theme* for all other categories (apps/, places/, mimetypes/).
+
+    Returns the new theme name on success, ``None`` if the base theme is not
+    installed or no SVGs could be recoloured.
+    """
+    palette = design.get("palette", {})
+    name = design.get("name", "rice")
+    theme_name = f"{name}-icons"
+    output_dir = Path.home() / ".local" / "share" / "icons" / theme_name
+
+    base_path = _find_theme_path(base_theme)
+    if not base_path:
+        return None  # Nothing to recolour from
+
+    # Categories that use .ColorScheme-* CSS classes (status-bar/panel icons).
+    _RECOLOR_CATEGORIES = ("status", "devices", "actions")
+    _RECOLOR_SIZES = (16, 22)
+
+    dir_entries: list[str] = []
+    for category in _RECOLOR_CATEGORIES:
+        for size in _RECOLOR_SIZES:
+            src = base_path / category / str(size)
+            if not src.exists():
+                continue
+            dst = output_dir / category / str(size)
+            n = _recolor_size_dir(src, dst, palette)
+            if n:
+                dir_entries.append(f"{category}/{size}")
+
+    if not dir_entries:
+        return None  # Base theme had no recolourable icons in target categories
+
+    # Write index.theme listing recoloured dirs; inherit base for everything else.
+    dirs_str = ",".join(dir_entries)
+    size_sections = ""
+    for entry in dir_entries:
+        cat, sz = entry.split("/")
+        size_sections += (
+            f"\n[{entry}]\nSize={sz}\nContext={cat.capitalize()}\nType=Fixed\n"
+        )
+    content = (
+        f"[Icon Theme]\n"
+        f"Name={theme_name}\n"
+        f"Comment=Palette-matched icon theme generated by linux-ricing\n"
+        f"Inherits={base_theme},hicolor\n"
+        f"Directories={dirs_str}\n"
+        f"{size_sections.strip()}\n"
+    )
+    (output_dir / "index.theme").write_text(content, encoding="utf-8")
+    _update_icon_cache(output_dir)
+    return theme_name
+
+
+# ---------------------------------------------------------------------------
+# fal.ai fallback — generate a custom app-launcher icon
+# ---------------------------------------------------------------------------
+
+def generate_icon_via_fal(
+    design: dict,
+    fal_key: str,
+    output_path: Path,
+    sizes: tuple[int, ...] = (16, 22, 24, 32, 48, 64, 128),
+) -> bool:
+    """Generate a palette-matched app-launcher icon via fal-ai/flux/dev.
+
+    Downloads the 512×512 result and writes resized PNG copies to
+    ``output_path/<size>/<name>.png`` for each size in *sizes*.  Requires
+    ``fal_client`` and ``Pillow`` to be installed; returns ``False`` silently
+    if either is missing or the API call fails.
+    """
+    try:
+        import fal_client  # type: ignore[import]
+        from PIL import Image  # type: ignore[import]
+    except ImportError:
+        return False
+
+    palette = design.get("palette", {})
+    name = design.get("name", "rice")
+    mood = " ".join(design.get("mood_tags", []))
+    primary = palette.get("primary", "#7aa2f7")
+    background = palette.get("background", "#1a1b26")
+
+    prompt = (
+        f"A single Linux desktop application icon. "
+        f"Primary colour {primary} on background {background}. "
+        f"Mood: {mood or 'minimal dark'}. "
+        "Flat design, no text, centred symbol, clean edges, 512×512."
+    )
+
+    os.environ.setdefault("FAL_KEY", fal_key)
+    try:
+        result = fal_client.subscribe(
+            "fal-ai/flux/dev",
+            arguments={
+                "prompt": prompt,
+                "image_size": "square_hd",
+                "num_inference_steps": 28,
+                "guidance_scale": 3.5,
+                "num_images": 1,
+                "output_format": "png",
+            },
+            with_logs=False,
+        )
+        image_url = result["images"][0]["url"]
+    except Exception as e:
+        print(f"[icon_theme_gen] fal-ai API call failed: {e}", file=sys.stderr)
+        return False
+
+    try:
+        tmp_path = output_path / "_source512.png"
+        output_path.mkdir(parents=True, exist_ok=True)
+        urllib.request.urlretrieve(image_url, str(tmp_path))
+
+        with Image.open(tmp_path) as img:
+            img = img.convert("RGBA")
+            for size in sizes:
+                size_dir = output_path / str(size)
+                size_dir.mkdir(parents=True, exist_ok=True)
+                resized = img.resize((size, size), Image.Resampling.LANCZOS)
+                resized.save(size_dir / f"{name}.png", "PNG")
+
+        tmp_path.unlink(missing_ok=True)
+        return True
+    except Exception as e:
+        print(f"[icon_theme_gen] icon download/resize failed: {e}", file=sys.stderr)
+        return False
+
+
+# ---------------------------------------------------------------------------
+# Convenience query
+# ---------------------------------------------------------------------------
+
+def is_installed(theme_name: str) -> bool:
+    """Return True if *theme_name* exists as a directory in any icon search path."""
+    return _find_theme_path(theme_name) is not None

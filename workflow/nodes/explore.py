@@ -2,11 +2,12 @@
 from __future__ import annotations
 
 import json
+import sys
 
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 from langgraph.types import interrupt
 
-from ..config import get_llm, SKILL_DIR
+from ..config import get_llm, SKILL_DIR, MAX_LOOP_ITERATIONS
 from ..state import RiceSessionState
 
 DIRECTION_SENTINEL = "<<DIRECTION_CONFIRMED>>"
@@ -50,6 +51,11 @@ def explore_node(state: RiceSessionState) -> dict:
     llm = get_llm(0.7)
     messages = list(state.get("messages", []))
 
+    # Track invocations so routing.after_explore can abort if the LLM loops without
+    # converging (e.g. sentinel emitted but JSON parsing consistently fails).
+    loop_counts = dict(state.get("loop_counts") or {})
+    loop_counts["explore"] = loop_counts.get("explore", 0) + 1
+
     new_messages: list = []
     if not messages:
         # First turn — inject system + device context
@@ -65,7 +71,7 @@ def explore_node(state: RiceSessionState) -> dict:
     response = llm.invoke(messages)
 
     # Check for confirmed direction
-    if DIRECTION_SENTINEL in response.content:
+    if response.content and DIRECTION_SENTINEL in response.content:
         direction = _parse_direction(response.content)
         clean_content = response.content.split(DIRECTION_SENTINEL)[0].strip()
         print(f"\n[Explore] Direction confirmed: {direction}\n")
@@ -73,17 +79,19 @@ def explore_node(state: RiceSessionState) -> dict:
             "messages": new_messages + [AIMessage(content=clean_content)],
             "design": direction,
             "current_step": 2,
+            "loop_counts": loop_counts,
         }
 
     # Pause and collect user reply
     user_reply = interrupt({
         "step": 2,
         "type": "conversation",
-        "message": response.content,
+        "message": response.content or "",
     })
 
     return {
         "messages": new_messages + [response, HumanMessage(content=str(user_reply))],
+        "loop_counts": loop_counts,
     }
 
 
@@ -115,7 +123,7 @@ def _parse_direction(content: str) -> dict:
         try:
             obj, _ = decoder.raw_decode(after, idx)
             return obj
-        except Exception:
-            pass
-    print("[Explore][WARN] Could not parse direction JSON from LLM response — returning empty direction", flush=True)
+        except Exception as e:
+            print(f"[Explore][WARN] JSON parse error: {e}", file=sys.stderr, flush=True)
+    print("[Explore][WARN] Could not parse direction JSON from LLM response — returning empty direction", file=sys.stderr, flush=True)
     return {}

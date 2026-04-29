@@ -1,4 +1,4 @@
-"""Unit tests for KDE-specific undo restore paths in ricer.py."""
+"""Unit tests for KDE-specific undo restore paths in ricer_undo.py."""
 from __future__ import annotations
 
 import importlib.util
@@ -9,17 +9,19 @@ from pathlib import Path
 from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parent.parent
-RICER_PY = ROOT / "scripts" / "ricer.py"
+# Undo logic now lives in scripts/ricer_undo.py (extracted from ricer.py).
+# We load it directly so patches target the correct module namespace.
+RICER_UNDO_PY = ROOT / "scripts" / "ricer_undo.py"
 
 
-def _load_ricer():
-    spec = importlib.util.spec_from_file_location("ricer", RICER_PY)
+def _load_ricer_undo():
+    spec = importlib.util.spec_from_file_location("ricer_undo", RICER_UNDO_PY)
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
     return mod
 
 
-ricer = _load_ricer()
+ricer_undo = _load_ricer_undo()
 
 
 def _write_manifest(path: Path, changes: list[dict], dry_run: bool = False) -> None:
@@ -38,14 +40,14 @@ class TestUndoKde(unittest.TestCase):
             manifest_path = Path(tmp) / "manifest.json"
             _write_manifest(manifest_path, changes, dry_run=dry_run)
             with (
-                patch.object(ricer, "CURRENT_DIR", Path(tmp)),
-                patch.object(ricer, "run_cmd",
+                patch.object(ricer_undo, "CURRENT_DIR", Path(tmp)),
+                patch.object(ricer_undo, "run_cmd",
                              side_effect=lambda cmd, **kw: calls.append(list(cmd)) or (0, "", "")),
-                patch.object(ricer, "cmd_exists", side_effect=cmd_exists_fn),
-                patch.object(ricer, "_get_kwrite", return_value="kwriteconfig6"),
+                patch.object(ricer_undo, "cmd_exists", side_effect=cmd_exists_fn),
+                patch.object(ricer_undo, "_get_kwrite", return_value="kwriteconfig6"),
             ):
-                result = ricer.undo()
-            manifest = json.loads(manifest_path.read_text())
+                result = ricer_undo.undo()
+            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
         return result, calls, manifest
 
     def test_reapplies_previous_colorscheme(self):

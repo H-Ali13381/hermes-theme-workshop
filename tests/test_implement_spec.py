@@ -1,7 +1,6 @@
 """Tests for implementation spec structured output and apply element."""
 from __future__ import annotations
 
-import subprocess
 import unittest
 from unittest.mock import patch
 
@@ -28,6 +27,10 @@ class _FakeLLM:
 
 
 class ImplementSpecTests(unittest.TestCase):
+    def setUp(self):
+        _FakeLLM.requested_schema = None
+        _FakeLLM.structured_response = None
+
     def test_element_spec_defaults_optional_fields(self):
         spec = ElementSpec(targets=["~/.config/kitty/theme.conf"], palette_keys=["background"])
 
@@ -86,14 +89,60 @@ class ImplementSpecTests(unittest.TestCase):
         self.assertIn("structured output unavailable", result["notes"])
 
 
-class ApplyElementTimeoutTests(unittest.TestCase):
-    def test_timeout_returns_structured_failure(self):
-        with patch("workflow.nodes.implement.apply.subprocess.run",
-                   side_effect=subprocess.TimeoutExpired(cmd=[], timeout=60)):
-            result = apply_element("gtk_theme", {}, "/tmp")
+class ApplyElementTests(unittest.TestCase):
+    """apply_element delegates to materialize() directly — no subprocess involved."""
+
+    _FAKE_APPS   = {"gtk": "/usr/bin/gtk-query-settings"}
+    _FAKE_MANIFEST = {"timestamp": "20260101_000000", "changes": []}
+
+    def _patch_ricer(self, *, manifest=None, raises=None):
+        """Return a context manager that patches discover_apps + materialize."""
+        fake_apps     = self._FAKE_APPS
+        fake_manifest = manifest if manifest is not None else self._FAKE_MANIFEST
+
+        def _materialize(design, apps=None, wallpaper=None, dry_run=False):
+            if raises:
+                raise raises
+            return fake_manifest
+
+        return (
+            patch("workflow.nodes.implement.apply.discover_apps", return_value=fake_apps),
+            patch("workflow.nodes.implement.apply.materialize", side_effect=_materialize),
+        )
+
+    def test_success_returns_manifest(self):
+        patches = self._patch_ricer()
+        with patches[0], patches[1]:
+            result = apply_element("gtk_theme", {"name": "test"}, "/tmp")
+
+        self.assertTrue(result["success"])
+        self.assertEqual(result["manifest"], self._FAKE_MANIFEST)
+
+    def test_materializer_exception_returns_structured_failure(self):
+        patches = self._patch_ricer(raises=RuntimeError("disk full"))
+        with patches[0], patches[1]:
+            result = apply_element("gtk_theme", {"name": "test"}, "/tmp")
 
         self.assertFalse(result["success"])
-        self.assertIn("timed out", result["error"])
+        self.assertIn("disk full", result["error"])
+
+    def test_unsupported_element_returns_failure(self):
+        patches = self._patch_ricer()
+        with patches[0], patches[1]:
+            result = apply_element("unknown_widget", {}, "/tmp")
+
+        self.assertFalse(result["success"])
+        self.assertIn("unsupported element", result["error"])
+
+    def test_materializer_not_detected_returns_failure(self):
+        # discover_apps returns nothing — materializer absent on this system.
+        with patch("workflow.nodes.implement.apply.discover_apps", return_value={}), \
+             patch("workflow.nodes.implement.apply.materialize") as mock_mat:
+            result = apply_element("gtk_theme", {}, "/tmp")
+
+        mock_mat.assert_not_called()
+        self.assertFalse(result["success"])
+        self.assertIn("not detected", result["error"])
 
 
 if __name__ == "__main__":

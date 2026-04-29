@@ -6,37 +6,8 @@ import re
 import sys
 from pathlib import Path
 
-
-def _strip_jsonc_comments(text: str) -> str:
-    """Remove // line comments from JSONC text, skipping // inside string literals."""
-    result: list[str] = []
-    in_string = False
-    i = 0
-    while i < len(text):
-        ch = text[i]
-        if in_string:
-            if ch == "\\":
-                result.append(ch)
-                i += 1
-                if i < len(text):
-                    result.append(text[i])
-            elif ch == '"':
-                in_string = False
-                result.append(ch)
-            else:
-                result.append(ch)
-        else:
-            if ch == '"':
-                in_string = True
-                result.append(ch)
-            elif ch == "/" and i + 1 < len(text) and text[i + 1] == "/":
-                while i < len(text) and text[i] != "\n":
-                    i += 1
-                continue
-            else:
-                result.append(ch)
-        i += 1
-    return "".join(result)
+from ...utils import strip_jsonc_comments as _strip_jsonc_comments
+from ...utils import css_braces_balanced as _css_braces_balanced
 
 CATEGORIES = ["palette", "shape", "diegesis", "usability", "preview_match"]
 
@@ -58,17 +29,17 @@ def score_element(element: str, spec: dict, design: dict, verify: dict) -> dict:
         sc["palette"] = 1
 
     # shape — did files get written and are they non-trivially sized?
-    if files_missing > 0 and files_written == 0:
+    if files_written == 0:
+        # No files written at all (either nothing expected, or everything missing).
         sc["shape"] = 0
-    elif files_written > 0:
-        all_ok = all(
-            Path(f).expanduser().stat().st_size > 20
+    else:
+        existing_sizes = [
+            Path(f).expanduser().stat().st_size
             for f in verify.get("files_written", [])
             if Path(f).expanduser().exists()
-        )
+        ]
+        all_ok = bool(existing_sizes) and all(s > 20 for s in existing_sizes)
         sc["shape"] = 2 if all_ok else 1
-    else:
-        sc["shape"] = 1
 
     # diegesis — does the element fit the design? (heuristic: files exist)
     sc["diegesis"] = 2 if files_written > 0 else 0
@@ -100,7 +71,7 @@ def _syntax_ok(files: list[str]) -> bool:
         if not p.exists():
             continue
         try:
-            text = p.read_text(errors="replace")
+            text = p.read_text(encoding="utf-8", errors="replace")
         except OSError:
             return False
 
@@ -119,14 +90,8 @@ def _syntax_ok(files: list[str]) -> bool:
             except Exception:
                 return False
 
-        elif p.suffix in (".conf", ".ini", ".cfg"):
-            opens  = text.count("{") + text.count("[")
-            closes = text.count("}") + text.count("]")
-            if opens != closes:
-                return False
-
         elif p.suffix == ".css":
-            if text.count("{") != text.count("}"):
+            if not _css_braces_balanced(text):
                 return False
 
     return True

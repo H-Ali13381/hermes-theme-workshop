@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import subprocess
 import sys
-from datetime import datetime
+from datetime import datetime, timezone
 
 from ..config import SCRIPTS_DIR
 from ..state import RiceSessionState
@@ -13,12 +13,12 @@ def baseline_node(state: RiceSessionState) -> dict:
     """Run desktop_state_audit.py to snapshot current desktop state."""
     print("[Step 4.5] Capturing rollback baseline...", flush=True)
 
-    ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+    ts = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
     audit_script = SCRIPTS_DIR / "desktop_state_audit.py"
 
     if not audit_script.exists():
         print("  [WARN] desktop_state_audit.py not found — skipping baseline capture")
-        return {"baseline_ts": ts, "current_step": 5}
+        return {"baseline_ts": ts}
 
     session_dir = state.get("session_dir", "")
     cmd = [sys.executable, str(audit_script)]
@@ -29,7 +29,7 @@ def baseline_node(state: RiceSessionState) -> dict:
 
     if result.returncode != 0:
         print(f"  [WARN] Baseline capture exited {result.returncode}: {result.stderr[:200]}")
-        return {"baseline_ts": ts, "current_step": 5, "errors": [f"baseline_warn: {result.stderr[:200]}"]}
+        return {"baseline_ts": ts, "errors": [f"baseline_warn: {result.stderr[:200]}"]}
 
     print(f"  Baseline captured (ts={ts}). Rollback with: ricer undo\n")
-    return {"baseline_ts": ts, "current_step": 5}
+    return {"baseline_ts": ts}

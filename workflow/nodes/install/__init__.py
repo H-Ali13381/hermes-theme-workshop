@@ -3,7 +3,10 @@ from __future__ import annotations
 
 import os
 
-from langgraph.types import interrupt
+try:
+    from langgraph.types import interrupt
+except ImportError:  # LangGraph not installed (e.g. during unit tests)
+    interrupt = None  # type: ignore[assignment]
 
 from ...state import RiceSessionState
 from .resolver import resolve_packages, install_packages, can_sudo_noninteractive
@@ -36,6 +39,10 @@ def install_node(state: RiceSessionState) -> dict:
 
     if decision_str == "skip":
         print("[Step 5] Package installation skipped.\n")
+        return {"packages": packages, "current_step": 5}
+
+    if decision_str != "install":
+        print(f"[Step 5] Unrecognised response '{decision_str}' — skipping installation.\n")
         return {"packages": packages, "current_step": 5}
 
     # Acquire sudo password — 3-tier escalation

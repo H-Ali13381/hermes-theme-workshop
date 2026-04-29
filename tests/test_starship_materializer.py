@@ -1,6 +1,7 @@
 """Unit tests for materialize_starship and _build_starship_toml."""
 from __future__ import annotations
 
+import shutil
 import sys
 import tempfile
 import unittest
@@ -78,17 +79,28 @@ class ThemeNameNormalizationTests(unittest.TestCase):
         toml = _build_starship_toml(_DESIGN["palette"], "my-theme")
         self.assertIn("[palettes.my-theme]", toml)
 
+    # materialize_starship lives in materializers.system; backup_file uses core.backup.BACKUP_DIR
+    _SYS = "materializers.system"
+    _BACK = "core.backup"
+
     def test_materialize_normalizes_design_name(self):
         design = {**_DESIGN, "name": "my theme/name!"}
-        with patch("ricer.HOME", new=Path(tempfile.mkdtemp())):
+        _tmp = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, _tmp, True)
+        with patch(f"{self._SYS}.HOME", new=_tmp):
             changes = materialize_starship(design, backup_ts="20260101_000000", dry_run=True)
         self.assertEqual(len(changes), 1)
         self.assertEqual(changes[0]["action"], "dry-run")
 
 
 class MaterializeStarshipTests(unittest.TestCase):
+    _SYS = "materializers.system"
+    _BACK = "core.backup"
+
     def test_dry_run_returns_single_change_without_writing(self):
-        with patch("ricer.HOME", new=Path(tempfile.mkdtemp())):
+        _tmp = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, _tmp, True)
+        with patch(f"{self._SYS}.HOME", new=_tmp):
             changes = materialize_starship(_DESIGN, backup_ts="20260101_000000", dry_run=True)
 
         self.assertEqual(len(changes), 1)
@@ -98,20 +110,22 @@ class MaterializeStarshipTests(unittest.TestCase):
 
     def test_writes_toml_file(self):
         tmpdir = Path(tempfile.mkdtemp())
-        with patch("ricer.HOME", new=tmpdir), \
-             patch("ricer.BACKUP_DIR", new=tmpdir / ".cache" / "backup"):
+        self.addCleanup(shutil.rmtree, tmpdir, True)
+        with patch(f"{self._SYS}.HOME", new=tmpdir), \
+             patch(f"{self._BACK}.BACKUP_DIR", new=tmpdir / ".cache" / "backup"):
             changes = materialize_starship(_DESIGN, backup_ts="20260101_000000")
 
         config_path = tmpdir / ".config" / "starship.toml"
         self.assertTrue(config_path.exists(), "starship.toml was not created")
-        content = config_path.read_text()
+        content = config_path.read_text(encoding="utf-8")
         self.assertIn('palette = "ghost-blade"', content)
         self.assertIn("[palettes.ghost-blade]", content)
 
     def test_change_record_has_app_path_and_backup_fields(self):
         tmpdir = Path(tempfile.mkdtemp())
-        with patch("ricer.HOME", new=tmpdir), \
-             patch("ricer.BACKUP_DIR", new=tmpdir / ".cache" / "backup"):
+        self.addCleanup(shutil.rmtree, tmpdir, True)
+        with patch(f"{self._SYS}.HOME", new=tmpdir), \
+             patch(f"{self._BACK}.BACKUP_DIR", new=tmpdir / ".cache" / "backup"):
             changes = materialize_starship(_DESIGN, backup_ts="20260101_000000")
 
         self.assertEqual(len(changes), 1)
@@ -124,19 +138,20 @@ class MaterializeStarshipTests(unittest.TestCase):
 
     def test_backup_created_when_existing_config_present(self):
         tmpdir = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, tmpdir, True)
         backup_dir = tmpdir / ".cache" / "backup"
         config_path = tmpdir / ".config" / "starship.toml"
         config_path.parent.mkdir(parents=True, exist_ok=True)
-        config_path.write_text("# old config\n")
+        config_path.write_text("# old config\n", encoding="utf-8")
 
-        with patch("ricer.HOME", new=tmpdir), \
-             patch("ricer.BACKUP_DIR", new=backup_dir):
+        with patch(f"{self._SYS}.HOME", new=tmpdir), \
+             patch(f"{self._BACK}.BACKUP_DIR", new=backup_dir):
             changes = materialize_starship(_DESIGN, backup_ts="20260101_000000")
 
         self.assertIsNotNone(changes[0]["backup"])
         backup_path = Path(changes[0]["backup"])
         self.assertTrue(backup_path.exists())
-        self.assertEqual(backup_path.read_text(), "# old config\n")
+        self.assertEqual(backup_path.read_text(encoding="utf-8"), "# old config\n")
 
 
 if __name__ == "__main__":

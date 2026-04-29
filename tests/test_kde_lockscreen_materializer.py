@@ -1,6 +1,7 @@
 """Unit tests for materialize_kde_lockscreen and _lockscreen_lnf_for_palette."""
 from __future__ import annotations
 
+import shutil
 import sys
 import tempfile
 import unittest
@@ -58,9 +59,19 @@ class LnfSelectionTests(unittest.TestCase):
 
 
 class MaterializeKdeLockscreenTests(unittest.TestCase):
+    # After the modular refactor, materialize_kde_lockscreen lives in
+    # materializers.kde_extras and its helpers in core.{backup,process}.
+    # Patches must target the module where each symbol is actually used.
+    _HOME_PATCH      = "materializers.kde_extras.HOME"
+    _BACKUP_DIR_PATCH = "core.backup.BACKUP_DIR"
+    _CMD_EXISTS_PATCH = "materializers.kde_extras.cmd_exists"
+    _GET_KWRITE_PATCH = "materializers.kde_extras._get_kwrite"
+    _RUN_CMD_PATCH    = "materializers.kde_extras.run_cmd"
+
     def test_dry_run_returns_single_change_without_writing(self):
         tmpdir = Path(tempfile.mkdtemp())
-        with patch("ricer.HOME", new=tmpdir):
+        self.addCleanup(shutil.rmtree, tmpdir, True)
+        with patch(self._HOME_PATCH, new=tmpdir):
             changes = materialize_kde_lockscreen(_DARK_DESIGN, backup_ts="20260101_000000", dry_run=True)
 
         self.assertEqual(len(changes), 1)
@@ -76,11 +87,12 @@ class MaterializeKdeLockscreenTests(unittest.TestCase):
 
     def test_dark_palette_writes_breezedark_theme(self):
         tmpdir = Path(tempfile.mkdtemp())
-        with patch("ricer.HOME", new=tmpdir), \
-             patch("ricer.BACKUP_DIR", new=tmpdir / "backup"), \
-             patch("ricer.cmd_exists", return_value=False), \
-             patch("ricer._get_kwrite", return_value="kwriteconfig6"), \
-             patch("ricer.run_cmd") as mock_run:
+        self.addCleanup(shutil.rmtree, tmpdir, True)
+        with patch(self._HOME_PATCH, new=tmpdir), \
+             patch(self._BACKUP_DIR_PATCH, new=tmpdir / "backup"), \
+             patch(self._CMD_EXISTS_PATCH, return_value=False), \
+             patch(self._GET_KWRITE_PATCH, return_value="kwriteconfig6"), \
+             patch(self._RUN_CMD_PATCH) as mock_run:
             mock_run.return_value = (0, "", "")
             changes = materialize_kde_lockscreen(_DARK_DESIGN, backup_ts="20260101_000000")
 
@@ -103,11 +115,12 @@ class MaterializeKdeLockscreenTests(unittest.TestCase):
 
     def test_light_palette_writes_breeze_theme(self):
         tmpdir = Path(tempfile.mkdtemp())
-        with patch("ricer.HOME", new=tmpdir), \
-             patch("ricer.BACKUP_DIR", new=tmpdir / "backup"), \
-             patch("ricer.cmd_exists", return_value=False), \
-             patch("ricer._get_kwrite", return_value="kwriteconfig6"), \
-             patch("ricer.run_cmd") as mock_run:
+        self.addCleanup(shutil.rmtree, tmpdir, True)
+        with patch(self._HOME_PATCH, new=tmpdir), \
+             patch(self._BACKUP_DIR_PATCH, new=tmpdir / "backup"), \
+             patch(self._CMD_EXISTS_PATCH, return_value=False), \
+             patch(self._GET_KWRITE_PATCH, return_value="kwriteconfig6"), \
+             patch(self._RUN_CMD_PATCH) as mock_run:
             mock_run.return_value = (0, "", "")
             changes = materialize_kde_lockscreen(_LIGHT_DESIGN, backup_ts="20260101_000000")
 
@@ -118,11 +131,12 @@ class MaterializeKdeLockscreenTests(unittest.TestCase):
 
     def test_change_record_has_all_required_fields(self):
         tmpdir = Path(tempfile.mkdtemp())
-        with patch("ricer.HOME", new=tmpdir), \
-             patch("ricer.BACKUP_DIR", new=tmpdir / "backup"), \
-             patch("ricer.cmd_exists", return_value=False), \
-             patch("ricer._get_kwrite", return_value=None), \
-             patch("ricer.run_cmd", return_value=(0, "", "")):
+        self.addCleanup(shutil.rmtree, tmpdir, True)
+        with patch(self._HOME_PATCH, new=tmpdir), \
+             patch(self._BACKUP_DIR_PATCH, new=tmpdir / "backup"), \
+             patch(self._CMD_EXISTS_PATCH, return_value=False), \
+             patch(self._GET_KWRITE_PATCH, return_value=None), \
+             patch(self._RUN_CMD_PATCH, return_value=(0, "", "")):
             changes = materialize_kde_lockscreen(_DARK_DESIGN, backup_ts="20260101_000000")
 
         change = changes[0]
@@ -131,39 +145,41 @@ class MaterializeKdeLockscreenTests(unittest.TestCase):
 
     def test_previous_theme_captured_when_kreadconfig_succeeds(self):
         tmpdir = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, tmpdir, True)
 
         def fake_run_cmd(cmd, **_):
             if "kreadconfig6" in cmd[0]:
                 return (0, "org.kde.breeze.desktop", "")
             return (0, "", "")
 
-        with patch("ricer.HOME", new=tmpdir), \
-             patch("ricer.BACKUP_DIR", new=tmpdir / "backup"), \
-             patch("ricer.cmd_exists", return_value=True), \
-             patch("ricer._get_kwrite", return_value=None), \
-             patch("ricer.run_cmd", side_effect=fake_run_cmd):
+        with patch(self._HOME_PATCH, new=tmpdir), \
+             patch(self._BACKUP_DIR_PATCH, new=tmpdir / "backup"), \
+             patch(self._CMD_EXISTS_PATCH, return_value=True), \
+             patch(self._GET_KWRITE_PATCH, return_value=None), \
+             patch(self._RUN_CMD_PATCH, side_effect=fake_run_cmd):
             changes = materialize_kde_lockscreen(_DARK_DESIGN, backup_ts="20260101_000000")
 
         self.assertEqual(changes[0]["previous_theme"], "org.kde.breeze.desktop")
 
     def test_backup_created_when_kscreenlockerrc_exists(self):
         tmpdir = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, tmpdir, True)
         backup_dir = tmpdir / "backup"
         config_path = tmpdir / ".config" / "kscreenlockerrc"
         config_path.parent.mkdir(parents=True, exist_ok=True)
-        config_path.write_text("[Daemon]\nTimeout=15\n")
+        config_path.write_text("[Daemon]\nTimeout=15\n", encoding="utf-8")
 
-        with patch("ricer.HOME", new=tmpdir), \
-             patch("ricer.BACKUP_DIR", new=backup_dir), \
-             patch("ricer.cmd_exists", return_value=False), \
-             patch("ricer._get_kwrite", return_value=None), \
-             patch("ricer.run_cmd", return_value=(0, "", "")):
+        with patch(self._HOME_PATCH, new=tmpdir), \
+             patch(self._BACKUP_DIR_PATCH, new=backup_dir), \
+             patch(self._CMD_EXISTS_PATCH, return_value=False), \
+             patch(self._GET_KWRITE_PATCH, return_value=None), \
+             patch(self._RUN_CMD_PATCH, return_value=(0, "", "")):
             changes = materialize_kde_lockscreen(_DARK_DESIGN, backup_ts="20260101_000000")
 
         self.assertIsNotNone(changes[0]["backup"])
         backup_path = Path(changes[0]["backup"])
         self.assertTrue(backup_path.exists())
-        self.assertIn("Timeout", backup_path.read_text())
+        self.assertIn("Timeout", backup_path.read_text(encoding="utf-8"))
 
 
 class RoutingTests(unittest.TestCase):
@@ -185,6 +201,18 @@ class RoutingTests(unittest.TestCase):
 
     def test_terminal_kitty_unchanged(self):
         self.assertEqual(self._map("terminal:kitty"), "kitty")
+
+    def test_window_decorations_gnome_maps_to_gnome_shell(self):
+        self.assertEqual(self._map("window_decorations:gnome"), "gnome_shell")
+
+    def test_lock_screen_gnome_maps_to_gnome_lockscreen(self):
+        self.assertEqual(self._map("lock_screen:gnome"), "gnome_lockscreen")
+
+    def test_window_decorations_gnome_does_not_map_to_gnome(self):
+        self.assertNotEqual(self._map("window_decorations:gnome"), "gnome")
+
+    def test_lock_screen_gnome_does_not_map_to_gnome(self):
+        self.assertNotEqual(self._map("lock_screen:gnome"), "gnome")
 
 
 if __name__ == "__main__":

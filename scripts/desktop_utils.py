@@ -16,11 +16,20 @@ def discover_desktop() -> dict[str, Any]:
     """Detect what DE/WM/compositor is running.
 
     Returns a dict with keys:
-        wm           — one of: kde, hyprland, sway, i3, bspwm, awesome, qtile, unknown
+        wm           — one of: kde, gnome, hyprland, sway, i3, bspwm, awesome,
+                       qtile, unknown
         session_type — wayland | x11 | unknown
-        desktop_env  — raw XDG_CURRENT_DESKTOP value (lowercased)
+        desktop_env  — XDG_CURRENT_DESKTOP (or DESKTOP_SESSION) value, lowercased
+
+    This is the single source of truth used by both the scripts layer
+    (ricer.py, desktop_state_audit.py) and the workflow layer
+    (workflow/nodes/audit/detectors.py:detect_wm).
     """
+    # Primary env var; fall back to DESKTOP_SESSION when XDG_CURRENT_DESKTOP is unset.
     desktop = os.environ.get("XDG_CURRENT_DESKTOP", "").lower()
+    if not desktop:
+        desktop = os.environ.get("DESKTOP_SESSION", "").lower()
+
     wayland_display = os.environ.get("WAYLAND_DISPLAY", "")
     display = os.environ.get("DISPLAY", "")
 
@@ -39,6 +48,8 @@ def discover_desktop() -> dict[str, Any]:
     wm = "unknown"
     if "plasmashell" in proc_lower or "kwin" in proc_lower:
         wm = "kde"
+    elif "gnome-shell" in proc_lower:
+        wm = "gnome"
     elif "hyprland" in proc_lower:
         wm = "hyprland"
     elif "sway" in proc_lower:
@@ -52,9 +63,14 @@ def discover_desktop() -> dict[str, Any]:
     elif "qtile" in proc_lower:
         wm = "qtile"
 
-    # XDG fallback for KDE when plasmashell/kwin aren't in ps output
-    if wm == "unknown" and ("kde" in desktop or "plasma" in desktop):
-        wm = "kde"
+    # XDG/session fallback when ps scan found nothing (e.g. nested session, CI).
+    if wm == "unknown":
+        if "kde" in desktop or "plasma" in desktop:
+            wm = "kde"
+        elif "gnome" in desktop:
+            wm = "gnome"
+        elif "hypr" in desktop:
+            wm = "hyprland"
 
     return {
         "wm": wm,
