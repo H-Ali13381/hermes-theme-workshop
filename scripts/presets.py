@@ -4,6 +4,8 @@ Each preset is a fully-specified design dict ready to pass to materialize().
 """
 
 PRESETS: dict[str, dict] = {
+    # Palette by the Catppuccin org — MIT License
+    # https://github.com/catppuccin/catppuccin
     "catppuccin-mocha": {
         "name": "catppuccin-mocha",
         "description": "Soothing pastel dark theme.",
@@ -19,6 +21,8 @@ PRESETS: dict[str, dict] = {
         "gtk_theme": "Adwaita-dark",
         "mood_tags": ["pastel", "dark", "cozy"],
     },
+    # Palette by Sven Greb (Arctic Ice Studio) — MIT License
+    # https://github.com/nordtheme/nord
     "nord": {
         "name": "nord",
         "description": "Arctic, north-bluish color palette.",
@@ -35,6 +39,8 @@ PRESETS: dict[str, dict] = {
         "gtk_theme": "Adwaita-dark",
         "mood_tags": ["arctic", "blue", "flat"],
     },
+    # Palette by morhetz — MIT License
+    # https://github.com/morhetz/gruvbox
     "gruvbox-dark": {
         "name": "gruvbox-dark",
         "description": "Retro groove dark colors.",
@@ -51,6 +57,8 @@ PRESETS: dict[str, dict] = {
         "gtk_theme": "Adwaita-dark",
         "mood_tags": ["retro", "warm", "sepia"],
     },
+    # Palette by Zeno Rocha — MIT License
+    # https://github.com/dracula/dracula-theme
     "dracula": {
         "name": "dracula",
         "description": "Dark theme with vibrant colors.",
@@ -66,6 +74,8 @@ PRESETS: dict[str, dict] = {
         "gtk_theme": "Adwaita-dark",
         "mood_tags": ["dark", "neon", "purple"],
     },
+    # Palette by Enkia — MIT License
+    # https://github.com/enkia/tokyo-night-vscode-theme
     "tokyo-night": {
         "name": "tokyo-night",
         "description": "A dark and clean theme inspired by the lights of Tokyo at night.",
@@ -81,6 +91,8 @@ PRESETS: dict[str, dict] = {
         "gtk_theme": "Adwaita-dark",
         "mood_tags": ["cyberpunk", "blue", "neon"],
     },
+    # Palette by mvllow — MIT License
+    # https://github.com/rose-pine/rose-pine-theme
     "rose-pine": {
         "name": "rose-pine",
         "description": "All natural pine, faux fur and a bit of soho vibes.",
@@ -97,6 +109,8 @@ PRESETS: dict[str, dict] = {
         "gtk_theme": "Adwaita-dark",
         "mood_tags": ["soft", "pastel", "nature"],
     },
+    # Palette by Ethan Schoonover — MIT License
+    # https://github.com/altercation/solarized
     "solarized-dark": {
         "name": "solarized-dark",
         "description": "Precision colors for machines and people.",
