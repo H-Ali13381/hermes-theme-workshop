@@ -36,9 +36,17 @@ _BACKUP_KEYS = ("backup", "backup_profile", "backup_colors",
 
 
 def _restore_destination(change: dict, backup_key: str) -> Path | None:
-    """Return the live file path for a manifest backup key."""
-    if backup_key == "backup" and "path" in change:
-        return Path(change["path"])
+    """Return the live file path for a manifest backup key.
+
+    For the generic "backup" key, materializers may record the destination
+    under either "path" (most apps) or "config_path" (kde_lockscreen, kvantum,
+    lnf, …).  Both are accepted so file-restore is not silently skipped.
+    """
+    if backup_key == "backup":
+        if "path" in change:
+            return Path(change["path"])
+        if "config_path" in change:
+            return Path(change["config_path"])
     if backup_key == "backup_profile" and "profile_path" in change:
         return Path(change["profile_path"])
     if backup_key == "backup_colors" and "color_scheme_path" in change:
@@ -53,8 +61,11 @@ def _restore_destination(change: dict, backup_key: str) -> Path | None:
     return None
 
 
-def _restore_backed_up_files(change: dict, restored: list, failed: list) -> None:
-    """Restore any backed-up files referenced in a change record."""
+def _iter_change_artifacts(change: dict):
+    """Yield (app, dest_path, has_backup) for every backup-tracked write
+    in a change record.  ``has_backup`` is False when the backup file does
+    not exist and the destination would be deleted on undo.
+    """
     app = change.get("app", "unknown")
     for backup_key in _BACKUP_KEYS:
         if backup_key not in change:
@@ -63,21 +74,65 @@ def _restore_backed_up_files(change: dict, restored: list, failed: list) -> None
         dest = _restore_destination(change, backup_key)
         if dest is None:
             continue
-        if bp and Path(bp).exists():
+        yield app, dest, bool(bp and Path(bp).exists())
+
+
+def collect_deletable_artifacts(manifest_path: Path) -> list[dict]:
+    """Return a list of {app, path} entries that ``undo()`` would delete.
+
+    A path is "deletable" when the backup is missing (the file was created
+    fresh during apply, with no prior version to restore).  Only existing
+    files are reported — already-absent paths are skipped.  Used by the CLI
+    to surface destructive operations before invoking ``undo()``.
+    """
+    try:
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return []
+    if manifest.get("dry_run") or manifest.get("undone"):
+        return []
+    out: list[dict] = []
+    for change in manifest.get("changes", []):
+        if change.get("action") == "error":
+            continue
+        for app, dest, has_backup in _iter_change_artifacts(change):
+            if not has_backup and dest.exists():
+                out.append({"app": app, "path": str(dest)})
+    return out
+
+
+def _restore_backed_up_files(change: dict, restored: list, failed: list,
+                             delete_artifacts: bool = True) -> None:
+    """Restore any backed-up files referenced in a change record.
+
+    When ``delete_artifacts`` is False, files whose backup is missing are
+    left in place (instead of being deleted) and reported under
+    ``restored`` with a ``kept`` field.  Used by the CLI to honour a user
+    declining the deletion prompt.
+    """
+    for app, dest, has_backup in _iter_change_artifacts(change):
+        # Re-derive the backup path the same way _iter_change_artifacts did.
+        bp = next((change[k] for k in _BACKUP_KEYS
+                   if k in change and _restore_destination(change, k) == dest), None)
+        if has_backup:
             try:
                 shutil.copy2(bp, dest)
                 restored.append({"app": app, "restored": str(dest), "from": bp})
             except (OSError, shutil.Error) as e:
                 failed.append({"app": app, "path": str(dest), "error": str(e)})
         else:
-            # Backup gone — delete the file we created
-            if dest.exists():
-                try:
-                    dest.unlink()
-                    restored.append({"app": app, "deleted": str(dest),
-                                     "note": "no backup existed — file was new, deleted"})
-                except OSError as e:
-                    failed.append({"app": app, "path": str(dest), "error": str(e)})
+            if not dest.exists():
+                continue
+            if not delete_artifacts:
+                restored.append({"app": app, "kept": str(dest),
+                                 "note": "no backup existed — file kept (user declined deletion)"})
+                continue
+            try:
+                dest.unlink()
+                restored.append({"app": app, "deleted": str(dest),
+                                 "note": "no backup existed — file was new, deleted"})
+            except OSError as e:
+                failed.append({"app": app, "path": str(dest), "error": str(e)})
 
 
 def _undo_injections(change: dict, restored: list, skipped: list) -> None:
@@ -193,17 +248,30 @@ def _undo_icon_theme(change: dict, restored: list, failed: list, skipped: list) 
 
 
 def _undo_kde_lockscreen(change: dict, restored: list, failed: list, skipped: list) -> None:
-    # The generic file-backup loop skips kde_lockscreen (uses "config_path" not "path");
-    # this handler is the authoritative restore path.
+    # Belt-and-suspenders: the generic file-restore loop reverts kscreenlockerrc
+    # via the 'config_path' fallback when a backup is present, but this handler
+    # also rewrites Greeter/Theme and the Wallpaper Image key directly so a
+    # missing/empty backup doesn't leave the new values in place.
     if change.get("action") != "write":
         return
-    prev = change.get("previous_theme")
-    kwrite = _get_kwrite()
+    prev    = change.get("previous_theme")
+    prev_wp = change.get("previous_wallpaper")
+    new_wp  = change.get("wallpaper")
+    kwrite  = _get_kwrite()
     if prev and kwrite:
         run_cmd([kwrite, "--file", "kscreenlockerrc", "--group", "Greeter", "--key", "Theme", prev])
         restored.append({"app": "kde_lockscreen", "action": "restored", "theme": prev})
     elif not prev:
         skipped.append({"app": "kde_lockscreen", "note": "no previous lock screen theme recorded"})
+    if kwrite and new_wp is not None:
+        wp_group = ["--group", "Greeter", "--group", "Wallpaper",
+                    "--group", "org.kde.image", "--group", "General"]
+        if prev_wp:
+            run_cmd([kwrite, "--file", "kscreenlockerrc", *wp_group, "--key", "Image", prev_wp])
+            restored.append({"app": "kde_lockscreen", "action": "restored_wallpaper", "path": prev_wp})
+        else:
+            run_cmd([kwrite, "--file", "kscreenlockerrc", *wp_group, "--key", "Image", "--delete"])
+            restored.append({"app": "kde_lockscreen", "action": "cleared_wallpaper"})
 
 
 # method string → binary to check; command is built as method.split() + [prev_path]
@@ -292,7 +360,8 @@ _APP_UNDO_HANDLERS: dict[str, object] = {
 # ROLLBACK ENTRY POINT
 # ---------------------------------------------------------------------------
 
-def undo(manifest_path: Path | None = None) -> dict:
+def undo(manifest_path: Path | None = None,
+         delete_artifacts: bool = True) -> dict:
     """Undo a single materialization manifest.
 
     Defaults to the active manifest at ``CURRENT_DIR/manifest.json``; pass an
@@ -304,6 +373,10 @@ def undo(manifest_path: Path | None = None) -> dict:
       injected lines using the stored marker (even if backup already restored
       the file — belt-and-suspenders).
     - For KDE: re-apply the previous colorscheme via plasma-apply-colorscheme.
+
+    When ``delete_artifacts`` is False, files written without a backup
+    (i.e. created fresh during apply) are kept on disk instead of deleted.
+    Use :func:`collect_deletable_artifacts` to preview what would be removed.
     """
     if manifest_path is None:
         manifest_path = CURRENT_DIR / "manifest.json"
@@ -325,7 +398,8 @@ def undo(manifest_path: Path | None = None) -> dict:
     for change in manifest.get("changes", []):
         if change.get("action") == "error":
             continue
-        _restore_backed_up_files(change, restored, failed)
+        _restore_backed_up_files(change, restored, failed,
+                                 delete_artifacts=delete_artifacts)
         _undo_injections(change, restored, skipped)
         handler = _APP_UNDO_HANDLERS.get(change.get("app", ""))
         if handler:
@@ -393,7 +467,8 @@ def _active_theme_name() -> str | None:
     return data.get("design_system", {}).get("name")
 
 
-def undo_session(all_history: bool = False) -> dict:
+def undo_session(all_history: bool = False,
+                 delete_artifacts: bool = True) -> dict:
     """Roll back every manifest of the current session, newest→oldest.
 
     By default scopes to the active session's theme (matches
@@ -405,6 +480,8 @@ def undo_session(all_history: bool = False) -> dict:
     timestamp order, calling :func:`undo` on each. Manifests that are already
     undone or were dry-runs are skipped silently. Each step's restore output
     is preserved in ``per_manifest`` for auditing.
+
+    ``delete_artifacts`` is forwarded to :func:`undo` for every manifest.
     """
     theme = None if all_history else _active_theme_name()
     manifests = _collect_session_manifests(theme)
@@ -419,7 +496,7 @@ def undo_session(all_history: bool = False) -> dict:
     skipped        = 0
 
     for mp in manifests:
-        result = undo(mp)
+        result = undo(mp, delete_artifacts=delete_artifacts)
         per_manifest.append(result)
         if result.get("status") == "skipped":
             skipped += 1

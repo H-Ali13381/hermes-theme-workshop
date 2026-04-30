@@ -53,7 +53,43 @@ from presets import PRESETS, load_preset                   # noqa: E402
 # ── undo / rollback ───────────────────────────────────────────────────────────
 from ricer_undo import (                                   # noqa: E402
     undo, undo_session, simulate_undo_session, _describe_change,
+    collect_deletable_artifacts, _collect_session_manifests, _active_theme_name,
 )
+
+
+def _confirm_artifact_deletion(manifest_paths: list, assume_yes: bool) -> bool:
+    """Show files that undo would delete and prompt the user (unless --yes).
+
+    Returns True if undo should proceed with deletion, False to keep
+    artifacts on disk.  Returns True with no prompt when nothing would be
+    deleted, when --yes is set, or when stdin is not a TTY (non-interactive
+    runs default to deletion to match prior behaviour).
+    """
+    artifacts: list[dict] = []
+    for mp in manifest_paths:
+        for a in collect_deletable_artifacts(mp):
+            artifacts.append({**a, "manifest": str(mp)})
+    if not artifacts:
+        return True
+    if assume_yes:
+        return True
+    print("\nThe following generated files will be DELETED on undo "
+          "(no backup exists, so they cannot be restored):", file=sys.stderr)
+    for a in artifacts:
+        print(f"  [{a['app']:>14s}] {a['path']}", file=sys.stderr)
+    print(f"\n{len(artifacts)} file(s) will be removed. "
+          "Pass --keep-artifacts to leave them in place.", file=sys.stderr)
+    if not sys.stdin.isatty():
+        print("(non-interactive stdin: defaulting to delete; "
+              "use --yes to silence or --keep-artifacts to preserve)",
+              file=sys.stderr)
+        return True
+    try:
+        ans = input("Proceed with deletion? [y/N]: ").strip().lower()
+    except (EOFError, KeyboardInterrupt):
+        print("\nAborted.", file=sys.stderr)
+        return False
+    return ans in ("y", "yes")
 
 # ---------------------------------------------------------------------------
 # ORCHESTRATOR
@@ -145,9 +181,17 @@ def main():
     extract_parser.add_argument("--out", default=None, help="Write JSON here (default: stdout)")
     extract_parser.add_argument("--name", default=None, help="Theme name (default: image stem)")
 
-    subparsers.add_parser("undo", help="Undo last theme application")
+    undo_p = subparsers.add_parser("undo", help="Undo last theme application")
+    undo_p.add_argument("-y", "--yes", action="store_true",
+                        help="Skip the artifact-deletion confirmation prompt")
+    undo_p.add_argument("--keep-artifacts", action="store_true",
+                        help="Restore backed-up files but keep generated artifacts (no-backup files) on disk")
     undo_session_p = subparsers.add_parser("undo-session", help="Roll back every apply of the current session (active manifest + history)")
     undo_session_p.add_argument("--all", action="store_true", help="Walk every manifest in history regardless of theme (default: scope to active session's theme)")
+    undo_session_p.add_argument("-y", "--yes", action="store_true",
+                                help="Skip the artifact-deletion confirmation prompt")
+    undo_session_p.add_argument("--keep-artifacts", action="store_true",
+                                help="Restore backed-up files but keep generated artifacts (no-backup files) on disk")
     subparsers.add_parser("status", help="Show detected stack and active theme")
     subparsers.add_parser("presets", help="List available presets")
     subparsers.add_parser("simulate-undo", help="Show exactly what undo would restore, without applying anything")
@@ -258,7 +302,10 @@ def main():
         return
 
     if args.command == "undo":
-        result = undo()
+        delete = not args.keep_artifacts
+        if delete:
+            delete = _confirm_artifact_deletion([CURRENT_DIR / "manifest.json"], args.yes)
+        result = undo(delete_artifacts=delete)
         print(json.dumps(result, indent=2, default=str))
         if result["status"] == "success":
             print("\nUndo complete.", file=sys.stderr)
@@ -289,7 +336,12 @@ def main():
         return
 
     if args.command == "undo-session":
-        result = undo_session(all_history=args.all)
+        delete = not args.keep_artifacts
+        if delete:
+            theme = None if args.all else _active_theme_name()
+            session_manifests = _collect_session_manifests(theme)
+            delete = _confirm_artifact_deletion(session_manifests, args.yes)
+        result = undo_session(all_history=args.all, delete_artifacts=delete)
         print(json.dumps(result, indent=2, default=str))
         if result.get("status") == "success":
             print(f"\nSession rollback complete — {result.get('manifests_executed', 0)} "

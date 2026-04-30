@@ -107,6 +107,78 @@ class TestUndoKde(unittest.TestCase):
         result, _, _ = self._undo([{"app": "kde_lockscreen", "action": "write", "previous_theme": None}])
         self.assertIn("kde_lockscreen", [s.get("app") for s in result.get("skipped", [])])
 
+    def test_lockscreen_wallpaper_restored_when_previous_recorded(self):
+        result, calls, _ = self._undo([
+            {"app": "kde_lockscreen", "action": "write",
+             "previous_theme": "org.kde.breezedark.desktop",
+             "wallpaper": "/new/lock.png",
+             "previous_wallpaper": "file:///old/lock.png"},
+        ])
+        wp = [c for c in calls if "kwriteconfig6" in c and "Image" in c]
+        self.assertTrue(wp, f"no Image kwriteconfig6 call; calls={calls}")
+        self.assertIn("file:///old/lock.png", wp[0])
+        self.assertNotIn("--delete", wp[0])
+        actions = [r.get("action") for r in result.get("restored", [])]
+        self.assertIn("restored_wallpaper", actions)
+
+    def test_lockscreen_wallpaper_cleared_when_no_previous_recorded(self):
+        result, calls, _ = self._undo([
+            {"app": "kde_lockscreen", "action": "write",
+             "previous_theme": "org.kde.breezedark.desktop",
+             "wallpaper": "/new/lock.png",
+             "previous_wallpaper": None},
+        ])
+        wp = [c for c in calls if "kwriteconfig6" in c and "Image" in c]
+        self.assertTrue(wp, f"no Image kwriteconfig6 call; calls={calls}")
+        self.assertIn("--delete", wp[0])
+        actions = [r.get("action") for r in result.get("restored", [])]
+        self.assertIn("cleared_wallpaper", actions)
+
+    def test_lockscreen_wallpaper_untouched_when_apply_did_not_set_one(self):
+        _, calls, _ = self._undo([
+            {"app": "kde_lockscreen", "action": "write",
+             "previous_theme": "org.kde.breezedark.desktop"},
+        ])
+        wp = [c for c in calls if "kwriteconfig6" in c and "Image" in c]
+        self.assertFalse(wp, f"unexpected Image kwriteconfig6 call: {wp}")
+
+    def test_lockscreen_file_restored_from_backup_via_config_path(self):
+        """kde_lockscreen records destination as 'config_path' (not 'path').
+
+        The generic file-restore loop must resolve 'config_path' for the
+        'backup' key, otherwise the kscreenlockerrc Wallpaper subgroup keys
+        (Image, FillMode, WallpaperPlugin) are left in place even though a
+        backup exists — only the Greeter/Theme key gets rewritten by the
+        per-app handler.
+        """
+        with tempfile.TemporaryDirectory() as tmp:
+            manifest_path = Path(tmp) / "manifest.json"
+            kscreenlockerrc = Path(tmp) / "kscreenlockerrc"
+            backup = Path(tmp) / "backup_kscreenlockerrc"
+            backup.write_text(
+                "[Greeter]\nTheme=org.kde.breezedark.desktop\n"
+                "[Greeter][Wallpaper][org.kde.image][General]\n"
+                "Image=file:///old/wallpaper.png\n",
+                encoding="utf-8")
+            kscreenlockerrc.write_text(
+                "[Greeter]\nTheme=org.kde.breezedark.desktop\nWallpaperPlugin=org.kde.image\n"
+                "[Greeter][Wallpaper][org.kde.image][General]\n"
+                "FillMode=2\nImage=file:///new/wallpaper.png\n",
+                encoding="utf-8")
+            _write_manifest(manifest_path, [{
+                "app": "kde_lockscreen", "action": "write",
+                "config_path": str(kscreenlockerrc),
+                "backup": str(backup),
+                "previous_theme": "org.kde.breezedark.desktop",
+            }])
+            with patch.object(ricer_undo, "CURRENT_DIR", Path(tmp)):
+                result = ricer_undo.undo()
+            self.assertEqual(result["status"], "success")
+            self.assertEqual(kscreenlockerrc.read_text(encoding="utf-8"),
+                             backup.read_text(encoding="utf-8"))
+            restored_paths = [r.get("restored") for r in result.get("restored", [])]
+            self.assertIn(str(kscreenlockerrc), restored_paths)
+
     def test_manifest_marked_undone(self):
         result, _, manifest = self._undo([])
         self.assertTrue(manifest.get("undone"))
