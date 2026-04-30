@@ -79,9 +79,9 @@ def adjust_lightness(hex_color: str, factor: float) -> str:
     Clamps to [0.0, 1.0].  Preserves hue and saturation.
     """
     r, g, b = hex_to_rgb_tuple(hex_color)
-    h, l, s = colorsys.rgb_to_hls(r / 255, g / 255, b / 255)
-    l = max(0.0, min(1.0, l * factor))
-    nr, ng, nb = colorsys.hls_to_rgb(h, l, s)
+    h, lightness, s = colorsys.rgb_to_hls(r / 255, g / 255, b / 255)
+    lightness = max(0.0, min(1.0, lightness * factor))
+    nr, ng, nb = colorsys.hls_to_rgb(h, lightness, s)
     return rgb_tuple_to_hex(int(nr * 255), int(ng * 255), int(nb * 255))
 
 

@@ -25,7 +25,7 @@ def baseline_node(state: RiceSessionState) -> dict:
     if session_dir:
         cmd += ["--output", f"{session_dir}/baseline_{ts}.json"]
 
-    result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
+    result = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", timeout=30)
 
     if result.returncode != 0:
         print(f"  [WARN] Baseline capture exited {result.returncode}: {result.stderr[:200]}")

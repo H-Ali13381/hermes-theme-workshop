@@ -28,7 +28,7 @@ def cmd_exists(name: str) -> bool:
 
 
 def run_cmd(cmd: list[str], timeout: int = 30, check: bool = True) -> subprocess.CompletedProcess:
-    result = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
+    result = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", timeout=timeout)
     if check and result.returncode != 0:
         raise RuntimeError(
             f"Command failed ({result.returncode}): {' '.join(cmd)}\n"

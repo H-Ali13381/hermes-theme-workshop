@@ -82,7 +82,7 @@ def _query_workflow_sessions() -> list[dict]:
     try:
         result = subprocess.run(
             [sys.executable, str(WORKFLOW_RUN_PY), "--list", "--json"],
-            capture_output=True, text=True, timeout=15,
+            capture_output=True, text=True, encoding="utf-8", timeout=15,
         )
     except Exception as e:
         print(f"[session_manager] Warning: could not query workflow sessions: {e}", file=sys.stderr)

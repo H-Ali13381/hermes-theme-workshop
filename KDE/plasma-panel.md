@@ -76,8 +76,55 @@ If the Step 4 preview specifies a panel that the Plasma theme SVG renderer canno
 
 The decision is the user's. The agent's job is to surface it — not to silently pick option 1 and call it done. Whichever is chosen, log it via `append-item` (e.g. `panel: accepted-deviation: preview shows photo texture; using flat Plasma SVG (user OK)`).
 
+## Common Panel Layout Patterns
+
+Panel layout is configured via the Plasma desktop GUI, not via config files. These patterns are the most common in riced setups:
+
+**Pattern 1 — Floating bottom dock + minimal top bar**
+- Bottom panel: floating, centered, app launchers only. Add spacers on both sides of the app icons to center them; set a maximum width to keep it compact.
+- Top panel: full-width, no float. Contains: app launcher button (left), spacer, system tray + clock (right). Remove or hide the taskbar from the top bar.
+- System tray: hide all icons except network, volume, battery. Disable notification badges for low-priority apps. This is the most common "clean" KDE layout.
+
+**Pattern 2 — Single full-width top bar (waybar-style)**
+- One panel at top, full width, not floating.
+- Left: app menu / workspace switcher. Center: clock. Right: tray.
+- Matches Waybar layouts 1:1 — good when the design was originally made for Hyprland.
+
+**Pattern 2.5 — Floating panel + Panel Colorizer (Latte replacement)**
+Latte Dock is **broken on Plasma 6** and no longer maintained. The native replacement for its blur/transparency/gradient features is the **Panel Colorizer** widget:
+
+```bash
+yay -S plasma-panel-colorizer
+```
+
+Add it to any panel in Edit Mode → Add Widgets → Panel Colorizer. It provides per-panel:
+- Background color with opacity control
+- Gradient backgrounds
+- Blur behind panel (without needing a custom SVG theme)
+- Custom border radius
+
+This is the recommended approach for achieving a glass/frosted panel on Plasma 6 without writing SVG files.
+
+**Pattern 3 — No native panel (EWW replacement)**
+- Hide or auto-hide all Plasma panels.
+- Use EWW overlays for bar and any panels (see `KDE/widgets.md` §4).
+- Retains full Plasma session (notifications, tray daemons) while replacing the visual chrome entirely.
+
+## System Tray Cleanup
+
+Reducing system tray icon count significantly improves visual coherence. In the system tray settings (right-click tray → Configure System Tray):
+- Set most entries to **"Always hidden"** — only show what matters to the rice
+- Keep visible: network manager, volume, battery (if laptop)
+- Hide: bluetooth (unless actively used), printer, device notifier, updates
+- Disable "extra items" category entirely if not needed
+
+A cluttered tray visually undermines even a well-themed panel.
+
 ## Pitfalls
 
 - **SVGs with wrong element IDs are silently ignored.** KDE will not error — the panel will use its fallback theme.
 - **Cannot embed textures** via `<pattern>` or base64 `data:` URI — Qt silently ignores both.
 - **`plasma-apply-desktoptheme` requires** the theme directory to exist under `~/.local/share/plasma/desktoptheme/` or `/usr/share/plasma/desktoptheme/`.
+- **Spacer vs fixed-width spacer:** use a regular spacer (expands to fill) to center content, but a fixed-width spacer for precise gaps. Using two regular spacers on either side of a widget centers it.
+- **Latte Dock is broken on Plasma 6.** Do not attempt to install or use it on Plasma 6. Use the native floating panel + Panel Colorizer widget instead.
+- **Aurorae window decorations** are SVG-based (no compilation needed) and can be generated the same way as Plasma SVG themes. Install to `~/.local/share/aurorae/themes/<name>/` and select in System Settings → Window Decorations. The library key for Aurorae in kwinrc is `org.kde.kwin.aurorae`.

@@ -5,7 +5,7 @@ they invoke `ricer apply` and `ricer undo` on the real desktop. They're
 kept separate from the unit tests and must be opted into:
 
     cd ~/.hermes/skills/creative/linux-ricing
-    python3 -m unittest tests.test_bug_reproducers -v
+    LINUX_RICING_LIVE=1 python3 -m unittest tests.test_bug_reproducers -v
 
 Each test asserts the INVARIANT the bug violates. Every test should FAIL
 against the current code (reproducing the bug) and PASS once the matching
@@ -76,6 +76,8 @@ class LiveBugReproducers(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
+        if os.environ.get("LINUX_RICING_LIVE") != "1":
+            raise unittest.SkipTest("set LINUX_RICING_LIVE=1 to run live desktop mutation tests")
         if not kde_available():
             raise unittest.SkipTest("KDE Plasma not detected in environment")
         if not Path(RICER).exists():

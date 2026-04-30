@@ -125,7 +125,7 @@ def raise_window_by_title(title_substring: str) -> None:
     script_path.write_text(kwin_script, encoding="utf-8")
     result = subprocess.run(
         ["qdbus6", "org.kde.KWin", "/Scripting", "org.kde.kwin.Scripting.loadScript", str(script_path), "hermes_raise"],
-        capture_output=True, text=True, timeout=10,
+        capture_output=True, text=True, encoding="utf-8", timeout=10,
     )
     script_id = result.stdout.strip()
     if script_id:

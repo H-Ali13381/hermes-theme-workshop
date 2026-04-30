@@ -7,6 +7,7 @@ from materializers.kde_extras import (
     materialize_cursor,
     materialize_icon_theme,
     materialize_kde_lockscreen,
+    materialize_lnf,
     _lockscreen_lnf_for_palette,
 )
 from materializers.terminals import materialize_kitty, materialize_alacritty, materialize_konsole
@@ -23,15 +24,20 @@ from materializers.system import (
 )
 from materializers.gnome import materialize_gnome_shell, materialize_gnome_lockscreen
 from materializers.wallpaper import materialize_wallpaper
+from materializers.widgets import materialize_eww
 
 APP_MATERIALIZERS = {
-    # KDE stack
+    # KDE stack — order matters:
+    # lnf runs first to apply the Look-and-Feel base (sets widgetStyle, ColorScheme, etc.).
+    # kvantum runs last among KDE sub-systems so its kvconfig write is never overwritten
+    # by plasma-apply-lookandfeel triggering a Kvantum re-initialisation.
     "kde":            materialize_kde,
-    "kvantum":        materialize_kvantum,
+    "lnf":            materialize_lnf,
     "plasma_theme":   materialize_plasma_theme,
     "cursor":         materialize_cursor,
     "icon_theme":     materialize_icon_theme,
     "kde_lockscreen": materialize_kde_lockscreen,
+    "kvantum":        materialize_kvantum,
     # Terminals
     "kitty":     materialize_kitty,
     "alacritty": materialize_alacritty,
@@ -57,13 +63,15 @@ APP_MATERIALIZERS = {
     "picom":     materialize_picom,
     "fastfetch": materialize_fastfetch,
     "starship":  materialize_starship,
+    # Widgets
+    "eww":       materialize_eww,
 }
 
 __all__ = [
     "APP_MATERIALIZERS",
     "materialize_kde", "materialize_kvantum", "materialize_plasma_theme",
     "materialize_cursor", "materialize_icon_theme", "materialize_kde_lockscreen",
-    "_lockscreen_lnf_for_palette",
+    "materialize_lnf", "_lockscreen_lnf_for_palette",
     "materialize_kitty", "materialize_alacritty", "materialize_konsole",
     "materialize_waybar", "materialize_polybar",
     "materialize_rofi", "materialize_wofi",
@@ -73,4 +81,5 @@ __all__ = [
     "materialize_gtk", "materialize_picom", "materialize_fastfetch",
     "materialize_starship", "_build_starship_toml",
     "materialize_wallpaper",
+    "materialize_eww",
 ]

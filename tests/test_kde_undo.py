@@ -69,7 +69,8 @@ class TestUndoKde(unittest.TestCase):
         widget = [c for c in calls if "widgetStyle" in c]
         self.assertTrue(widget)
         self.assertIn("--delete", widget[0])
-        self.assertFalse([c for c in widget if "" in c and "--delete" not in c])
+        self.assertTrue(all("--delete" in c for c in widget),
+                        f"Expected every widgetStyle call to use --delete; got: {widget}")
 
     def test_cursor_restored_via_plasma_apply_cursortheme(self):
         result, calls, _ = self._undo(
@@ -112,9 +113,28 @@ class TestUndoKde(unittest.TestCase):
         self.assertIn("undone_at", manifest)
         self.assertEqual(result["status"], "success")
 
-    def test_dry_run_manifest_returns_error(self):
+    def test_generic_write_with_no_backup_deletes_created_file(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            manifest_path = Path(tmp) / "manifest.json"
+            created = Path(tmp) / "gtk.css"
+            created.write_text("/* generated */\n", encoding="utf-8")
+            _write_manifest(manifest_path, [
+                {"app": "gtk", "action": "write", "path": str(created), "backup": None},
+            ])
+
+            with patch.object(ricer_undo, "CURRENT_DIR", Path(tmp)):
+                result = ricer_undo.undo()
+
+            self.assertEqual(result["status"], "success")
+            self.assertFalse(created.exists())
+            self.assertEqual(result["restored"][0]["deleted"], str(created))
+
+    def test_dry_run_manifest_is_skipped(self):
+        # Dry-run manifests are a soft skip (not a hard error) so that
+        # undo_session() can walk past them when rolling back a session.
         result, _, _ = self._undo([], dry_run=True)
-        self.assertEqual(result["status"], "error")
+        self.assertEqual(result["status"], "skipped")
+        self.assertIn("dry-run", result["message"].lower())
 
 
 if __name__ == "__main__":

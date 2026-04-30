@@ -116,6 +116,113 @@ def snapshot_gtk_state() -> dict:
     return state
 ```
 
+## Font Installation & Rendering
+
+### Installing fonts
+```bash
+# User fonts (no sudo, preferred):
+mkdir -p ~/.local/share/fonts
+cp MyFont.ttf ~/.local/share/fonts/
+fc-cache -fv
+
+# System-wide:
+sudo cp MyFont.ttf /usr/share/fonts/
+sudo fc-cache -fv
+```
+
+### Fontconfig rendering tuning
+For crisp LCD rendering, create `~/.config/fontconfig/fonts.conf`:
+```xml
+<?xml version="1.0"?>
+<!DOCTYPE fontconfig SYSTEM "fonts.dtd">
+<fontconfig>
+  <match target="font">
+    <edit name="antialias"  mode="assign"><bool>true</bool></edit>
+    <edit name="hinting"    mode="assign"><bool>true</bool></edit>
+    <edit name="hintstyle"  mode="assign"><const>hintslight</const></edit>
+    <edit name="rgba"       mode="assign"><const>rgb</const></edit>
+    <edit name="lcdfilter"  mode="assign"><const>lcddefault</const></edit>
+  </match>
+</fontconfig>
+```
+`hintstyle`: `hintnone` → `hintslight` → `hintmedium` → `hintfull` (more aggressive grid-snapping).
+`rgba`: `rgb` for most monitors; `bgr` for some Samsung/reversed-subpixel panels; `none` for OLED.
+
+---
+
+## GTK4 & adw-gtk3
+
+GTK4 apps (Nautilus, GNOME apps, newer Flatpaks) use libadwaita and ignore GTK3 themes entirely. Two approaches:
+
+**Option 1 — adw-gtk3 (best consistency):** installs a GTK3 theme that mimics libadwaita, keeping GTK3 and GTK4 apps visually in sync:
+```bash
+yay -S adw-gtk3        # or: sudo pacman -S adw-gtk3
+# Then in gtk-3.0/settings.ini:
+gtk-theme-name=adw-gtk3-dark
+```
+
+**Option 2 — GTK4 CSS overrides:** edit `~/.config/gtk-4.0/gtk.css` with `@define-color` overrides (already documented above). GTK4 apps pick these up on next launch.
+
+---
+
+## Flatpak App Theming
+
+Flatpak apps are sandboxed — they cannot see system themes by default. The correct fix is exposing the XDG config dirs where our `settings.ini` lives, not the legacy `~/.themes` / `~/.icons` dirs (which Flatpak doesn't formally support).
+
+```bash
+# Expose GTK config to all user-installed Flatpak apps — no sudo needed:
+flatpak override --user --filesystem=xdg-config/gtk-3.0:ro
+flatpak override --user --filesystem=xdg-config/gtk-4.0:ro
+flatpak override --user --filesystem=xdg-data/icons:ro
+
+# Qt Flatpak apps:
+flatpak override --user --env=QT_STYLE_OVERRIDE=kvantum
+```
+
+`xdg-config/gtk-3.0` maps to `~/.config/gtk-3.0` — the Flatpak app reads our generated `settings.ini` directly, which already contains the correct theme name. `xdg-data/icons` maps to `~/.local/share/icons` for user-installed icon themes.
+
+After running these, restart the Flatpak apps. To verify active overrides:
+```bash
+flatpak override --user --show
+```
+
+> **Why not `sudo flatpak override --filesystem=$HOME/.themes`?** `~/.themes` is a legacy path Flatpak does not reliably honour. `sudo` sets overrides for the root user, not you. Use `--user` without sudo for user-installed apps.
+
+---
+
+## Icon Pack Selection
+
+`gtk-icon-theme-name` controls icons across GTK apps, file managers, and (partially) Qt apps. Choosing poorly breaks visual coherence wherever a gap icon appears.
+
+**Criteria for a rice-worthy icon pack:**
+1. **Extensive coverage** — gaps (missing icons falling back to a generic image) are the most visible failure. Check coverage for the apps you actually use.
+2. **Stylistically consistent** — flat vs. outlined vs. skeuomorphic. Mixing styles is the fastest way to make a rice look amateur.
+3. **Compatible with the default fallback** — if there are gaps, the fallback icon pack should not look jarring next to the primary. Choosing a pack from the same visual family as the default (e.g., Papirus near Breeze) limits the damage from gaps.
+4. **Dark/light variants** — many packs ship `-Dark` and `-Light` suffixed variants. Match to `gtk-application-prefer-dark-theme`.
+
+**Recommended defaults by style:**
+| Style | Pack | Notes |
+|---|---|---|
+| Clean / modern flat | **Papirus** / **Papirus-Dark** | Enormous coverage, maintained, Breeze-compatible |
+| Pastel / Catppuccin | **Tela-circle** or **Catppuccin** icon pack | Pairs with Catppuccin color schemes |
+| Minimal / mono | **Numix** | Circular, fewer gaps than most minimal packs |
+| Retro / pixel | **PixelFun** / custom | Limited coverage; expect gaps in modern apps |
+| Game-themed | Generate subset with `scripts/icon_theme_gen.py` and fall back to Papirus |
+
+### Papirus folder colors
+Papirus ships a companion tool that recolors folder icons to match any palette accent:
+```bash
+yay -S papirus-folders   # or: papirus-folders-git
+
+# List available colors:
+papirus-folders -l
+
+# Apply an accent color to match your theme:
+papirus-folders -C cat-mocha-lavender --theme Papirus-Dark
+papirus-folders -C nordic --theme Papirus
+```
+Color names map to common theme families (catppuccin, nord, gruvbox, dracula, etc.). Run after any icon theme change.
+
 ## Pitfalls
 
 - **`kde-gtk-config` is NOT always installed.** Write `settings.ini` files directly.

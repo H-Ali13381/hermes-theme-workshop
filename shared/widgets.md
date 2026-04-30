@@ -52,21 +52,59 @@ eww --version
 ### Config location
 ```
 ~/.config/eww/
-├── eww.yuck       ← layout & widget definitions
-├── eww.scss       ← styles (SCSS, not raw CSS)
-├── scripts/       ← polling/listener scripts
-└── images/        ← sliced textures, icons, backgrounds
+├── eww.yuck          ← layout & widget definitions (can split with `include`)
+├── eww.scss          ← styles (SCSS compiled internally — not raw CSS)
+├── scripts/          ← polling/listener scripts
+└── images/           ← sliced textures, icons, backgrounds
 ```
 
-### Core concepts
+### Splitting configs
+```lisp
+(include "./widgets/bar.yuck")
+(include "./widgets/panel.yuck")
+```
+
+### Core variable types
 
 | Concept | Purpose |
 |---------|---------|
 | `defwindow` | Top-level window with geometry, stacking, and monitor config |
-| `defwidget` | Reusable widget component with properties |
-| `defvar` | Static variable |
-| `defpoll` | Variable updated on interval (runs a shell command) |
-| `deflisten` | Variable updated by streaming script (stdout lines) |
+| `defwidget` | Reusable widget component with optional (`?param`) and required params |
+| `defvar` | Static variable — update externally with `eww update foo="value"` |
+| `defpoll` | Runs a shell command on `:interval`; supports `:initial` and `:run-while` |
+| `deflisten` | Runs a script once and reads stdout lines continuously (event-driven) |
+
+### Magic built-in variables (EWW_*)
+
+| Variable | Contents |
+|----------|----------|
+| `EWW_RAM` | `{total_mem, used_mem, available_mem, used_mem_perc}` |
+| `EWW_CPU` | `{cores: [{core, usage}], avg}` |
+| `EWW_DISK["/"]` | `{total, used, free, used_perc}` |
+| `EWW_NET["eth0"]` | `{NET_UP, NET_DOWN}` |
+| `EWW_BATTERY` | `{BAT0: {status, capacity}}` |
+| `EWW_TIME` | Current time as string |
+
+```lisp
+; Usage examples
+(label :text "${EWW_RAM.used_mem_perc}%")
+(label :text "${round(EWW_CPU.avg, 0)}%")
+(progress :value {EWW_CPU.avg})
+```
+
+### Window arguments (parameterized windows)
+Defwindow can accept arguments — essential for multi-monitor bars:
+```lisp
+(defwindow my_bar [screen ?size]
+  :monitor screen
+  :geometry (geometry :width "100%" :height {size ?: "40px"} :anchor "top center")
+  :stacking "overlay" :exclusive true
+  (bar-content))
+```
+```bash
+eww open my_bar --id bar-0 --arg screen=0 --arg size=48px
+eww open my_bar --id bar-1 --arg screen=1
+```
 
 ### Simple example — styled clock with background image
 
@@ -78,7 +116,7 @@ eww --version
 (defwindow clock-widget
   :monitor 0
   :geometry (geometry :x "20px" :y "20px" :width "200px" :height "80px" :anchor "top right")
-  :stacking "overlay"
+  :stacking "overlay"   ; Wayland: "overlay" | X11/X.Org: "fg" | background: "bg"
   :exclusive false
   :focusable false
   (clock-display))
@@ -112,7 +150,225 @@ eww --version
 
 ---
 
-## 4. AI Image → Widget Pipeline
+## 4. Full Widget Reference
+
+### Layout widgets
+
+**`box`** — primary layout container
+```lisp
+(box :orientation "h"   ; or "v"
+     :spacing 8
+     :space-evenly false
+     :halign "start"    ; fill | baseline | center | start | end
+     :valign "center"
+     :hexpand true
+     (label :text "left")
+     (label :text "right"))
+```
+
+**`centerbox`** — exactly 3 children, placed at start / center / end
+```lisp
+(centerbox :orientation "h"
+  (workspaces)   ; left
+  (clock)        ; center
+  (tray))        ; right
+```
+
+**`overlay`** — stacks children on top of each other; takes the size of the **first** child
+```lisp
+(overlay
+  (box :class "panel-bg" :width 300 :height 80)   ; ← sets the size
+  (image :path "images/ornament.png" :image-width 300 :image-height 80)
+  (label :class "panel-text" :text "HP 450"))
+```
+> ⚠️ **The first child defines the overlay's dimensions.** All subsequent children are layered on top. Use explicit `:width`/`:height` on the first child.
+
+**`scroll`**
+```lisp
+(scroll :vscroll true :hscroll false
+  (box :orientation "v" (label :text "item 1") (label :text "item 2")))
+```
+
+**`stack`** — shows exactly one child at a time with optional transition
+```lisp
+(defvar active-tab 0)
+(stack :selected active-tab :transition "slideright"
+  (inventory-panel)
+  (stats-panel)
+  (map-panel))
+```
+
+### Interactive widgets
+
+**`button`** — wraps any widget; events fire on release
+```lisp
+(button :onclick "notify-send 'clicked'"
+        :onrightclick "eww open context-menu"
+        :onmiddleclick "eww close panel"
+  (label :text "⚔ Attack"))
+```
+
+**`eventbox`** — hover/scroll events without visual appearance; use for hot zones
+```lisp
+(eventbox :onhover "eww update panel-visible=true"
+          :onhoverlost "eww update panel-visible=false"
+          :onscroll "scripts/handle-scroll.sh {}"  ; {} = "up" or "down"
+          :cursor "pointer"
+  (box :class "slot" (image :path "images/item.png" :image-width 48 :image-height 48)))
+```
+> Supports `:onclick`, `:onmiddleclick`, `:onrightclick`, `:ondropped`, `:dragvalue`, `:dragtype`.
+
+**`scale`** — slider (use for volume controls, not styled HP bars — use `progress` for those)
+```lisp
+(scale :min 0 :max 100 :value volume
+       :orientation "h"
+       :onchange "wpctl set-volume @DEFAULT_AUDIO_SINK@ {}%")
+```
+
+**`revealer`** — animated show/hide; transitions: `slideright slideleft slideup slidedown crossfade none`
+```lisp
+(defvar inv-open false)
+(revealer :reveal inv-open
+          :transition "slidedown"
+          :duration "300ms"
+  (inventory-widget))
+```
+> ⚠️ **Known issue**: a `button` inside a `revealer` inside an `overlay` may not receive clicks. Workaround: avoid nesting `revealer` inside `overlay`; use separate windows instead.
+
+**`expander`** — built-in expand/collapse
+```lisp
+(expander :name "Stats" :expanded false
+  (stats-content))
+```
+
+### Display widgets
+
+**`label`** — rich text display
+```lisp
+(label :text "HP: ${hp_val}"
+       :markup "<span foreground='#ff4444'><b>DANGER</b></span>"
+       :angle 45.0          ; rotate text
+       :wrap true
+       :limit-width 20      ; truncate at N chars
+       :xalign 0.0)         ; 0=left 0.5=center 1=right
+```
+
+**`image`** — renders PNG, SVG, animated GIF
+```lisp
+(image :path "images/hero-portrait.png"
+       :image-width 64      ; ⚠️ INTEGER, not "64px"
+       :image-height 64
+       :preserve-aspect-ratio true)
+; For dynamic paths:
+(defpoll album-art :interval "2s" "scripts/get-art.sh")
+(image :path album-art :image-width 50 :image-height 50)
+; Animated GIFs auto-play — no extra configuration needed
+(image :path "images/maple-sparkle.gif" :image-width 32 :image-height 32)
+```
+> ⚠️ **`image-width`/`image-height` must be plain integers**, not strings like `"64px"`. The widget will silently fail to display if you pass a px string.
+
+**`progress`** — HP/MP/XP bars
+```lisp
+(progress :class "hp-bar"
+          :value {hp_current}
+          :min 0 :max {hp_max}   ; wait — min/max are NOT properties
+          :orientation "h"
+          :flipped false)
+; Note: progress only has :value (0-100). To show a fraction, compute it:
+(progress :value {round(hp / hp_max * 100, 0)})
+```
+CSS node path for styling:
+```scss
+.hp-bar {
+  background-color: transparent;           // trough (empty portion)
+  background-image: url("images/hp-bar-bg.png");
+  background-size: cover;
+  min-height: 16px;
+  min-width: 200px;                        // required or bar collapses
+}
+.hp-bar > trough {
+  background-color: transparent;
+  border-radius: 0;
+}
+.hp-bar > trough > progress {
+  background-color: transparent;
+  background-image: url("images/hp-bar-fill.png");
+  background-size: cover;                  // fill image clips with bar value
+}
+```
+
+**`circular-progress`** — circular stat ring
+```lisp
+(circular-progress :class "cpu-ring"
+                   :value {EWW_CPU.avg}
+                   :start-at 75          ; 0=right, 25=bottom, 50=left, 75=top
+                   :thickness 8
+                   :clockwise true)
+```
+```scss
+.cpu-ring {
+  color: #7ad4f0;          // fill color
+  background-color: rgba(0,0,0,0.3);   // track color
+  min-width: 60px;
+  min-height: 60px;
+}
+```
+
+**`graph`** — time-series sparkline
+```lisp
+(graph :class "net-graph"
+       :value {EWW_NET["eth0"].NET_DOWN}
+       :time-range "60s"
+       :thickness 2
+       :line-style "round"
+       :dynamic true)
+```
+
+**`transform`** — rotate / scale / translate any widget
+```lisp
+(transform :rotate 45
+           :scale-x "1.2" :scale-y "1.2"
+           :translate-x "10px" :translate-y "0px"
+  (image :path "images/star.png" :image-width 32 :image-height 32))
+```
+
+**`literal`** — render a Yuck string as a widget (for fully dynamic widget trees)
+```lisp
+(defvar slot-widgets "(box (label :text 'empty'))")
+(literal :content slot-widgets)
+; Update from a script: eww update slot-widgets="$(scripts/gen-slots.sh)"
+```
+
+### `for` loop — generate grids from JSON
+```lisp
+(defpoll inventory :interval "1s" "scripts/get-inventory.sh")
+; Script outputs: [{"icon":"sword.png","qty":1},{"icon":"potion.png","qty":5}]
+
+(box :class "inventory-grid" :orientation "h" :space-evenly false :wrap true
+  (for item in inventory
+    (eventbox :class "item-slot"
+              :onrightclick "scripts/use-item.sh ${item.icon}"
+      (overlay
+        (box :class "slot-bg" :width 48 :height 48)
+        (image :path "images/${item.icon}" :image-width 40 :image-height 40)
+        (label :class "item-qty" :text "${item.qty}" :valign "end" :halign "end")))))
+```
+
+### `children` — reusable wrapper widgets
+```lisp
+(defwidget game-panel [title]
+  (box :class "panel-frame" :orientation "v"
+    (label :class "panel-title" :text title)
+    (children)))
+
+(game-panel :title "Inventory"
+  (inventory-grid)
+  (equip-slots))
+```
+
+---
+
+## 5. AI Image → Widget Pipeline
 
 ### Step 1: Describe the UI element
 User provides a description:
@@ -170,7 +426,7 @@ Set `defwindow` geometry, stacking order, exclusive zone, and monitor placement.
 
 ---
 
-## 5. Hover-to-Reveal Pattern
+## 6. Hover-to-Reveal Pattern
 
 A common pattern: an invisible trigger zone at a screen edge that reveals a styled bar on mouse hover.
 
@@ -254,7 +510,23 @@ esac
 
 ---
 
-## 6. Image Textures in SCSS
+## 7. GTK CSS for Game-Style Textures
+
+EWW uses **GTK's CSS engine**, not a browser engine. Most CSS works, but some critical web CSS is absent.
+
+### What GTK CSS supports ✅
+`background-color`, `background-image`, `background-size`, `background-repeat`, `background-position`, `border-image` (full 9-slice), `border-radius`, `box-shadow`, `text-shadow`, `color`, `font-*`, `margin`, `padding`, `min-width`, `min-height`, `transition` (state-based only), `opacity`
+
+### What GTK CSS does NOT support ❌
+| Property | Status | Alternative |
+|---|---|---|
+| `@keyframes` / `animation` | ❌ not supported | `defpoll`-driven state toggling; `eww update` |
+| `position: absolute` | ❌ not supported | `overlay` widget |
+| `clip-path` | ❌ not supported | Alpha-channel PNG masks |
+| `flexbox` | ❌ not supported | `box` widget with `:halign`/`:valign` |
+| `float` | ❌ not supported | `box` widget |
+| `width`/`height` in CSS | ⚠️ unreliable | Use `:width`/`:height` widget attrs or `min-width`/`min-height` in CSS |
+| Remote `url()` images | ❌ (needs gvfs) | Download to `/tmp` in a script, use local path |
 
 ### Basic background image
 ```scss
@@ -265,39 +537,150 @@ esac
 }
 ```
 
-### 9-slice technique for resizable textures
+### 9-slice border-image — scalable ornate panel borders ✅ (fully supported in GTK)
+This is the correct technique for MapleStory-style resizable wooden/gold panel borders:
 ```scss
-.resizable-panel {
-  border-image: url("images/panel-9slice.png") 12 12 12 12 fill stretch;
-  // 12px borders on all sides, fill center, stretch to fit
+.maple-panel {
+  // border must be set to match the slice widths
+  border-style: solid;
+  border-color: transparent;
+  border-width: 16px 20px 16px 20px;  // top right bottom left — match slice values
+
+  // The 9-slice image: corners=fixed, edges=stretch or repeat, center=fill
+  border-image: url("images/panel-9slice.png") 16 20 16 20 fill stretch;
+  //            ↑source                         ↑slice (px)   ↑center ↑edge mode
 }
 ```
+Slice values in px (not %) are the pixel offsets from each edge where the image is cut:
+```
+┌──────┬──────────────┬──────┐
+│  TL  │  top-edge    │  TR  │  ← top 16px
+├──────┼──────────────┼──────┤
+│ left │    center    │right │  ← center (fill)
+├──────┼──────────────┼──────┤
+│  BL  │ bottom-edge  │  BR  │  ← bottom 16px
+└──────┴──────────────┴──────┘
+ ←20px→                ←20px→
+```
+Edge repeat modes: `stretch` (default), `repeat`, `round`, `space`
 
 ### Transparent windows
 ```scss
 window {
-  background-color: transparent;  // MUST set on the window itself
+  background-color: transparent;  // MUST set on the eww window itself
+}
+.my-widget {
+  background-color: transparent;  // also clear widget containers
 }
 ```
 
-### Layering multiple images
+### Layering multiple images (panel + ornament overlay)
 ```scss
-.layered {
+.layered-panel {
   background-image:
-    url("images/overlay-pattern.png"),
-    url("images/base-texture.png");
-  background-size: 100% 100%, cover;
+    url("images/gold-ornament.png"),   // drawn on top (closest to user)
+    url("images/wood-texture.png");    // drawn underneath
+  background-size: auto, cover;
+  background-repeat: no-repeat, no-repeat;
+  background-position: center, center;
 }
 ```
+
+### Glow effects via box-shadow and text-shadow
+```scss
+.active-slot {
+  box-shadow:
+    0 0 8px 3px rgba(255, 200, 50, 0.8),   // outer glow (gold)
+    inset 0 0 4px rgba(255, 200, 50, 0.4); // inner glow
+}
+.hp-label {
+  text-shadow: 0 0 6px #ff2222, 1px 1px 0 #000;
+}
+```
+
+### GTK CSS transitions (state-based only — no keyframes)
+GTK supports `transition` for state changes (`:hover`, `:active`, `:focused`), not time-based loops:
+```scss
+.item-slot {
+  transition: 150ms ease-in-out;
+  background-color: rgba(0,0,0,0.4);
+}
+.item-slot:hover {
+  background-color: rgba(255, 200, 50, 0.3);
+  box-shadow: 0 0 8px rgba(255, 200, 50, 0.7);
+}
+```
+> EWW `eventbox` supports `:hover` CSS selectors. `button` supports `:hover` and `:active`.
 
 ### Image path rules
 - Paths are relative to `~/.config/eww/`
 - Absolute paths also work: `/home/user/.config/eww/images/bg.png`
-- PNG with alpha channel for transparency
+- PNG with alpha channel for non-rectangular shapes
+- Remote URLs do NOT work without gvfs installed (download to `/tmp` instead)
 
 ---
 
-## 7. Wiring to System Data
+## 8. Animation Patterns
+
+GTK CSS has no `@keyframes`. All animation in EWW must be driven by **state changes** (via `defvar`/`defpoll`/`eww update`) or use GIF files.
+
+### Animated GIFs — simplest approach
+GTK natively auto-plays animated GIFs in the `image` widget. No configuration needed:
+```lisp
+(image :path "images/maple-sparkle.gif" :image-width 32 :image-height 32)
+(image :path "images/fire-effect.gif" :image-width 64 :image-height 64)
+```
+
+### `defpoll`-driven sprite sheet animation
+Cycle through frame images at a fixed interval — simulates a sprite animation:
+```lisp
+(defpoll sprite-frame :interval "80ms"
+  "scripts/next-frame.sh")   ; outputs 0..7 cyclically
+; scripts/next-frame.sh:
+;   STATE_FILE=/tmp/sprite-frame
+;   echo $(( ($(cat $STATE_FILE 2>/dev/null || echo -1) + 1) % 8 )) | tee $STATE_FILE
+
+(defwidget sprite-anim []
+  (image :path "images/hero-walk-${sprite-frame}.png"
+         :image-width 64 :image-height 64))
+```
+
+### `eww update` + CSS transition — hover reveal with smooth slide
+```lisp
+(defvar panel-open false)
+
+(eventbox :onhover "eww update panel-open=true"
+          :onhoverlost "eww update panel-open=false"
+  (box
+    (label :text "⚔")
+    (revealer :reveal panel-open
+              :transition "slideright"
+              :duration "250ms"
+      (label :text " Attack"))))
+```
+
+### `defpoll`-driven background image swap (idle/combat state)
+```lisp
+(defpoll game-state :interval "2s" "scripts/check-state.sh")
+; script outputs "idle" or "combat"
+
+(box :class "status-bar"
+     :style "background-image: url('images/bar-${game-state}.png'); background-size: cover;")
+```
+
+### Blinking effect via defpoll boolean toggle
+```lisp
+(defpoll blink :interval "500ms" "scripts/toggle.sh")
+; scripts/toggle.sh: [ "$(cat /tmp/blink)" = "1" ] && echo 0 > /tmp/blink && echo 0 || echo 1 > /tmp/blink && echo 1
+
+(label :class "warning-label"
+       :style "opacity: ${blink == '1' ? '1.0' : '0.3'};"
+       :text "⚠ LOW HP")
+```
+
+---
+
+## 9. Wiring to System Data
 
 ### Polling variables (periodic updates)
 ```lisp
@@ -323,9 +706,119 @@ window {
 | Media | `playerctl` | `playerctl` | `playerctl` |
 | Brightness | `brightnessctl` | `qdbus6` | `brightnessctl` |
 
+### D-Bus daemon backend → `deflisten` + `literal` pipeline
+
+For notification daemons, music daemons, or any long-running backend that pushes events: the script runs **once**, owns a D-Bus name, and `flush`es Yuck syntax strings to stdout on every event. `deflisten` picks up each flushed line; `literal` renders it as a live widget tree.
+
+```
+Python daemon ──stdout──▶ deflisten ──▶ literal (renders Yuck string as widget)
+```
+
+**eww.yuck:**
+```lisp
+(deflisten notifications "scripts/notification-daemon.py")
+
+(defwindow notif-window
+  :monitor 0
+  :geometry (geometry :x "20px" :y "20px" :anchor "top right")
+  :stacking "overlay" :exclusive false
+  (literal :content notifications))
+```
+
+**scripts/notification-daemon.py** (skeleton):
+```python
+import dbus, dbus.service, dbus.mainloop.glib, gi, threading, sys
+from gi.repository import GLib
+
+class NotifServer(dbus.service.Object):
+    def __init__(self):
+        dbus.mainloop.glib.DBusGMainLoop(set_as_default=True)
+        bus = dbus.SessionBus()
+        bus.request_name("org.freedesktop.Notifications")
+        super().__init__(bus, "/org/freedesktop/Notifications")
+        self.notifications = []
+
+    @dbus.service.method("org.freedesktop.Notifications",
+                         in_signature="susssasa{sv}i", out_signature="u")
+    def Notify(self, app_name, replaces_id, icon, summary, body, actions, hints, timeout):
+        n = {"summary": str(summary), "body": str(body), "icon": str(icon)}
+        self.notifications.insert(0, n)
+        threading.Timer(10, lambda: self.dismiss(n)).start()
+        self.flush()
+        return replaces_id or 1
+
+    def dismiss(self, n):
+        self.notifications = [x for x in self.notifications if x is not n]
+        self.flush()
+
+    def flush(self):
+        # Output a Yuck string — eww deflisten captures each print() as a new value
+        items = "".join(
+            f'(box :class "notif" (label :text "{n["summary"]}: {n["body"]}"))'
+            for n in self.notifications
+        )
+        print(f'(box :orientation "v" {items})', flush=True)
+
+NotifServer()
+GLib.MainLoop().run()
+```
+
+**Required packages:** `dbus-python`, `python-gobject` (PyGObject)
+
+> **Key insight:** Every `print(..., flush=True)` call replaces the entire `deflisten` variable. `literal` re-renders the new Yuck tree instantly. This pattern works for any daemon (music, hotkey, game state monitor) — not just notifications.
+
+### Launcher toggle pattern
+
+Prevent double-opening an app launcher from both a keybind and a widget button:
+
+```bash
+# Shell one-liner: close if open, open if closed
+pkill wofi || wofi --show drun
+pkill rofi || rofi -show drun
+```
+
+The EWW equivalent for toggling a panel window:
+```bash
+eww open --toggle my-panel-window
+```
+
+Use `eww open --toggle` in widget `:onclick` handlers:
+```lisp
+(button :onclick "eww open --toggle inventory-panel"
+  (label :text "🎒 Inventory"))
+```
+
 ---
 
-## 8. Materializer Contract
+## 10. Debugging
+
+### GTK Inspector (essential for CSS issues)
+```bash
+eww inspector
+```
+Opens GTK's visual inspector. Click the crosshair icon → hover a widget to see its CSS node path, computed properties, and the full GTK widget tree. This is how you discover undocumented node paths like `.my-bar > trough > progress`.
+
+### eww logs
+```bash
+eww logs    # tail the eww daemon log
+```
+
+### Shell test for scripts
+```bash
+# Test a defpoll command directly
+bash -c "date '+%H:%M'"
+bash -c "scripts/get-workspaces.sh"
+```
+
+### Common debug pattern
+```lisp
+; Add a debug label to see live variable values
+(label :text "cpu=${EWW_CPU.avg} | ram=${EWW_RAM.used_mem_perc}")
+```
+
+---
+
+## 11. Materializer Contract
 
 How `ricer.py` should generate EWW configs from a design system:
 
@@ -356,7 +849,7 @@ eww kill && eww daemon && eww open <window>  # full restart (for Yuck changes)
 
 ---
 
-## 9. Widget Framework Comparison
+## 12. Widget Framework Comparison
 
 | Framework | Language | Wayland | X11 | Image Textures | Community |
 |-----------|----------|---------|-----|----------------|-----------|
@@ -369,16 +862,26 @@ eww kill && eww daemon && eww open <window>  # full restart (for Yuck changes)
 
 ---
 
-## 10. Known Pitfalls
+## 13. Known Pitfalls
 
+### General
 - **EWW daemon must be running** before `eww open` — add to autostart before any `eww open` calls
 - **SCSS not CSS** — EWW compiles SCSS internally; raw CSS syntax will fail silently or error
-- **`exclusive: false`** means the widget doesn't reserve screen space — important for overlays, but means windows render behind/over it
-- **Hot-reload limitations** — `eww reload` picks up SCSS changes but NOT Yuck structural changes; for those: `eww kill && eww daemon`
-- **GTK Layer Shell varies by compositor**:
-  - Works great on Hyprland/Sway
-  - Works on KDE Wayland but may fight with Plasma panels at the same edge
-  - Not available on X11 (falls back to GDK X11)
-- **X11 z-ordering** — use `stacking: bg` or `wmctrl -r 'eww' -b add,sticky,above` for reliable layering
+- **`exclusive: false`** means the widget doesn't reserve screen space — important for overlays, but windows will render behind/over it
+- **Hot-reload**: `eww reload` picks up SCSS changes but NOT Yuck structural changes; for those: `eww kill && eww daemon`
+- **GTK Layer Shell varies by compositor**: works great on Hyprland/Sway; on KDE Wayland may fight with Plasma panels; not available on X11 (falls back to GDK X11)
+- **X11 stacking values differ** — on X.Org use `stacking: "fg"` (foreground) or `stacking: "bg"` (background). On Wayland (Hyprland/Sway) use `stacking: "overlay"`. Using `"overlay"` on X11 silently falls back but behavior is unpredictable — always match to the compositor.
 - **Image paths in SCSS** must be absolute or relative to `~/.config/eww/` — relative to the SCSS file does NOT work
 - **Large images** — use optimized PNGs; uncompressed 4K textures cause noticeable lag on lower-end GPUs
+
+### Game-UI specific pitfalls
+- **`image` widget width/height** — must be plain integers (`48`), NOT strings (`"48px"`). Passing a px string causes the image to silently not render while the widget box is still present.
+- **`overlay` size** — the overlay takes the size of its **first child**. If you put a decorative image as the first child, the container will be that image's size. Always put a sized `box` first.
+- **`progress` bar CSS** — to style the fill portion, you must target the sub-node: `.my-bar > trough > progress { }`. Targeting `.my-bar > progress` has no effect. Use `eww inspector` to verify node paths.
+- **`progress` value** — the value is always 0–100. There is no `:min`/`:max` attribute. Compute the percentage yourself: `{round(hp / hp_max * 100, 0)}`.
+- **`border-image` requires `border-width`** — GTK CSS will not render `border-image` if `border-width` is `0` or unset. Always set matching `border-width` and `border-style: solid; border-color: transparent;`.
+- **No `clip-path`** — GTK CSS does not support `clip-path`. For non-rectangular panels, use alpha-channel PNGs as the background; transparent pixels will show through without blur.
+- **No `@keyframes`** — looping CSS animations are not supported. Use `defpoll` to swap image paths or toggle CSS classes for animations.
+- **`revealer` + `overlay` + `button` bug** — a clickable `button` inside a `revealer` that is itself inside an `overlay` may not receive mouse events. Workaround: restructure to avoid this triple-nesting; use separate `defwindow` for panels instead.
+- **`for` loop re-renders** — every time the polled JSON changes, the entire `for` loop re-renders. Keep the poll interval reasonable (≥ 500ms) to avoid flicker on large grids.
+- **`literal` performance** — `literal` re-parses and re-renders the entire Yuck tree on every change. Use `for` loops instead where possible; reserve `literal` for truly dynamic structures.

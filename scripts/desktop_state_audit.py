@@ -73,7 +73,7 @@ def run_full_audit(output_path: str | None = None) -> dict[str, Any]:
     baseline_dir = BASELINES_DIR / f"{timestamp}_files"
     baseline_dir.mkdir(parents=True, exist_ok=True)
 
-    print(f"=== HERMES-RICER DESKTOP STATE AUDIT ===")
+    print("=== HERMES-RICER DESKTOP STATE AUDIT ===")
     print(f"Timestamp : {timestamp}")
     print(f"Baseline  : {baseline_dir}")
     print("")
@@ -170,7 +170,7 @@ def run_full_audit(output_path: str | None = None) -> dict[str, Any]:
 
     manifest_path.write_text(json.dumps(manifest, indent=2, default=str), encoding="utf-8")
     print("")
-    print(f"=== AUDIT COMPLETE ===")
+    print("=== AUDIT COMPLETE ===")
     print(f"Manifest  : {manifest_path}")
     print(f"Files     : {baseline_dir}")
     print("")

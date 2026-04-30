@@ -1,5 +1,268 @@
 # linux-ricing TODO
 
+## Upcoming Features
+
+- [ ] **[FEATURE] EWW widget library expansion + deeper customization**
+  Today, `materialize_eww` ships exactly one widget (`hermes-clock`, a
+  top-right time+date overlay) generated from a single
+  `templates/eww/hermes-theme.yuck.template` and a single SCSS palette
+  template. Anything beyond this requires the user to hand-write yuck.
+  Build out a selectable widget library with palette-aware styling so a
+  rice can compose a full bar / overlay set from declarative config:
+  - **Bar widgets**: workspace indicator (per-WM: KWin virtual desktops,
+    Hyprland workspaces, sway), window title / focused-app, taskbar
+    (icon-only and titled variants), launcher button, power menu.
+  - **System stat widgets**: CPU / RAM / GPU usage (graph + numeric),
+    network throughput, disk I/O, battery (with charge state icon),
+    temperatures, fan RPM.
+  - **Media + audio**: now-playing (mpris2 via `playerctl`), volume
+    slider with mute toggle, microphone mute indicator, audio sink
+    selector.
+  - **Comms / status**: notification history (read from `dunst-history`
+    or `swaync`), bluetooth devices, network manager (SSID + signal),
+    VPN status, calendar (next event from `khal`/`gcal`).
+  - **Weather / time variants**: weather (OpenWeatherMap or wttr.in),
+    moon phase, world-clock multi-row, focus/Pomodoro timer.
+  - **Layout primitives**: vertical sidebar, top/bottom bar, floating
+    overlay, dropdown panel toggled by hotkey, modal popup.
+  - **Theming surfaces per widget**: border, padding, font, glyph set
+    (nerd / emoji / ascii), background gradient / texture / blur,
+    animation duration, hover effects, transitions.
+  **Approach:** Promote `templates/eww/` from one file to a
+  per-widget directory tree (`widgets/clock/`, `widgets/workspaces/`,
+  ...), each with its own `.yuck`, `.scss`, and helper `scripts/`.
+  Add `design["eww"]` schema (`enabled_widgets`, `bar_layout`,
+  `overlay_widgets`, per-widget overrides). Materializer composes the
+  selected set into `eww.yuck` and `eww.scss` via includes. Per-widget
+  scripts (e.g. `getvol`, `getbattery`, `getnet`) installed under
+  `~/.config/eww/scripts/` from `templates/eww/scripts/`. Mirror
+  Rofi/notifications/GTK/Qt/cursor/starship/fastfetch TODOs in scope.
+
+- [ ] **[FEATURE] Fastfetch shell-rc gate management + deeper customization**
+  Today, `materialize_fastfetch` only writes `~/.config/fastfetch/config.jsonc`
+  (recently fixed: was writing `config.json` which fastfetch never auto-loads,
+  and was stripping the `#` from hex colors which fastfetch 2.x rejects).
+  The materializer never touches shell rc files, so whether fastfetch
+  auto-runs at terminal launch is left to the user's hand-edited `.bashrc`/
+  `.zshrc`. This causes two bad UXs for fresh users:
+  - **No auto-run gate**: fastfetch fires in every shell \u2014 including
+    VSCode integrated terminals, AI agent terminals, SSH non-interactive
+    sessions, tmux pane splits \u2014 spamming output and breaking tooling.
+  - **Hand-rolled gate**: users have to know the right `$KONSOLE_VERSION`
+    / `$KITTY_WINDOW_ID` env vars and write the conditional themselves.
+  **Approach:** Add an optional, opt-in shell-rc gate writer to
+  `materialize_fastfetch`:
+  - Detect supported shells (`bash`, `zsh`, `fish`) and their rc files.
+  - Insert a marked block (`# linux-ricing: fastfetch gate {start,end}`)
+    that gates `fastfetch` to "main terminals" only:
+    `[[ -n "$KONSOLE_VERSION" || -n "$KITTY_WINDOW_ID" || -n "$ALACRITTY_WINDOW_ID" || -n "$WEZTERM_PANE" ]] && fastfetch`.
+  - Idempotent: replaces the block if present, never duplicates.
+  - Opt-in via `design["fastfetch"]["manage_shell_rc"]` and gated on
+    interactive confirmation in `ricer.py apply` (don't silently edit
+    `.bashrc`).
+  - Backups via existing `backup_file`.
+  Also bundle deeper visual customization while in the materializer:
+  - Custom logo (file path, image, kitty/sixel inline, palette-recolored
+    SVG\u2192PNG) instead of `type: "auto"`.
+  - Module set / order / format strings exposed via `design["fastfetch"]`.
+  - Per-module separator / icon glyph customization (nerd / emoji / ascii).
+  - Truecolor / 256-color / monochrome fallback handling.
+
+- [ ] **[FEATURE] Starship prompt deeper customization**
+  Today, `_build_starship_toml` writes a fixed-shape `~/.config/starship.toml`
+  with the 10-key palette under `[palettes.<rice>]` and styles for:
+  `character`, `directory`, `git_branch`, `git_status`, `cmd_duration`,
+  `username`, `hostname`. (Bug fix: palette refs are bare names, not
+  `$prefixed`.) Several customization surfaces are inaccessible:
+  - **Format string**: locked to starship's default. Designs cannot
+    request multi-line prompts, right-prompts (`right_format`), custom
+    section ordering, or framed/boxed prompt styles.
+  - **Per-module symbols / glyphs**: directory truncation, branch
+    symbols (`ﰌ`, ``), status icons, lang module icons (rust , python
+    , node , etc.) all hard-coded. Could expose a `design["prompt"]`
+    `glyph_set` (nerd / emoji / ascii).
+  - **Lang module styling**: `nodejs`, `python`, `rust`, `golang`,
+    `docker_context`, `kubernetes`, etc. modules are not configured at
+    all \u2014 they use upstream defaults (often colorful blue/green) which
+    will clash with the rice palette.
+  - **Background fills**: starship supports `bg:<color>` for solid pill
+    segments (powerline-style). Designs cannot request this.
+  - **Time / battery / OS modules**: not enabled.
+  - **Profile selection**: the entire prompt could be one of several
+    presets (`pure`, `bracketed-segments`, `nerd-font-symbols`,
+    `tokyo-night`-style); currently only the default shape is generated.
+  **Approach:** Promote `_build_starship_toml` to a Jinja template
+  (`templates/starship/starship.toml.template`). Add `design["prompt"]`
+  schema (`preset`, `glyph_set`, `multiline`, `right_format`, `bg_fill`,
+  `enabled_lang_modules`, `time_format`, `battery_thresholds`). Mirror
+  Rofi/notifications/GTK/Qt/cursor TODOs in scope.
+
+- [ ] **[FEATURE] KDE lock screen deeper customization**
+  Today, `materialize_kde_lockscreen` writes:
+  - `kscreenlockerrc[Greeter].Theme` (light vs dark greeter LnF, by palette).
+  - `kscreenlockerrc[Greeter].WallpaperPlugin = org.kde.image`.
+  - `kscreenlockerrc[Greeter][Wallpaper][org.kde.image][General].Image`
+    (resolved from `design.lockscreen_wallpaper` \u2192 `design.wallpaper`
+    \u2192 current desktop wallpaper snapshot).
+  - `...General.FillMode` (stretched by default).
+  Several customization surfaces are inaccessible:
+  - **Custom greeter LnF**: locked to upstream Breeze. Could fork
+    `org.kde.breezedark.desktop`, recolor its QML clock + password box +
+    user avatar background to palette accents, and ship under
+    `~/.local/share/plasma/look-and-feel/<rice>-greeter.desktop`.
+  - **Wallpaper plugin variants**: only `org.kde.image` supported. Plasma
+    also offers `org.kde.slideshow`, `org.kde.color`, `org.kde.potd`
+    (picture-of-the-day), and third-party plugins. Designs that want
+    a solid-color or palette-gradient lockscreen cannot express it.
+  - **Lock screen blur / transition / clock font / clock format**: not
+    exposed (Plasma supports these via the greeter QML / `kscreenlockerrc`).
+  - **Power management strings / unlock hint**: customizable per rice.
+  - **SDDM login screen sync**: the lock screen and the SDDM login screen
+    are separate surfaces but usually want the same look. SDDM theming
+    requires writes to `/etc/sddm.conf.d/` (root) and a custom theme
+    package; could be optional sudo-gated.
+  **Approach:** Add `design["lockscreen"]` schema (`greeter_theme_fork`,
+  `wallpaper_plugin`, `fill_mode`, `clock_font`, `clock_format`,
+  `unlock_hint`, `blur_radius`). Implement greeter-fork generator akin to
+  `_build_lnf_package`. Gate SDDM behind explicit opt-in flag.
+
+- [ ] **[FEATURE] Cursor + Icon theme deeper customization**
+  Today, `materialize_cursor` only points the system at an existing installed
+  cursor theme name (writes `kcminputrc`, `kdeglobals[General].cursorTheme`,
+  `~/.icons/default/index.theme`, `gsettings cursor-theme`, then refreshes via
+  `plasma-apply-cursortheme` + kwin reconfigure). `materialize_icon_theme`
+  has more depth (`icon_theme_gen.create_palette_icon_theme` recolor + optional
+  fal.ai generation + `papirus-folders -C <color>`), but several surfaces are
+  inaccessible:
+  - **Cursor recolor / generation**: no equivalent of `icon_theme_gen` for
+    cursors. XCursor binary format makes this nontrivial; an approach is to
+    fork an installed theme (e.g. `Breeze_Light`), tint its PNG frames to
+    palette `accent` / `primary` via PIL hue-rotate, regenerate XCursor
+    binaries via `xcursorgen`, and install under
+    `~/.local/share/icons/<rice>-cursors/`.
+  - **Cursor size / animation**: `kcminputrc[Mouse].cursorSize` and
+    Plasma's pointer animation toggles are not exposed.
+  - **Icon palette overrides per category**: `papirus-folders` only sets
+    the global folder accent. Categories like `mimetypes`, `places`,
+    `apps`, `actions`, `devices`, `status` could each take a palette key
+    (e.g. devices = `secondary`, actions = `accent`).
+  - **Symbolic icon recolor**: GTK / libadwaita symbolic icons render
+    monochrome \u2014 their color comes from the GTK theme, not the icon
+    theme. Could expose this in the GTK gtk.css template.
+  - **Cursor theme bundling into the LookAndFeel package**: currently
+    `_build_lnf_package` references `cursor_theme` by name only. Bundling
+    a recolored cursor fork into `<lnf>/contents/cursors/` would make the
+    theme self-contained for sharing.
+  **Approach:** Add `design["cursor"]` schema (`size`, `recolor`,
+  `tint_keys`) and `design["icons"]["category_overrides"]` schema. Implement
+  PIL-based cursor recolor pipeline as a sibling to `icon_theme_gen`.
+
+- [ ] **[FEATURE] Qt / Kvantum / Plasma LookAndFeel deeper customization**
+  Today, `materialize_kvantum` regenerates a fork of `KvArcDark`'s SVG with
+  `_svg_color_map` swapping a fixed list of grey/blue hex strings to palette
+  values, then writes a hand-rolled `kvconfig` (`_build_hermes_kvconfig`) and
+  flips `widgetStyle` to `kvantum`. `materialize_lnf` ships a minimal
+  `defaults` file and `metadata.json`. Several customization surfaces are
+  inaccessible from the design schema:
+  - **Kvantum geometry**: per-element border radius (buttons / menus /
+    tabs), frame width, button padding, indicator size, focus ring style.
+  - **Kvantum behavior**: animation durations, hover/pressed lightness
+    deltas, gradient direction (currently flat fills only), drop shadows.
+  - **Base SVG choice**: locked to `KvArcDark`/`KvAdaptaDark`/`KvFlat`/
+    `KvDark`. Designs cannot request a different shape language (e.g.
+    `KvBubble`, `KvCurves3d`, custom forks).
+  - **Right-click menus / popups**: no per-element accent (e.g. checked
+    item highlight, separator color, submenu indicator).
+  - **Plasma LookAndFeel splash screen / sddm theme / lockscreen
+    wallpaper bundling**: `_build_lnf_package` only writes `defaults`;
+    no `splash/`, `lockscreen/`, `previews/` assets generated from
+    palette + wallpaper.
+  - **Plasma theme fork**: `materialize_plasma_theme` only sets the name
+    (default \u2192 default no-op). Could fork `default` per-rice with
+    palette-recolored `dialogs/`, `widgets/`, `tooltips/` SVG fragments.
+  **Approach:** Promote the inline SVG color map and `_build_hermes_kvconfig`
+  to Jinja templates with palette + design-schema inputs; expose
+  `design["qt"]` schema (`base_svg`, `border_radius`, `button_padding`,
+  `frame_width`, `animation_ms`, `gradient`, `menu_accent`, `splash_image`,
+  `sddm_wallpaper`, etc.). Mirror Rofi/notifications/GTK TODOs in scope.
+
+- [ ] **[FEATURE] GTK 3 / GTK 4 / libadwaita deeper customization**
+  Today, `materialize_gtk` writes a fixed-shape `gtk.css` covering only:
+  `window`, `headerbar`, `entry`, `entry:focus`, `button`, `button:hover`,
+  plus libadwaita `@define-color accent_color / destructive_color /
+  success_color / warning_color / error_color / accent_bg_color /
+  accent_fg_color`. Many palette\u2192widget surfaces are not exposed:
+  - `headerbar` border/shadow/title font + subtitle styling.
+  - `button.suggested-action`, `button.destructive-action`, `.flat`,
+    `.linked` button variants and toggle button states.
+  - `popover`, `menu`, `menuitem`, `tooltip` (currently inherit defaults).
+  - `notebook tab`, `stack-switcher`, `viewswitcher`, sidebar.
+  - `selection`, `treeview` row hover/selection colors.
+  - `scrollbar`, `progressbar`, `switch`, `checkbutton`, `radiobutton`.
+  - libadwaita window border-radius, shadow, `card` widget background.
+  - Per-element border radius, font family override, background textures
+    / gradients (palette-derived `linear-gradient(...)` or PNG fills written
+    into the rice-session dir).
+  - GTK theme override choice (currently always `Adwaita-dark` / `Adwaita`
+    fallback; could be a custom forked theme generated per-rice).
+  **Approach:** Promote the inline f-string in `_build_gtk_css` to a Jinja
+  template (`templates/gtk/gtk.css.template`) with a thorough widget map.
+  Add optional `design["gtk"]` schema (`border_radius`, `shadow`,
+  `body_font`, `header_font`, `button_radius`, `texture_path`, etc.) with
+  sensible palette-derived defaults so existing designs keep working
+  unchanged. Mirror Rofi/notifications TODOs in scope.
+
+- [ ] **[FEATURE] KDE / Plasma notification popup deep customization**
+  Today, Plasma notification popups inherit colors from the global colorscheme
+  written by `materialize_kde` (`Colors:Window` for chrome, `Colors:View` for
+  body, `Colors:Tooltip` only for actual tooltips). There is no way to skin
+  notifications independently of the rest of the desktop without recoloring
+  every dialog and window. Provide a dedicated `materialize_plasma_notifications`
+  surface so the rice can give popups a distinct identity:
+  - Full palette override per-urgency (low / normal / critical) using palette
+    keys (e.g. critical \u2192 `danger` accent stripe, success-style green for
+    `notify-send -u low -h string:category:transfer.complete`).
+  - Font family + size override (e.g. force monospace prompt-style popups).
+  - Border width, color, radius, and optional drop-shadow.
+  - Background texture / gradient (palette-derived PNG/SVG written into the
+    rice-session dir, similar to wallpaper debug strip).
+  **Approach:** Plasma notification visuals are driven by the active Plasma
+  theme's `dialogs/background.svg` and the colorscheme. To customize without
+  hijacking the global colorscheme, generate a per-rice forked Plasma theme
+  (palette-recolored copy of `default`) targeting only `dialogs/background.svg`
+  and `widgets/notifications.svgz`, then set it via `plasma-apply-desktoptheme`.
+  Wire optional `design["notifications"]` schema (font, urgencies, border,
+  texture path) and fall back to colorscheme inheritance when absent.
+
+- [ ] **[FEATURE] Rofi: richer border + background texture support**
+  Current `materialize_rofi` exposes a fixed border (`2px solid @primary`,
+  `border-radius: 8px`) and solid-color backgrounds only. RASI supports more
+  expressive styling that is not yet wired through the design system:
+  - `background-image: linear-gradient(...)` / `url("...")` for window and
+    inputbar fills (patterns, palette-derived gradients, raster textures).
+  - Per-side `border` widths and `border-color` (e.g. asymmetric / accent
+    underline only).
+  - Variable `border-radius` per element (window vs inputbar vs element).
+  - Optional drop-shadow / outline emulation via stacked windows.
+  **Approach:** Extend `design["launcher"]` schema with optional
+  `border_style`, `border_radius`, `background_image`, `gradient` keys; let
+  materializer fall back to current defaults when absent. For texture support,
+  generate palette-derived PNG/SVG fills into the rice-session dir (similar to
+  how the wallpaper debug strip is generated) and reference them by absolute
+  path in the rasi.
+
+- [ ] **[FEATURE] Hermes document style / `soul.md` theme bridge**
+  When a desktop rice is active, generate a matching Hermes document/artifact
+  style context from the same design system. Use the theme palette and suitable
+  fonts for user-facing generated documents, reports, HTML handoffs, and other
+  artifacts when the user has not explicitly specified another style.
+  **Approach:** Add a safe optional materializer that updates only a managed
+  block in `~/.hermes/soul.md` (or equivalent Hermes style context), preserving
+  user-authored content. Derive body, heading, and monospace fonts plus document
+  colors from `design["document_style"]`, `design["typography"]`, `palette`,
+  `mood_tags`, and stance. Explicit user styling should always override this
+  default theme context.
+
 ## Open Issues
 
 ### Architectural Concerns
@@ -893,3 +1156,113 @@
   The sibling guard on line 101 already handles the sentinel-check case; this one
   covers the fallback path.
   **Fix:** Change to "message": response.content or "".
+
+---
+
+### Rollback / Undo Hardening Backlog -- 2026-04-30
+
+#### Non-File State Not Fully Restored
+
+- [ ] **[BUG] `materializers/system.py` + `ricer_undo.py`: GTK `gsettings` values are not restored**
+  `materialize_gtk()` writes `org.gnome.desktop.interface` keys (`gtk-theme`,
+  `icon-theme`, `cursor-theme`) and records the new values, but it does not
+  snapshot the previous values. `undo()` therefore cannot restore the pre-apply
+  GTK desktop state.
+  **Fix:** Before each `gsettings set`, run `gsettings get <schema> <key>` and
+  store `previous_value` in the manifest. Add a generic `_undo_gsettings()` helper
+  or a GTK-specific handler that restores previous values when present.
+
+- [ ] **[BUG] `materializers/gnome.py` + `ricer_undo.py`: GNOME Shell `gsettings` values are not restored**
+  `materialize_gnome_shell()` sets `org.gnome.desktop.interface color-scheme`,
+  but only records the new value. Undo cannot return GNOME's color-scheme
+  preference to the prior state.
+  **Fix:** Snapshot the previous `color-scheme` value before applying, record it
+  as `previous_value`, and restore it during undo.
+
+- [ ] **[BUG] `materializers/gnome.py` + `ricer_undo.py`: GNOME lockscreen `gsettings` values are not restored**
+  `materialize_gnome_lockscreen()` sets `org.gnome.desktop.screensaver`
+  `primary-color`, `secondary-color`, and `color-shading-type`, but records only
+  the new values. Undo leaves those persistent settings behind.
+  **Fix:** Snapshot each previous key value and add a GNOME lockscreen undo path
+  that restores them.
+
+- [ ] **[BUG] `materializers/system.py`: Flatpak GTK/icon overrides are persistent and not undone**
+  `materialize_gtk()` may run `flatpak override --user --filesystem ...` for GTK
+  config and icon directories. These user overrides persist after undo, and the
+  manifest currently records only success/new target state.
+  **Fix:** Snapshot `flatpak override --user --show` before applying. On undo,
+  restore the previous override state or remove only Hermes-added overrides that
+  were absent before apply.
+
+#### KDE / Plasma State Gaps
+
+- [ ] **[BUG] `materializers/kde_extras.py`: Look-and-Feel (`lnf`) has no undo handler**
+  `materialize_lnf()` records `previous_lnf`, `lnf_id`, and `lnf_path`, but
+  `_APP_UNDO_HANDLERS` does not include `lnf`. Undo does not reapply the previous
+  global theme and leaves the generated package selected or present.
+  **Fix:** Add `_undo_lnf()` and register it. If `previous_lnf` exists, run
+  `plasma-apply-lookandfeel --apply <previous_lnf>`; otherwise clear/delete the
+  `LookAndFeelPackage` key if appropriate. Also clean up generated Hermes LnF
+  packages only when safely under the expected prefix.
+
+- [ ] **[QUALITY] `materializers/kde_extras.py`: generated icon/LnF/Kvantum assets are not cleaned up on undo**
+  Undo restores config pointers for many KDE layers, but generated directories
+  such as palette icon themes, FAL icon assets, Look-and-Feel packages, and
+  generated Kvantum themes can remain in `~/.local/share` after rollback.
+  **Fix:** Record generated directories with a `generated_path` / `generated_paths`
+  field. Add safe undo cleanup that deletes only paths under known safe prefixes
+  and with Hermes/generated names.
+
+- [ ] **[BUG] `materializers/kde_extras.py`: Papirus folder color changes are not restored**
+  `materialize_icon_theme()` can call `papirus-folders`, but the manifest records
+  only the new color and success. Undo does not restore the previous Papirus folder
+  color state.
+  **Fix:** Snapshot the previous Papirus folder color if possible. If the tool does
+  not expose reliable readback, mark the action as best-effort/non-reversible in
+  the manifest and undo simulation output.
+
+#### Generic File / Injection Cleanup Gaps
+
+- [ ] **[BUG] `ricer_undo.py`: injection-only files created by Hermes can be left empty after undo**
+  `_undo_injections()` removes the marker line and following directive, but if
+  Hermes created the host file solely for that include/import, undo may leave an
+  empty config file behind. Likely affected: `waybar/style.css`, `eww/eww.scss`,
+  `eww/eww.yuck`, and similar injection host files.
+  **Fix:** Injection change records should include `backup` and/or `created: True`.
+  After removing the injected block, delete the file if it becomes empty and was
+  created by Hermes.
+
+- [ ] **[QUALITY] `ricer_undo.py`: older manifests cannot restore newly tracked state**
+  Manifests created before rollback fixes will not contain GTK CSS entries,
+  `backup: None` records, previous `gsettings` values, Flatpak snapshots, or
+  generated asset paths. Undo can only restore what the manifest recorded.
+  **Fix:** Improve `simulate-undo`/undo reporting to call out missing legacy fields
+  and recommend manual cleanup for known legacy gaps.
+
+#### Runtime Reload / Live State Gaps
+
+- [ ] **[QUALITY] `ricer_undo.py`: restored configs are not always live-reloaded after undo**
+  Many materializers reload live state on apply (`qdbus6 KWin reconfigure`,
+  `pkill -SIGUSR2 waybar`, `pkill -HUP picom`, `eww reload`, `hyprctl keyword ...`),
+  but generic file restoration does not consistently trigger matching reloads.
+  **Fix:** Add post-restore reload hooks for Hyprland, Waybar, Picom, EWW, and
+  other runtime-managed apps, or record explicit previous runtime values where the
+  config file alone is insufficient.
+
+- [ ] **[BUG] `materializers/hyprland.py`: live border keywords are not explicitly reverted by undo**
+  `materialize_hyprland()` applies border colors via `hyprctl keyword` immediately
+  and also patches `hyprland.conf` when present. Generic undo restores the config,
+  but it does not necessarily reset the live Hyprland keywords immediately.
+  **Fix:** Snapshot previous live values via `hyprctl getoption` where available,
+  record them, and add a Hyprland undo handler that reapplies the previous live
+  keywords or reloads Hyprland after config restore.
+
+#### Dry-Run / Simulation Parity
+
+- [ ] **[QUALITY] Materializer dry-run output should list all files/actions that would be touched**
+  Some dry-run records are less detailed than real apply records, especially for
+  non-file state, generated directories, `gsettings`, Flatpak overrides, and LnF.
+  This makes `--dry-run` and undo simulation less useful for risk review.
+  **Fix:** Ensure dry-run emits one change-like record per planned file write,
+  generated path, persistent setting, and external state mutation, without writing
+  anything.

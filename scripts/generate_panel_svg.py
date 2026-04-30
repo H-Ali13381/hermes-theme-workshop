@@ -58,8 +58,8 @@ def generate_svg(patch_b64=None):
         edge_fill   = "url(#parchment-tile)"
     else:
         pattern_def = ""
-        center_fill = f"url(#grad-center)"
-        edge_fill   = f"url(#grad-center)"
+        center_fill = "url(#grad-center)"
+        edge_fill   = "url(#grad-center)"
 
     svg = f"""<?xml version="1.0" encoding="UTF-8" standalone="no"?>
 <svg
@@ -279,7 +279,7 @@ X-Plasma-API=5.0
         print(f"  Wrote: {meta_path}")
 
     print("\nDone. To apply:")
-    print(f"  plasma-apply-desktoptheme void-dragon")
-    print(f"  qdbus6 org.kde.KWin /KWin reconfigure")
-    print(f"\nTo undo:")
-    print(f"  plasma-apply-desktoptheme default")
+    print("  plasma-apply-desktoptheme void-dragon")
+    print("  qdbus6 org.kde.KWin /KWin reconfigure")
+    print("\nTo undo:")
+    print("  plasma-apply-desktoptheme default")

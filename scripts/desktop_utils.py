@@ -39,7 +39,7 @@ def discover_desktop() -> dict[str, Any]:
 
     try:
         result = subprocess.run(
-            ["ps", "aux"], capture_output=True, text=True, timeout=3
+            ["ps", "aux"], capture_output=True, text=True, encoding="utf-8", timeout=3
         )
         proc_lower = result.stdout.lower()
     except (OSError, subprocess.SubprocessError, TimeoutError):

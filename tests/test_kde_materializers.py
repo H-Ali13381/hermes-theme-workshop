@@ -58,6 +58,42 @@ class TestMaterializeKvantumFallback(unittest.TestCase):
         self.assertEqual(len(result), 1)
         self.assertEqual(result[0]["action"], "dry-run")
         self.assertEqual(result[0]["theme"], "KvDark")
+        # Non-hermes themes must not be flagged for generation.
+        self.assertFalse(result[0]["will_generate"])
+
+    def test_dry_run_hermes_theme_flags_will_generate(self):
+        """hermes- themes with a palette must set will_generate=True in dry-run."""
+        result = ricer.materialize_kvantum(
+            {"kvantum_theme": "hermes-solar-flare", "palette": _MINIMAL_PALETTE},
+            backup_ts="20260427T000000", dry_run=True,
+        )
+        self.assertEqual(len(result), 1)
+        self.assertEqual(result[0]["action"], "dry-run")
+        self.assertTrue(result[0]["will_generate"])
+
+    def test_hermes_kvconfig_includes_explicit_menu_sections(self):
+        """Generated Kvantum themes must style Qt context menus explicitly."""
+        from materializers.kde_extras import _build_hermes_kvconfig
+
+        content = _build_hermes_kvconfig("hermes-test", _MINIMAL_PALETTE)
+
+        for section in ("[PanelButtonCommand]", "[Menu]", "[MenuItem]", "[MenuBar]", "[MenuBarItem]"):
+            self.assertIn(section, content)
+        self.assertIn("interior.element=menu", content)
+        self.assertIn("interior.element=menuitem", content)
+        self.assertIn("text.normal.color=#cdd6f4", content)
+
+    def test_hermes_svg_recolor_maps_kvarc_menu_accents(self):
+        """KvArc blue/purple menu accents must be remapped to the palette."""
+        from materializers.kde_extras import _apply_svg_colors, _svg_color_map
+
+        svg = '<path fill="#5294e2"/><path fill="#b74aff"/>'
+        recolored = _apply_svg_colors(svg, _svg_color_map(_MINIMAL_PALETTE))
+
+        self.assertIn('#89b4fa', recolored)
+        self.assertIn('#fab387', recolored)
+        self.assertNotIn('#5294e2', recolored)
+        self.assertNotIn('#b74aff', recolored)
 
     def test_widget_style_written_as_kvantum_not_kvantum_dark(self):
         """Regression: widgetStyle must be 'kvantum', never 'kvantum-dark'."""
@@ -563,7 +599,7 @@ class TestDiscoverAppsKde(unittest.TestCase):
             patch(f"{self._DISC}._get_kwrite", return_value="kwriteconfig6"),
         ):
             apps = ricer.discover_apps()
-        for key in ("kvantum", "plasma_theme", "cursor", "kde_lockscreen"):
+        for key in ("kvantum", "plasma_theme", "cursor", "kde_lockscreen", "lnf"):
             self.assertIn(key, apps, f"{key!r} missing from discover_apps")
 
     def test_kde_subsystems_absent_without_kde(self):

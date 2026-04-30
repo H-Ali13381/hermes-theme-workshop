@@ -98,7 +98,7 @@ def reload_swaync(reloaded: list[str], errors: list[str]) -> None:
 
 def reload_hyprland(reloaded: list[str], errors: list[str]) -> None:
     try:
-        r = subprocess.run(["hyprctl", "reload"], capture_output=True, text=True, timeout=10)
+        r = subprocess.run(["hyprctl", "reload"], capture_output=True, text=True, encoding="utf-8", timeout=10)
         if r.returncode == 0:
             reloaded.append("hyprland")
         else:

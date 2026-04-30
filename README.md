@@ -1,13 +1,88 @@
 # hermes-theme-workshop
 
-**Hermes agent skills for desktop personalization** — terminal skins, full DE theming
-engines, and everything in between. Extracted from iterative real-world usage on
-Arch Linux / KDE Plasma / Hyprland.
+**An AI-agent workshop for safe, reversible Linux desktop personalization.**
+
+This repo contains Hermes skills and tooling that let an AI agent act as a
+desktop designer: audit a Linux machine, turn a vague aesthetic brief into a
+concrete design system, apply that design across fragmented desktop components,
+verify what changed, and produce a rollback/handoff record.
+
+It started as terminal skinning. It has grown into an experiment in something
+Linux does not really have yet: a cross-desktop, adapter-based ricing agent for
+KDE Plasma, Hyprland, GTK/Qt apps, terminals, bars, launchers, notifications,
+wallpapers, prompts, and supporting config.
+
+Extracted from iterative real-world usage on Arch Linux / KDE Plasma / Hyprland.
 
 ![Marathon 2025 Themes](assets/previews/marathon2025-themes.png)
 
 > *Three themes (Chrysalis, Cortex, Extraction) generated live in a single Hyprland
 > ricing session — see [Part 2](#part-2--desktop-ricing-kde-hyprland-gtk).*
+
+---
+
+## Why This Exists
+
+Linux desktop theming is not one system. It is a pile of overlapping systems:
+
+- GTK 3, GTK 4, and libadwaita
+- Qt 5, Qt 6, Kvantum, KDE color schemes, and Plasma themes
+- Hyprland, Hyprlock, Waybar, Rofi/Wofi, Dunst/Mako/SwayNC
+- Kitty, Alacritty, Konsole, shell prompts, Fastfetch, widgets
+- wallpaper daemons, icon themes, cursor themes, Flatpak overrides, portals
+
+There is no universal “apply this design everywhere” API. Most users either keep
+the defaults, install a packaged theme, copy a dotfiles repo, or use palette tools
+like pywal/wallust/matugen and manually wire the rest together.
+
+This project treats that fragmentation as an agent problem:
+
+1. **Observe** what desktop environment, apps, and config files actually exist.
+2. **Plan** a coherent visual direction from a human brief.
+3. **Materialize** the design through per-target adapters instead of one giant overwrite.
+4. **Verify** files, settings, reloads, and visible state where possible.
+5. **Rollback** from a manifest if anything goes wrong.
+6. **Document** the final system so the user is not trapped in mystery dotfiles.
+
+The goal is not just “generate colors.” The goal is to make an AI agent safely
+operate over a messy local configuration ecosystem.
+
+---
+
+## What Makes It Unusual
+
+Most Linux ricing tools are one of these:
+
+- **Theme package installers** — good for GTK/KDE/GNOME themes, but limited to packaged assets.
+- **Palette generators** — pywal, wallust, matugen-style tools that emit colors/templates.
+- **Dotfiles** — beautiful, but usually tied to one author’s exact stack.
+- **Declarative frameworks** — powerful systems like Stylix, mostly for Nix/Home Manager users.
+
+`linux-ricing` is different because it is designed as an **AI-native orchestration
+layer** above those ideas:
+
+- The user can describe a feeling, not a config format.
+- The agent discovers which targets are relevant before writing anything.
+- Every target is handled by a small materializer with backups and reload logic.
+- The workflow has approval gates, quality scoring, checkpointing, and resume support.
+- The output includes a manifest, undo path, and human-readable handoff.
+
+In other words: this is not a universal theme file. It is a supervised agent
+workflow for turning design intent into safe, reversible OS-level changes.
+
+---
+
+## Current Status
+
+This is an active workshop, not a polished consumer app. The codebase currently
+contains two related systems:
+
+1. **Hermes CLI skinning** — stable, practical terminal/banner skin generation.
+2. **`linux-ricing` v3** — the main experiment: a LangGraph-backed desktop ricing
+   workflow plus a deterministic `ricer` CLI and rollback engine.
+
+The strongest paths today are KDE Plasma and Hyprland-oriented setups. Other
+desktops are partially documented or treated as future adapters.
 
 ---
 
@@ -43,7 +118,7 @@ linux-ricing/                                   ★ AI-native desktop design sys
 ├── scripts/
 │   ├── ricer.py                                ← materializer CLI (23 app targets)
 │   ├── ricer_undo.py                           ← rollback engine
-│   ├── presets.py                              ← built-in design presets (11 themes)
+│   ├── presets.py                              ← built-in design presets (10 themes)
 │   ├── palette_extractor.py                    ← image → 10-slot semantic palette
 │   ├── desktop_state_audit.py                  ← full desktop state snapshot
 │   ├── desktop_utils.py                        ← shared WM/DE detection

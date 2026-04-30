@@ -97,7 +97,7 @@ def _sudo_run(cmd: list[str], sudo_password: str) -> bool:
             r = subprocess.run(
                 ["sudo", "-S", "-p", "", "-k"] + cmd,
                 input=sudo_password + "\n",
-                capture_output=True, text=True, timeout=300,
+                capture_output=True, text=True, encoding="utf-8", timeout=300,
             )
             return r.returncode == 0
         except subprocess.TimeoutExpired:
@@ -105,7 +105,7 @@ def _sudo_run(cmd: list[str], sudo_password: str) -> bool:
     try:
         r = subprocess.run(
             ["sudo", "-n"] + cmd,
-            capture_output=True, text=True, timeout=300,
+            capture_output=True, text=True, encoding="utf-8", timeout=300,
         )
         return r.returncode == 0
     except subprocess.TimeoutExpired:
@@ -119,7 +119,7 @@ def _try_arch(pkg: str, sudo_password: str) -> bool:
         try:
             return subprocess.run(
                 ["yay", "-S", "--noconfirm", "--needed", pkg],
-                capture_output=True, text=True, timeout=300,
+                capture_output=True, text=True, encoding="utf-8", timeout=300,
             ).returncode == 0
         except subprocess.TimeoutExpired:
             pass

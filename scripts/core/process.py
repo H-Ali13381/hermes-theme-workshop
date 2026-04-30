@@ -6,7 +6,7 @@ import subprocess
 def run_cmd(cmd: list[str], timeout: int = 5) -> tuple[int, str, str]:
     try:
         result = subprocess.run(
-            cmd, capture_output=True, text=True, timeout=timeout
+            cmd, capture_output=True, text=True, encoding="utf-8", timeout=timeout
         )
         return result.returncode, result.stdout.strip(), result.stderr.strip()
     except (OSError, subprocess.SubprocessError, TimeoutError) as e:

@@ -65,15 +65,19 @@ color15 {adjust_lightness(palette['foreground'], 1.25)}
 
     include_line = "include theme.conf"
     hermes_marker = "# linux-ricing"
-    include_injected = False
     if main_config.exists():
-        conf_text = main_config.read_text(encoding="utf-8")
-        if include_line not in conf_text:
-            main_config.write_text(conf_text + f"\n{hermes_marker}\n{include_line}\n", encoding="utf-8")
-            include_injected = True
+        cleaned = []
+        for ln in main_config.read_text(encoding="utf-8").splitlines():
+            if ln.strip() == include_line:
+                if cleaned and cleaned[-1].strip() == hermes_marker:
+                    cleaned.pop()
+                continue
+            cleaned.append(ln)
+        new_text = "\n".join(cleaned).rstrip() + f"\n\n{hermes_marker}\n{include_line}\n"
+        main_config.write_text(new_text, encoding="utf-8")
     else:
         main_config.write_text(f"{hermes_marker}\n{include_line}\n", encoding="utf-8")
-        include_injected = True
+    include_injected = True
 
     changes.append({"app": "kitty", "action": "inject_include", "path": str(main_config),
                     "backup": main_backup, "injected": include_injected,
@@ -109,8 +113,15 @@ def materialize_konsole(design: dict, backup_ts: str, dry_run: bool = False) -> 
         "foreground": hex_to_rgb(adjust_lightness(palette["foreground"], 1.25)),
     }
     color_scheme_content = build_konsole_colorscheme(p, pi, color_scheme_name)
+    cursor_rgb = hex_to_rgb(palette["accent"])
+    cursor_text_rgb = hex_to_rgb(yiq_text_color(palette["accent"]))
     profile_content = f"""[Appearance]
 ColorScheme={color_scheme_name}
+
+[Cursor Options]
+CustomCursorColor={cursor_rgb}
+CustomCursorTextColor={cursor_text_rgb}
+UseCustomCursorColor=true
 
 [General]
 Name={profile_name}

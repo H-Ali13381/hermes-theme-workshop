@@ -71,6 +71,7 @@ def discover_apps() -> dict[str, Any]:
         apps["cursor"]         = {"installed": True}
         apps["icon_theme"]     = {"installed": True}
         apps["kde_lockscreen"] = {"installed": True}
+        apps["lnf"]            = {"installed": True}
 
     # Hyprland sub-system — register when hyprctl is present.
     if cmd_exists("hyprctl"):

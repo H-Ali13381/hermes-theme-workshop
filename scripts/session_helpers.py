@@ -46,7 +46,7 @@ def log(msg: str) -> None:
 def run(cmd: list[str], timeout: int = 30) -> tuple[int, str, str]:
     log(f"RUN: {' '.join(cmd)}")
     try:
-        result = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
+        result = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", timeout=timeout)
         if result.stdout:
             log(f"STDOUT: {result.stdout.strip()[:200]}")
         if result.stderr:

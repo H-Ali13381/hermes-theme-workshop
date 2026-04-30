@@ -38,7 +38,7 @@
   },
   "requirements": {
     "python": ">=3.10",
-    "packages": ["pillow", "jinja2"],
+    "packages": ["pillow", "jinja2", "pyyaml"],
     "workflow_packages": [
       "langgraph>=1.1.9",
       "langgraph-checkpoint-sqlite>=2.0.0",

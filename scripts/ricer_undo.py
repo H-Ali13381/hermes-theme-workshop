@@ -1,9 +1,13 @@
 """scripts/ricer_undo.py — Undo / rollback system for Hermes Ricer.
 
 Exports:
-  undo()            — execute full rollback of the last materialization
-  _describe_change  — used by 'simulate-undo' CLI command
-  _APP_UNDO_HANDLERS — per-app dispatch table (used by undo())
+  undo()                  — execute rollback of one materialization manifest
+  undo_session()          — walk active + history manifests newest→oldest and
+                            undo each (full session rollback)
+  simulate_undo_session() — list manifests + per-step describe output without
+                            executing anything
+  _describe_change        — used by 'simulate-undo' CLI command
+  _APP_UNDO_HANDLERS      — per-app dispatch table (used by undo())
 """
 from __future__ import annotations
 
@@ -27,30 +31,39 @@ from core.undo_describe import _describe_change           # noqa: E402
 # FILE-LEVEL RESTORE
 # ---------------------------------------------------------------------------
 
+_BACKUP_KEYS = ("backup", "backup_profile", "backup_colors",
+                "backup_konsolerc", "config_backup", "kdeglobals_backup")
+
+
+def _restore_destination(change: dict, backup_key: str) -> Path | None:
+    """Return the live file path for a manifest backup key."""
+    if backup_key == "backup" and "path" in change:
+        return Path(change["path"])
+    if backup_key == "backup_profile" and "profile_path" in change:
+        return Path(change["profile_path"])
+    if backup_key == "backup_colors" and "color_scheme_path" in change:
+        return Path(change["color_scheme_path"])
+    if backup_key == "backup_konsolerc":
+        return HOME / ".config" / "konsolerc"
+    if backup_key == "config_backup":
+        return (Path(change["config_path"]) if "config_path" in change
+                else HOME / ".config" / "waybar" / "config")
+    if backup_key == "kdeglobals_backup":
+        return HOME / ".config" / "kdeglobals"
+    return None
+
+
 def _restore_backed_up_files(change: dict, restored: list, failed: list) -> None:
     """Restore any backed-up files referenced in a change record."""
     app = change.get("app", "unknown")
-    for backup_key in ("backup", "backup_profile", "backup_colors",
-                       "backup_konsolerc", "config_backup", "kdeglobals_backup"):
-        bp = change.get(backup_key)
-        if not bp:
+    for backup_key in _BACKUP_KEYS:
+        if backup_key not in change:
             continue
-        if Path(bp).exists():
-            if backup_key == "backup" and "path" in change:
-                dest = Path(change["path"])
-            elif backup_key == "backup_profile" and "profile_path" in change:
-                dest = Path(change["profile_path"])
-            elif backup_key == "backup_colors" and "color_scheme_path" in change:
-                dest = Path(change["color_scheme_path"])
-            elif backup_key == "backup_konsolerc":
-                dest = HOME / ".config" / "konsolerc"
-            elif backup_key == "config_backup":
-                dest = (Path(change["config_path"]) if "config_path" in change
-                        else HOME / ".config" / "waybar" / "config")
-            elif backup_key == "kdeglobals_backup":
-                dest = HOME / ".config" / "kdeglobals"
-            else:
-                continue
+        bp = change.get(backup_key)
+        dest = _restore_destination(change, backup_key)
+        if dest is None:
+            continue
+        if bp and Path(bp).exists():
             try:
                 shutil.copy2(bp, dest)
                 restored.append({"app": app, "restored": str(dest), "from": bp})
@@ -58,14 +71,13 @@ def _restore_backed_up_files(change: dict, restored: list, failed: list) -> None
                 failed.append({"app": app, "path": str(dest), "error": str(e)})
         else:
             # Backup gone — delete the file we created
-            dest_path = change.get("path")
-            if dest_path and Path(dest_path).exists():
+            if dest.exists():
                 try:
-                    Path(dest_path).unlink()
-                    restored.append({"app": app, "deleted": dest_path,
+                    dest.unlink()
+                    restored.append({"app": app, "deleted": str(dest),
                                      "note": "no backup existed — file was new, deleted"})
                 except OSError as e:
-                    failed.append({"app": app, "path": dest_path, "error": str(e)})
+                    failed.append({"app": app, "path": str(dest), "error": str(e)})
 
 
 def _undo_injections(change: dict, restored: list, skipped: list) -> None:
@@ -145,7 +157,6 @@ def _undo_plasma_theme(change: dict, restored: list, failed: list, skipped: list
         skipped.append({"app": "plasma_theme", "note": "no previous theme recorded"})
 
 
-
 def _undo_cursor(change: dict, restored: list, failed: list, skipped: list) -> None:
     if change.get("action") != "write":
         return
@@ -204,6 +215,31 @@ _WALLPAPER_CMD_MAP: dict[str, str] = {
 }
 
 
+def _undo_eww(change: dict, restored: list, failed: list, skipped: list) -> None:
+    """Live-state cleanup for EWW.
+
+    Generic handlers already restore/delete the written files
+    (``hermes-palette.scss``, ``hermes-theme.yuck``) and strip the
+    ``@import`` / ``(include)`` injections from ``eww.scss`` /
+    ``eww.yuck``.  This handler then closes the ``hermes-clock``
+    window if it was opened and reloads the daemon so the live
+    config reflects the cleaned files.
+    """
+    if change.get("action") != "reload":
+        return
+    if not cmd_exists("eww"):
+        skipped.append({"app": "eww", "note": "eww binary not found"})
+        return
+    run_cmd(["eww", "close", "hermes-clock"], timeout=5)
+    rc, _, _ = run_cmd(["eww", "reload"], timeout=5)
+    if rc == 0:
+        restored.append({"app": "eww", "action": "closed_window_and_reloaded",
+                         "window": "hermes-clock"})
+    else:
+        skipped.append({"app": "eww",
+                        "note": "eww reload exit != 0 (daemon may not be running)"})
+
+
 def _undo_wallpaper(change: dict, restored: list, failed: list, skipped: list) -> None:
     if change.get("action") != "set":
         return
@@ -231,7 +267,8 @@ def _undo_wallpaper(change: dict, restored: list, failed: list, skipped: list) -
         run_cmd(["pkill", "-x", "hyprpaper"])
         time.sleep(1)
         if cmd_exists("hyprpaper"):
-            subprocess.Popen(["hyprpaper"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+            subprocess.Popen(["hyprpaper"], stdin=subprocess.DEVNULL,
+                             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
                              start_new_session=True)
         restored.append({"app": "wallpaper", "action": "restored", "path": prev, "method": method})
     else:
@@ -247,19 +284,19 @@ _APP_UNDO_HANDLERS: dict[str, object] = {
     "icon_theme":     _undo_icon_theme,
     "kde_lockscreen": _undo_kde_lockscreen,
     "wallpaper":      _undo_wallpaper,
+    "eww":            _undo_eww,
 }
-
-
-
-# _describe_change moved to core/undo_describe.py and re-exported above.
 
 
 # ---------------------------------------------------------------------------
 # ROLLBACK ENTRY POINT
 # ---------------------------------------------------------------------------
 
-def undo() -> dict:
-    """Undo the most recent materialization.
+def undo(manifest_path: Path | None = None) -> dict:
+    """Undo a single materialization manifest.
+
+    Defaults to the active manifest at ``CURRENT_DIR/manifest.json``; pass an
+    explicit path to undo an archived history manifest.
 
     Strategy per app:
     - If the change has a 'backup' key: restore the file from backup.
@@ -268,14 +305,20 @@ def undo() -> dict:
       the file — belt-and-suspenders).
     - For KDE: re-apply the previous colorscheme via plasma-apply-colorscheme.
     """
-    manifest_path = CURRENT_DIR / "manifest.json"
+    if manifest_path is None:
+        manifest_path = CURRENT_DIR / "manifest.json"
     if not manifest_path.exists():
         return {"status": "error",
+                "manifest": str(manifest_path),
                 "message": "No active theme to undo. Run 'apply' or 'preset' first."}
 
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     if manifest.get("dry_run"):
-        return {"status": "error", "message": "Cannot undo a dry-run — no changes were made."}
+        return {"status": "skipped", "manifest": str(manifest_path),
+                "message": "Dry-run manifest — no changes were made."}
+    if manifest.get("undone"):
+        return {"status": "skipped", "manifest": str(manifest_path),
+                "message": f"Already undone at {manifest.get('undone_at')}"}
 
     restored, failed, skipped = [], [], []
 
@@ -294,7 +337,160 @@ def undo() -> dict:
 
     return {
         "status":   "success" if not failed else "partial",
+        "manifest": str(manifest_path),
         "restored": restored,
         "failed":   failed,
         "skipped":  skipped,
+    }
+
+
+# ---------------------------------------------------------------------------
+# SESSION-SPANNING ROLLBACK
+# ---------------------------------------------------------------------------
+
+def _collect_session_manifests(theme: str | None = None) -> list[Path]:
+    """Return manifests for rollback, newest→oldest.
+
+    The active manifest (``CURRENT_DIR/manifest.json``) is always first;
+    archived manifests in ``CURRENT_DIR/history/manifest_*.json`` follow,
+    sorted by filename descending (timestamps embedded in filenames).
+
+    If ``theme`` is given, only manifests whose ``design_system.name`` matches
+    are kept — this scopes rollback to a single session and prevents undoing
+    applies from previous, unrelated sessions.
+    """
+    candidates: list[Path] = []
+    active = CURRENT_DIR / "manifest.json"
+    if active.exists():
+        candidates.append(active)
+    history_dir = CURRENT_DIR / "history"
+    if history_dir.exists():
+        archived = sorted(history_dir.glob("manifest_*.json"),
+                          key=lambda p: p.name, reverse=True)
+        candidates.extend(archived)
+    if theme is None:
+        return candidates
+    matching: list[Path] = []
+    for mp in candidates:
+        try:
+            data = json.loads(mp.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            continue
+        if data.get("design_system", {}).get("name") == theme:
+            matching.append(mp)
+    return matching
+
+
+def _active_theme_name() -> str | None:
+    """Return the design_system.name of the active manifest, or None."""
+    active = CURRENT_DIR / "manifest.json"
+    if not active.exists():
+        return None
+    try:
+        data = json.loads(active.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return None
+    return data.get("design_system", {}).get("name")
+
+
+def undo_session(all_history: bool = False) -> dict:
+    """Roll back every manifest of the current session, newest→oldest.
+
+    By default scopes to the active session's theme (matches
+    ``design_system.name`` of the active manifest), preventing accidental
+    rollback of unrelated previous sessions. Pass ``all_history=True`` to
+    walk every manifest in history regardless of theme.
+
+    Walks the active manifest and ``history/manifest_*.json`` in descending
+    timestamp order, calling :func:`undo` on each. Manifests that are already
+    undone or were dry-runs are skipped silently. Each step's restore output
+    is preserved in ``per_manifest`` for auditing.
+    """
+    theme = None if all_history else _active_theme_name()
+    manifests = _collect_session_manifests(theme)
+    if not manifests:
+        return {"status": "error",
+                "message": "No manifests to undo (no active session)."}
+
+    per_manifest: list[dict] = []
+    total_restored = 0
+    total_failed   = 0
+    executed       = 0
+    skipped        = 0
+
+    for mp in manifests:
+        result = undo(mp)
+        per_manifest.append(result)
+        if result.get("status") == "skipped":
+            skipped += 1
+            continue
+        if result.get("status") == "error":
+            continue
+        executed += 1
+        total_restored += len(result.get("restored", []))
+        total_failed   += len(result.get("failed", []))
+
+    return {
+        "status":               "success" if total_failed == 0 else "partial",
+        "scope":                "all_history" if all_history else f"theme={theme}",
+        "manifests_total":      len(manifests),
+        "manifests_executed":   executed,
+        "manifests_skipped":    skipped,
+        "total_restored":       total_restored,
+        "total_failed":         total_failed,
+        "per_manifest":         per_manifest,
+    }
+
+
+def simulate_undo_session(all_history: bool = False) -> dict:
+    """Preview a session-spanning rollback without applying any changes.
+
+    By default scopes to the active session's theme; pass ``all_history=True``
+    to preview a rollback across every manifest in history.
+
+    Returns a list of manifest summaries (one per step that *would* be undone),
+    each with the same shape used by ``simulate-undo``. Skipped manifests
+    (already-undone, dry-run) are included with a ``status`` field but no
+    ``changes`` list.
+    """
+    theme = None if all_history else _active_theme_name()
+    manifests = _collect_session_manifests(theme)
+    summaries: list[dict] = []
+    for mp in manifests:
+        try:
+            data = json.loads(mp.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError) as e:
+            summaries.append({"manifest": str(mp), "status": "error",
+                              "message": str(e)})
+            continue
+        ds = data.get("design_system", {})
+        entry: dict = {
+            "manifest":   str(mp),
+            "theme":      ds.get("name", "unknown"),
+            "timestamp":  data.get("timestamp", "unknown"),
+            "backup_dir": data.get("backup_dir", "unknown"),
+            "undone":     bool(data.get("undone")),
+            "dry_run":    bool(data.get("dry_run")),
+            "apps":       sorted({c.get("app", "?")
+                                  for c in data.get("changes", [])}),
+        }
+        if data.get("dry_run"):
+            entry["status"] = "skipped"
+            entry["reason"] = "dry-run"
+        elif data.get("undone"):
+            entry["status"] = "skipped"
+            entry["reason"] = "already undone"
+        else:
+            entry["status"] = "would_undo"
+            entry["change_descriptions"] = [
+                line
+                for change in data.get("changes", [])
+                if change.get("action") != "error"
+                for line in _describe_change(change)
+            ]
+        summaries.append(entry)
+    return {
+        "scope":           "all_history" if all_history else f"theme={theme}",
+        "manifests_total": len(manifests),
+        "manifests":       summaries,
     }

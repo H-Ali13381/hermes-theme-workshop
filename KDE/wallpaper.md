@@ -29,6 +29,20 @@ plasma-apply-wallpaperimage /path/to/output.png
 - Include palette language: "deep void-blue-black background, cyan energy glow, gold filigree border"
 - Style anchors: "dark fantasy digital painting, cinematic lighting, highly detailed"
 
+## Finding Wallpapers
+
+| Source | Notes |
+|--------|-------|
+| **WallHaven** (wallhaven.cc) | Massive curated collection; filter by hex color — paste your palette's background color to find matching wallpapers |
+| **Unsplash** (unsplash.com) | High-quality free photos; good for atmospheric/nature themes |
+| **r/wallpaper**, **r/wallpapers** | Community submissions; broad variety |
+| **KDE Store** (store.kde.org) | Plasma-specific packs, dynamic wallpapers |
+| **Bing Daily** | Daily high-quality photo; available as a KDE Plasma plugin |
+
+WallHaven's color filter is particularly useful for ricing: search for any hex color and it returns wallpapers dominated by that hue. Use your palette's `background` color to find wallpapers that will feel coherent with the rest of the theme.
+
+---
+
 ## Palette Extraction Integration
 
 Extract a design system palette from the wallpaper:

@@ -24,7 +24,7 @@ from desktop_utils import discover_desktop  # noqa: E402
 
 def run(cmd: list[str], timeout: int = 10) -> tuple[int, str]:
     try:
-        r = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
+        r = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", timeout=timeout)
         return r.returncode, r.stdout.strip()
     except (subprocess.TimeoutExpired, FileNotFoundError, OSError):
         return -1, ""

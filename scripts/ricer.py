@@ -35,7 +35,7 @@ from materializers import (                                # noqa: E402
     APP_MATERIALIZERS,
     materialize_kde, materialize_kvantum, materialize_plasma_theme,
     materialize_cursor, materialize_icon_theme, materialize_kde_lockscreen,
-    _lockscreen_lnf_for_palette,
+    materialize_lnf, _lockscreen_lnf_for_palette,
     materialize_kitty, materialize_alacritty, materialize_konsole,
     materialize_waybar, materialize_polybar,
     materialize_rofi, materialize_wofi,
@@ -51,7 +51,9 @@ from materializers import (                                # noqa: E402
 from presets import PRESETS, load_preset                   # noqa: E402
 
 # ── undo / rollback ───────────────────────────────────────────────────────────
-from ricer_undo import undo, _describe_change              # noqa: E402
+from ricer_undo import (                                   # noqa: E402
+    undo, undo_session, simulate_undo_session, _describe_change,
+)
 
 # ---------------------------------------------------------------------------
 # ORCHESTRATOR
@@ -144,9 +146,13 @@ def main():
     extract_parser.add_argument("--name", default=None, help="Theme name (default: image stem)")
 
     subparsers.add_parser("undo", help="Undo last theme application")
+    undo_session_p = subparsers.add_parser("undo-session", help="Roll back every apply of the current session (active manifest + history)")
+    undo_session_p.add_argument("--all", action="store_true", help="Walk every manifest in history regardless of theme (default: scope to active session's theme)")
     subparsers.add_parser("status", help="Show detected stack and active theme")
     subparsers.add_parser("presets", help="List available presets")
     subparsers.add_parser("simulate-undo", help="Show exactly what undo would restore, without applying anything")
+    sim_session_p = subparsers.add_parser("simulate-undo-session", help="Show exactly what undo-session would restore across the full session, without applying anything")
+    sim_session_p.add_argument("--all", action="store_true", help="Walk every manifest in history regardless of theme (default: scope to active session's theme)")
 
     args = parser.parse_args()
 
@@ -280,6 +286,44 @@ def main():
                 print(line)
         print()
         print("Run 'ricer undo' to execute the above.")
+        return
+
+    if args.command == "undo-session":
+        result = undo_session(all_history=args.all)
+        print(json.dumps(result, indent=2, default=str))
+        if result.get("status") == "success":
+            print(f"\nSession rollback complete — {result.get('manifests_executed', 0)} "
+                  f"manifest(s) undone, {result.get('total_restored', 0)} restore(s). "
+                  f"Scope: {result.get('scope')}.", file=sys.stderr)
+        elif result.get("status") == "partial":
+            print(f"\nPartial session rollback — {result.get('total_failed', 0)} "
+                  f"failure(s) across {result.get('manifests_executed', 0)} manifest(s). "
+                  f"Check 'per_manifest' in output. Scope: {result.get('scope')}.", file=sys.stderr)
+        return
+
+    if args.command == "simulate-undo-session":
+        result = simulate_undo_session(all_history=args.all)
+        manifests = result.get("manifests", [])
+        if not manifests:
+            print("No manifests found — no session to roll back.")
+            return
+        print("=== Simulate Session Undo ===")
+        print(f"Scope                : {result.get('scope')}")
+        print(f"Manifests in session : {result.get('manifests_total', 0)}")
+        print(f"Order                : newest \u2192 oldest")
+        print()
+        for i, m in enumerate(manifests, 1):
+            tag = "WOULD UNDO" if m.get("status") == "would_undo" else f"SKIP ({m.get('reason', m.get('status'))})"
+            print(f"--- [{i}/{len(manifests)}] {tag} ---")
+            print(f"  manifest   : {m.get('manifest')}")
+            print(f"  theme      : {m.get('theme')}")
+            print(f"  timestamp  : {m.get('timestamp')}")
+            print(f"  apps       : {', '.join(m.get('apps', [])) or '(none)'}")
+            print(f"  backup_dir : {m.get('backup_dir')}")
+            for line in m.get("change_descriptions", []):
+                print(f"    {line}")
+            print()
+        print("Run 'ricer undo-session' to execute the above.")
         return
 
     parser.print_help()

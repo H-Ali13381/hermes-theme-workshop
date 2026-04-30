@@ -50,7 +50,8 @@ class InstallPackagesTests(unittest.TestCase):
 
         self.assertEqual(errors, [])
         # The call should use sudo -n, not sudo -S (stdin password)
-        self.assertTrue(any("-n" in cmd for cmd in calls))
+        matching = [cmd for cmd in calls if "-n" in cmd]
+        self.assertTrue(matching, f"Expected a sudo -n call; got calls: {calls}")
         # No call should have both 'sudo' and '-S' adjacent (the stdin password flag)
         for cmd in calls:
             if "sudo" in cmd:

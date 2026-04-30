@@ -49,21 +49,34 @@ class BuildStarshipTomlTests(unittest.TestCase):
         self.assertIn('#7aa2f7"', self.toml)
         self.assertIn('#1a1b26"', self.toml)
 
+    # Starship 1.25+ does not interpolate $-prefixed names in palette styles
+    # (the materializer was patched to emit bare slot names, e.g. "bold primary"
+    # rather than "bold $primary"); these tests assert the bare-name form.
+
     def test_character_module_uses_success_and_danger_slots(self):
-        self.assertIn("$success", self.toml)
-        self.assertIn("$danger", self.toml)
+        self.assertIn("bold success", self.toml)
+        self.assertIn("bold danger", self.toml)
 
     def test_directory_uses_primary(self):
         self.assertIn("[directory]", self.toml)
-        self.assertIn("$primary", self.toml)
+        self.assertIn("bold primary", self.toml)
 
     def test_git_branch_uses_secondary(self):
         self.assertIn("[git_branch]", self.toml)
-        self.assertIn("$secondary", self.toml)
+        self.assertIn("bold secondary", self.toml)
 
     def test_cmd_duration_uses_muted(self):
         self.assertIn("[cmd_duration]", self.toml)
-        self.assertIn("$muted", self.toml)
+        self.assertIn("bold muted", self.toml)
+
+    def test_styles_do_not_use_dollar_prefix(self):
+        # Regression guard: $-prefixed palette refs are not interpolated by
+        # starship 1.25+; the materializer must emit bare names.
+        after_palette = self.toml.split("[character]", 1)[-1]
+        for slot in ("primary", "secondary", "accent", "muted",
+                     "success", "danger", "warning", "foreground"):
+            self.assertNotIn(f"${slot}", after_palette,
+                             f"$-prefixed palette ref leaked into styles: ${slot}")
 
     def test_no_raw_hex_in_style_strings(self):
         # Style strings must reference palette slots, not inline hex values

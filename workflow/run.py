@@ -72,7 +72,7 @@ def main() -> None:
                 "errors": [],
             }
             print(f"\n{'='*60}")
-            print(f"  Linux Ricing Session")
+            print("  Linux Ricing Session")
             print(f"  Thread ID: {thread_id}")
             print(f"  Session dir: {session_dir}")
             print(f"  Resume later: python3 workflow/run.py --resume {thread_id}")
@@ -112,7 +112,7 @@ def _run_loop(graph, config: dict, initial_input) -> None:
             print("  Session complete!")
             if session_dir:
                 print(f"  Handoff: {session_dir}/handoff.md")
-                print(f"  Rollback: ricer undo")
+                print("  Rollback: ricer undo")
             print("="*60 + "\n")
             break
 

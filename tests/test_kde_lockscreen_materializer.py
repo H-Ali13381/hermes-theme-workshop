@@ -68,6 +68,10 @@ class MaterializeKdeLockscreenTests(unittest.TestCase):
     _GET_KWRITE_PATCH = "materializers.kde_extras._get_kwrite"
     _RUN_CMD_PATCH    = "materializers.kde_extras.run_cmd"
     _KREAD_PATCH      = "materializers.kde_extras._kread"
+    # Lock-screen materializer also resolves a wallpaper. Patch the resolver
+    # to return None by default so the existing focused tests assert only the
+    # greeter-theme write path; wallpaper-injection is covered separately.
+    _RESOLVE_WP_PATCH = "materializers.kde_extras._resolve_lockscreen_wallpaper"
 
     def test_dry_run_returns_single_change_without_writing(self):
         tmpdir = Path(tempfile.mkdtemp())
@@ -93,6 +97,7 @@ class MaterializeKdeLockscreenTests(unittest.TestCase):
              patch(self._BACKUP_DIR_PATCH, new=tmpdir / "backup"), \
              patch(self._CMD_EXISTS_PATCH, return_value=False), \
              patch(self._GET_KWRITE_PATCH, return_value="kwriteconfig6"), \
+             patch(self._RESOLVE_WP_PATCH, return_value=None), \
              patch(self._RUN_CMD_PATCH) as mock_run:
             mock_run.return_value = (0, "", "")
             changes = materialize_kde_lockscreen(_DARK_DESIGN, backup_ts="20260101_000000")
@@ -103,7 +108,8 @@ class MaterializeKdeLockscreenTests(unittest.TestCase):
         self.assertEqual(change["action"], "write")
         self.assertEqual(change["greeter_theme"], "org.kde.breezedark.desktop")
 
-        # kwriteconfig6 called with correct args
+        # kwriteconfig6 called with correct args (only the greeter Theme write
+        # when no wallpaper is resolved).
         kwrite_calls = [c for c in mock_run.call_args_list
                         if c.args[0][0] == "kwriteconfig6"]
         self.assertEqual(len(kwrite_calls), 1)
@@ -121,6 +127,7 @@ class MaterializeKdeLockscreenTests(unittest.TestCase):
              patch(self._BACKUP_DIR_PATCH, new=tmpdir / "backup"), \
              patch(self._CMD_EXISTS_PATCH, return_value=False), \
              patch(self._GET_KWRITE_PATCH, return_value="kwriteconfig6"), \
+             patch(self._RESOLVE_WP_PATCH, return_value=None), \
              patch(self._RUN_CMD_PATCH) as mock_run:
             mock_run.return_value = (0, "", "")
             changes = materialize_kde_lockscreen(_LIGHT_DESIGN, backup_ts="20260101_000000")
@@ -137,11 +144,16 @@ class MaterializeKdeLockscreenTests(unittest.TestCase):
              patch(self._BACKUP_DIR_PATCH, new=tmpdir / "backup"), \
              patch(self._CMD_EXISTS_PATCH, return_value=False), \
              patch(self._GET_KWRITE_PATCH, return_value=None), \
+             patch(self._RESOLVE_WP_PATCH, return_value=None), \
              patch(self._RUN_CMD_PATCH, return_value=(0, "", "")):
             changes = materialize_kde_lockscreen(_DARK_DESIGN, backup_ts="20260101_000000")
 
         change = changes[0]
-        for field in ("app", "action", "greeter_theme", "config_path", "backup", "previous_theme"):
+        # The materializer now also records wallpaper context for rollback +
+        # downstream consumers (lockscreen materializer was extended to write
+        # the lock-screen wallpaper alongside the greeter theme).
+        for field in ("app", "action", "greeter_theme", "config_path", "backup",
+                      "previous_theme", "wallpaper", "previous_wallpaper", "fill_mode"):
             self.assertIn(field, change, f"missing field: {field}")
 
     def test_previous_theme_captured_when_kreadconfig_succeeds(self):
@@ -154,6 +166,7 @@ class MaterializeKdeLockscreenTests(unittest.TestCase):
              patch(self._BACKUP_DIR_PATCH, new=tmpdir / "backup"), \
              patch(self._CMD_EXISTS_PATCH, return_value=False), \
              patch(self._GET_KWRITE_PATCH, return_value=None), \
+             patch(self._RESOLVE_WP_PATCH, return_value=None), \
              patch(self._RUN_CMD_PATCH, return_value=(0, "", "")), \
              patch(self._KREAD_PATCH, return_value="org.kde.breeze.desktop"):
             changes = materialize_kde_lockscreen(_DARK_DESIGN, backup_ts="20260101_000000")
@@ -172,6 +185,7 @@ class MaterializeKdeLockscreenTests(unittest.TestCase):
              patch(self._BACKUP_DIR_PATCH, new=backup_dir), \
              patch(self._CMD_EXISTS_PATCH, return_value=False), \
              patch(self._GET_KWRITE_PATCH, return_value=None), \
+             patch(self._RESOLVE_WP_PATCH, return_value=None), \
              patch(self._RUN_CMD_PATCH, return_value=(0, "", "")):
             changes = materialize_kde_lockscreen(_DARK_DESIGN, backup_ts="20260101_000000")
 
@@ -179,6 +193,34 @@ class MaterializeKdeLockscreenTests(unittest.TestCase):
         backup_path = Path(changes[0]["backup"])
         self.assertTrue(backup_path.exists())
         self.assertIn("Timeout", backup_path.read_text(encoding="utf-8"))
+
+    def test_wallpaper_writes_image_and_fill_mode(self):
+        # When _resolve_lockscreen_wallpaper returns a path, the materializer
+        # also writes WallpaperPlugin, the Image URI, and FillMode in addition
+        # to the greeter Theme.
+        tmpdir = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, tmpdir, True)
+        wp = "/tmp/lockscreen-test.png"
+        with patch(self._HOME_PATCH, new=tmpdir), \
+             patch(self._BACKUP_DIR_PATCH, new=tmpdir / "backup"), \
+             patch(self._CMD_EXISTS_PATCH, return_value=False), \
+             patch(self._GET_KWRITE_PATCH, return_value="kwriteconfig6"), \
+             patch(self._RESOLVE_WP_PATCH, return_value=wp), \
+             patch(self._RUN_CMD_PATCH) as mock_run:
+            mock_run.return_value = (0, "", "")
+            changes = materialize_kde_lockscreen(_DARK_DESIGN, backup_ts="20260101_000000")
+
+        kwrite_calls = [c for c in mock_run.call_args_list
+                        if c.args[0][0] == "kwriteconfig6"]
+        self.assertEqual(len(kwrite_calls), 4)
+        flat = [tok for c in kwrite_calls for tok in c.args[0]]
+        self.assertIn("Theme", flat)
+        self.assertIn("WallpaperPlugin", flat)
+        self.assertIn("Image", flat)
+        self.assertIn("FillMode", flat)
+        self.assertIn(f"file://{wp}", flat)
+        self.assertEqual(changes[0]["wallpaper"], wp)
+        self.assertEqual(changes[0]["fill_mode"], "2")
 
 
 class RoutingTests(unittest.TestCase):

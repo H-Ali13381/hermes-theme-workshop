@@ -1,6 +1,6 @@
 # KDE Plasma Ricing — Setup & Overview
 
-## The 5-Layer Stack
+## The 6-Layer Stack
 
 A colorscheme alone produces subtle changes — only Qt window chrome shifts.
 For dramatic, system-wide transformation, apply ALL layers in order:
@@ -12,6 +12,18 @@ For dramatic, system-wide transformation, apply ALL layers in order:
 | 3. Cursor | Cursor theme across all apps | `plasma-apply-cursortheme "<Theme Name>"` |
 | 4. Splash screen | Boot splash | `kwriteconfig6 --file ksplashrc --group KSplash --key Theme <id>` |
 | 5. Plasma theme | Panel/taskbar SVG backgrounds | `plasma-apply-desktoptheme <theme-name>` |
+| 6. Window decorations | Title bar shape, buttons, borders on every window | `kwriteconfig6 --file kwinrc --group org.kde.kdecoration2 --key library org.kde.breeze` |
+
+Window decorations are a distinct KWin layer — independent of colorscheme and Kvantum. Common choices:
+- **Breeze** — default, minimal, adapts to colorscheme
+- **Flat Aurora** — borderless, no title bar buttons visible until hover (clean for riced setups)
+- **Klassy** — highly configurable borders, rounded corners, glow effects
+- **No decorations** — for tiling setups; set via `kwriteconfig6 --file kwinrc --group Windows --key BorderlessMaximizedWindows true`
+
+Apply without restart:
+```bash
+qdbus6 org.kde.KWin /KWin reconfigure
+```
 
 ### Live Reload
 
@@ -22,6 +34,50 @@ qdbus6 org.kde.KWin /KWin reconfigure
 **NEVER** call `qdbus6 org.kde.plasmashell /PlasmaShell org.kde.PlasmaShell.refreshCurrentShell` on Wayland — it kills plasmashell without restarting. Recovery: `plasmashell --replace &`
 
 Already-open Qt apps need to be closed and reopened to pick up Kvantum changes.
+
+---
+
+## KDE Config File Map
+
+Where KDE stores its state — useful for manual inspection or targeted writes:
+
+| Path | Contents |
+|------|----------|
+| `~/.config/kdeglobals` | Color scheme, fonts, widget style |
+| `~/.config/kwinrc` | Window manager settings, tiling, decoration plugin |
+| `~/.config/ksplashrc` | Plasma login splash theme |
+| `~/.config/kscreenlockerrc` | Lock screen config |
+| `~/.config/kcminputrc` | Cursor theme, input settings |
+| `~/.config/Kvantum/kvantum.kvconfig` | Active Kvantum theme |
+| `~/.config/plasma-org.kde.plasma.desktop-appletsrc` | Panel layout, widget positions, wallpaper |
+| `~/.local/share/plasma/desktoptheme/` | User-installed Plasma (panel) themes |
+| `~/.local/share/plasma/look-and-feel/` | Global theme bundles |
+| `~/.local/share/color-schemes/` | `.colors` files |
+| `~/.local/share/icons/` | User icon packs and cursor themes |
+| `~/.local/share/aurorae/themes/` | SVG-based window decoration themes |
+| `/usr/share/plasma/` | System-wide Plasma themes |
+| `/usr/share/icons/` | System-wide icons |
+
+### Global Themes
+A **Global Theme** (`~/.local/share/plasma/look-and-feel/`) bundles Plasma Style + Color Scheme + Window Decoration + Icons + Cursors + Splash Screen in one package. Applying one with `plasma-apply-lookandfeel` sets all layers at once, which is why individual layer commands (like `plasma-apply-colorscheme`) are needed when the ricer controls each layer independently.
+
+### KWin Desktop Effects (Blur & Animations)
+Enable/configure via System Settings → Workspace → Desktop Effects, or scripted via `kwriteconfig6`:
+
+Key effects for ricing:
+- **Blur** — blurs content behind translucent panels/windows. Requires the panel or window to have some transparency set (via Kvantum, Plasma Style, or KWin Rules). Configure Blur Strength (10–15 subtle, 20+ heavy) and optional Noise Strength (grain texture).
+- **Background Contrast** — darkens areas behind translucent elements for legibility.
+- **Wobbly Windows** — jelly window movement.
+- **Magic Lamp** — macOS-style minimize animation.
+- **Fall Apart** — windows explode into particles on close.
+
+```bash
+# Toggle compositor (X11 only):
+qdbus org.kde.KWin /Compositor toggleCompositing
+```
+
+**KWin Rules for per-window opacity** (System Settings → Window Management → Window Rules):
+Match by window class → apply `Opacity Active = 80`. Also accessible via right-click title bar → More Options → Special Window Settings.
 
 ---
 
@@ -80,6 +136,18 @@ sudo pacman -S spectacle
 ### AUR Pitfall
 
 `yay -S --noconfirm` fails in non-TTY (can't escalate sudo). Fix: build with yay (no sudo needed for build), install resulting `.pkg.tar.zst` with `sudo pacman -U`.
+
+---
+
+## Service Cache & Icon Refresh
+
+**`kbuildsycoca6`** rebuilds the KService database — the index of `.desktop` files, MIME types, and plugins. Use it when a newly installed app is missing from the launcher, or a MIME association stopped working:
+
+```bash
+kbuildsycoca6   # Plasma 6 — incremental rebuild (sufficient for most cases)
+```
+
+This is NOT the icon cache. Changing an icon theme via `kwriteconfig6` + `qdbus6 reconfigure` is sufficient in Plasma 6 — the per-process icon cache (`icon-cache.kcache`) was removed from KF6 apps. If icons from a theme are still stale after `qdbus6 reconfigure`, log out and back in.
 
 ---
 
