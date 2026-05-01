@@ -1,4 +1,7 @@
-"""Subprocess helpers: run_cmd, cmd_exists, and KDE kwrite tool detection."""
+"""Subprocess helpers: run_cmd, cmd_exists, KDE kwrite tool detection,
+and live-state snapshot readers (gsettings_get, _kread, _hyprctl_getoption_gradient)
+used by materializers to capture pre-apply values for undo/rollback."""
+import re
 import shutil
 import subprocess
 
@@ -54,4 +57,21 @@ def _kread(file: str, group: str, key: str) -> str | None:
             rc, out, _ = run_cmd([tool, "--file", file, "--group", group, "--key", key])
             if rc == 0 and out:
                 return out
+    return None
+
+
+def _hyprctl_getoption_gradient(option: str) -> str | None:
+    """Return the current live value of a Hyprland gradient option, or None.
+
+    Runs ``hyprctl getoption <option>`` and parses the ``gradient = …`` line.
+    Returns the raw gradient string (e.g. ``rgba(aabbccee) rgba(aabbccee) 45deg``)
+    or ``None`` if hyprctl is unavailable, the option is unset, or parsing fails.
+    """
+    rc, out, _ = run_cmd(["hyprctl", "getoption", option], timeout=5)
+    if rc != 0 or not out:
+        return None
+    m = re.search(r"^\s+gradient\s*=\s*(.+)$", out, re.MULTILINE)
+    if m:
+        val = m.group(1).strip()
+        return val if val else None
     return None

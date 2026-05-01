@@ -7,6 +7,7 @@ Exports:
   simulate_undo_session() — list manifests + per-step describe output without
                             executing anything
   _describe_change        — used by 'simulate-undo' CLI command
+  _ACTION_HANDLERS        — per-action dispatch table (gsettings, flatpak-override)
   _APP_UNDO_HANDLERS      — per-app dispatch table (used by undo())
 """
 from __future__ import annotations
@@ -18,6 +19,7 @@ import subprocess
 import time
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import Callable
 
 # ── bootstrap: honour sys.path set up by ricer.py (already done at import) ──
 # core imports are relative to scripts/ which is already on sys.path
@@ -194,40 +196,38 @@ def _undo_kvantum(change: dict, restored: list, failed: list, skipped: list) -> 
         run_cmd(["qdbus6", "org.kde.KWin", "/KWin", "reconfigure"], timeout=5)
 
 
-def _undo_plasma_theme(change: dict, restored: list, failed: list, skipped: list) -> None:
-    if change.get("action") != "write":
-        return
-    prev = change.get("previous_theme")
-    kwrite = _get_kwrite()
-    if prev and kwrite:
-        run_cmd([kwrite, "--file", "plasmarc", "--group", "Theme", "--key", "name", prev])
-    if prev and cmd_exists("plasma-apply-desktoptheme"):
-        rc, _, _ = run_cmd(["plasma-apply-desktoptheme", prev], timeout=10)
-        if rc == 0:
-            restored.append({"app": "plasma_theme", "action": "restored", "theme": prev})
-        else:
-            failed.append({"app": "plasma_theme", "action": "restore",
-                           "theme": prev, "error": f"exit code {rc}"})
-    elif not prev:
-        skipped.append({"app": "plasma_theme", "note": "no previous theme recorded"})
+def _make_simple_kde_theme_undo(*, app: str, field: str, file: str, group: str,
+                                 key: str, apply_cmd: str, note_label: str
+                                 ) -> Callable[[dict, list, list, list], None]:
+    """Build an undo handler for a 'write previous value to kdeglobals-style file
+    + plasma-apply-X' KDE theme component (plasma_theme, cursor, …)."""
+    def handler(change: dict, restored: list, failed: list, skipped: list) -> None:
+        if change.get("action") != "write":
+            return
+        prev = change.get(field)
+        kwrite = _get_kwrite()
+        if prev and kwrite:
+            run_cmd([kwrite, "--file", file, "--group", group, "--key", key, prev])
+        if prev and cmd_exists(apply_cmd):
+            rc, _, _ = run_cmd([apply_cmd, prev], timeout=10)
+            if rc == 0:
+                restored.append({"app": app, "action": "restored", "theme": prev})
+            else:
+                failed.append({"app": app, "action": "restore",
+                               "theme": prev, "error": f"exit code {rc}"})
+        elif not prev:
+            skipped.append({"app": app, "note": f"no previous {note_label} recorded"})
+    return handler
 
 
-def _undo_cursor(change: dict, restored: list, failed: list, skipped: list) -> None:
-    if change.get("action") != "write":
-        return
-    prev = change.get("previous_cursor")
-    kwrite = _get_kwrite()
-    if prev and kwrite:
-        run_cmd([kwrite, "--file", "kcminputrc", "--group", "Mouse", "--key", "cursorTheme", prev])
-    if prev and cmd_exists("plasma-apply-cursortheme"):
-        rc, _, _ = run_cmd(["plasma-apply-cursortheme", prev], timeout=10)
-        if rc == 0:
-            restored.append({"app": "cursor", "action": "restored", "theme": prev})
-        else:
-            failed.append({"app": "cursor", "action": "restore",
-                           "theme": prev, "error": f"exit code {rc}"})
-    elif not prev:
-        skipped.append({"app": "cursor", "note": "no previous cursor recorded"})
+_undo_plasma_theme = _make_simple_kde_theme_undo(
+    app="plasma_theme", field="previous_theme", file="plasmarc",
+    group="Theme", key="name", apply_cmd="plasma-apply-desktoptheme",
+    note_label="theme")
+_undo_cursor = _make_simple_kde_theme_undo(
+    app="cursor", field="previous_cursor", file="kcminputrc",
+    group="Mouse", key="cursorTheme", apply_cmd="plasma-apply-cursortheme",
+    note_label="cursor")
 
 
 def _undo_icon_theme(change: dict, restored: list, failed: list, skipped: list) -> None:
@@ -308,6 +308,122 @@ def _undo_eww(change: dict, restored: list, failed: list, skipped: list) -> None
                         "note": "eww reload exit != 0 (daemon may not be running)"})
 
 
+def _undo_lnf(change: dict, restored: list, failed: list, skipped: list) -> None:
+    """Reapply the previous KDE Look-and-Feel package and clean up generated hermes package.
+
+    Handles ``action == "write"`` change records from ``materialize_lnf``.
+    ``previous_lnf`` is the LookAndFeelPackage key read before apply.
+    ``lnf_path`` is the generated hermes package directory; deleted only when
+    it is safely under the expected hermes prefix.
+    """
+    if change.get("action") != "write":
+        return
+    prev_lnf = change.get("previous_lnf")
+    lnf_path = change.get("lnf_path")
+
+    if prev_lnf:
+        if cmd_exists("plasma-apply-lookandfeel"):
+            rc, _, err = run_cmd(["plasma-apply-lookandfeel", "--apply", prev_lnf], timeout=30)
+            if rc == 0:
+                restored.append({"app": "lnf", "action": "restored", "lnf": prev_lnf})
+            else:
+                failed.append({"app": "lnf", "action": "restore",
+                               "lnf": prev_lnf, "error": err or f"exit code {rc}"})
+        else:
+            skipped.append({"app": "lnf",
+                            "note": f"plasma-apply-lookandfeel not found; previous theme: {prev_lnf}"})
+    else:
+        skipped.append({"app": "lnf",
+                        "note": "no previous Look-and-Feel recorded — will not restore"})
+
+    # Clean up the generated Hermes LnF package only when it is safely scoped.
+    # Resolve both paths to their canonical forms before comparing so that symlinks
+    # in lnf_path cannot trick is_relative_to into a false positive (the check is
+    # purely lexical on unresolved Path objects).
+    if lnf_path:
+        lnf_dir = Path(lnf_path)
+        if lnf_dir.exists():
+            lnf_dir_real = lnf_dir.resolve()
+            expected_prefix = (HOME / ".local" / "share" / "plasma" / "look-and-feel").resolve()
+            if (lnf_dir_real.is_relative_to(expected_prefix)
+                    and lnf_dir_real.name.startswith("hermes-")):
+                try:
+                    shutil.rmtree(lnf_dir_real)
+                    restored.append({"app": "lnf", "action": "removed_generated_package",
+                                     "path": str(lnf_dir_real)})
+                except OSError as e:
+                    failed.append({"app": "lnf", "action": "remove_generated_package",
+                                   "path": str(lnf_dir_real), "error": str(e)})
+
+
+def _undo_flatpak_override(change: dict, restored: list, failed: list, skipped: list) -> None:
+    """Remove Flatpak filesystem overrides that Hermes added during apply.
+
+    Handles ``action == "flatpak-override"`` change records from ``materialize_gtk``.
+    Only overrides recorded in ``filesystems_added`` are removed, so pre-existing
+    user overrides are left intact.
+    """
+    if change.get("action") != "flatpak-override":
+        return
+    filesystems_added = change.get("filesystems_added")
+    if not filesystems_added:
+        skipped.append({"app": "gtk",
+                        "note": "no filesystems_added in manifest (legacy) — "
+                                "Flatpak overrides not reverted"})
+        return
+    if not cmd_exists("flatpak"):
+        skipped.append({"app": "gtk", "note": "flatpak not found — cannot revert overrides"})
+        return
+    for fs in filesystems_added:
+        fs_name = fs.split(":")[0]  # strip :ro/:rw suffix for --nofilesystem
+        rc, _, err = run_cmd(["flatpak", "override", "--user",
+                               f"--nofilesystem={fs_name}"], timeout=10)
+        if rc == 0:
+            restored.append({"app": "gtk", "action": "removed_flatpak_override",
+                             "filesystem": fs_name})
+        else:
+            failed.append({"app": "gtk", "action": "remove_flatpak_override",
+                           "filesystem": fs_name, "error": err or f"exit code {rc}"})
+
+
+def _undo_hyprland(change: dict, restored: list, failed: list, skipped: list) -> None:
+    """Revert live Hyprland border keywords to their pre-apply values.
+
+    Handles ``action == "set_borders"`` change records from ``materialize_hyprland``.
+    ``previous_active_border`` / ``previous_inactive_border`` are the gradient
+    strings captured via ``hyprctl getoption`` before apply.  If not recorded
+    (legacy manifest or getoption not available), the live state is not reverted
+    (the config-file restore still applies on the next Hyprland reload).
+    """
+    if change.get("action") != "set_borders":
+        return
+    prev_active   = change.get("previous_active_border")
+    prev_inactive = change.get("previous_inactive_border")
+
+    if not cmd_exists("hyprctl"):
+        skipped.append({"app": "hyprland",
+                        "note": "hyprctl not found — cannot revert live keywords"})
+        return
+
+    if prev_active is None and prev_inactive is None:
+        skipped.append({"app": "hyprland",
+                        "note": "no previous border values recorded — live state not reverted "
+                                "(config file restore still applied)"})
+        return
+
+    for key, val in [("general:col.active_border",   prev_active),
+                     ("general:col.inactive_border", prev_inactive)]:
+        if val is None:
+            continue
+        rc, _, err = run_cmd(["hyprctl", "keyword", key, val], timeout=5)
+        if rc == 0:
+            restored.append({"app": "hyprland", "action": "reverted_keyword",
+                             "key": key, "value": val})
+        else:
+            failed.append({"app": "hyprland", "action": "revert_keyword",
+                           "key": key, "error": err or f"exit code {rc}"})
+
+
 def _undo_gsettings(change: dict, restored: list, failed: list, skipped: list) -> None:
     """Restore a single gsettings key to its pre-apply value.
 
@@ -382,20 +498,31 @@ def _undo_wallpaper(change: dict, restored: list, failed: list, skipped: list) -
         skipped.append({"app": "wallpaper", "note": f"unknown or unavailable method: {method!r}"})
 
 
-# Registry: app key → undo handler function
-_APP_UNDO_HANDLERS: dict[str, object] = {
+_UndoHandler = Callable[[dict, list, list, list], None]
+
+# Registry: action → handler. Action handlers are app-agnostic; they self-gate
+# on the change record's "action" field and run on *every* change record. This
+# lets gtk / gnome_shell / gnome_lockscreen share the same gsettings restore
+# path without per-app wrapper functions.
+_ACTION_HANDLERS: dict[str, _UndoHandler] = {
+    "gsettings":        _undo_gsettings,
+    "flatpak-override": _undo_flatpak_override,
+}
+
+# Registry: app key → handler. App handlers self-gate on action and run after
+# the action handler so apps with bespoke live-state cleanup (KDE plasma reload,
+# eww daemon close, hyprland keyword revert, …) can do their own work.
+_APP_UNDO_HANDLERS: dict[str, _UndoHandler] = {
     "kde":              _undo_kde,
     "kvantum":          _undo_kvantum,
     "plasma_theme":     _undo_plasma_theme,
     "cursor":           _undo_cursor,
     "icon_theme":       _undo_icon_theme,
     "kde_lockscreen":   _undo_kde_lockscreen,
+    "lnf":              _undo_lnf,
     "wallpaper":        _undo_wallpaper,
     "eww":              _undo_eww,
-    # gsettings-based apps — same handler dispatches on action == "gsettings"
-    "gtk":              _undo_gsettings,
-    "gnome_shell":      _undo_gsettings,
-    "gnome_lockscreen": _undo_gsettings,
+    "hyprland":         _undo_hyprland,
 }
 
 
@@ -444,9 +571,12 @@ def undo(manifest_path: Path | None = None,
         _restore_backed_up_files(change, restored, failed,
                                  delete_artifacts=delete_artifacts)
         _undo_injections(change, restored, skipped)
-        handler = _APP_UNDO_HANDLERS.get(change.get("app", ""))
-        if handler:
-            handler(change, restored, failed, skipped)
+        action_handler = _ACTION_HANDLERS.get(change.get("action", ""))
+        if action_handler:
+            action_handler(change, restored, failed, skipped)
+        app_handler = _APP_UNDO_HANDLERS.get(change.get("app", ""))
+        if app_handler:
+            app_handler(change, restored, failed, skipped)
 
     manifest["undone"]    = True
     manifest["undone_at"] = datetime.now(timezone.utc).isoformat()

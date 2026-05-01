@@ -3,7 +3,7 @@ import re
 
 from core.constants import HOME
 from core.colors import hex_to_rgb_tuple, is_dark_palette
-from core.process import run_cmd, cmd_exists
+from core.process import run_cmd, cmd_exists, _hyprctl_getoption_gradient
 from core.backup import backup_file
 from core.config_parsers import _patch_hypr_conf_key, _hyprlock_background_path
 from desktop_utils import discover_desktop
@@ -37,6 +37,10 @@ def materialize_hyprland(design: dict, backup_ts: str, dry_run: bool = False,
                         "active_border": active_border, "inactive_border": inactive_border})
         return changes
 
+    # Snapshot the current live border values so undo can revert them immediately.
+    prev_active_border   = _hyprctl_getoption_gradient("general:col.active_border")
+    prev_inactive_border = _hyprctl_getoption_gradient("general:col.inactive_border")
+
     run_cmd(["hyprctl", "keyword", "general:col.active_border",   active_border])
     run_cmd(["hyprctl", "keyword", "general:col.inactive_border", inactive_border])
 
@@ -65,6 +69,8 @@ def materialize_hyprland(design: dict, backup_ts: str, dry_run: bool = False,
 
     changes.append({"app": "hyprland", "action": "set_borders",
                     "active_border": active_border, "inactive_border": inactive_border,
+                    "previous_active_border": prev_active_border,
+                    "previous_inactive_border": prev_inactive_border,
                     "path": str(hyprland_conf), "backup": hyprland_backup,
                     "config_path": str(hyprland_conf)})
     return changes

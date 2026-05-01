@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+from __future__ import annotations
 """
 session_manager.py — Linux ricing session state manager.
 
@@ -54,6 +55,12 @@ import re
 import subprocess
 import sys
 from pathlib import Path
+
+# Ensure scripts/ dir is on sys.path so `core.*` imports work
+# regardless of the caller's working directory.
+_SCRIPTS_DIR = str(Path(__file__).parent)
+if _SCRIPTS_DIR not in sys.path:
+    sys.path.insert(0, _SCRIPTS_DIR)
 
 from core.session_io import (                             # noqa: E402
     SESSIONS_ROOT, CURRENT_LINK,

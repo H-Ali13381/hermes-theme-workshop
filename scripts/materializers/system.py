@@ -9,6 +9,39 @@ from core.process import run_cmd, cmd_exists, gsettings_get
 from core.backup import backup_file
 from core.templates import render_template
 
+# Filesystem paths that Hermes exposes to Flatpak apps via --filesystem overrides.
+# Declared at module level so tests can reference the canonical list directly.
+_GTK_FLATPAK_FILESYSTEMS: list[str] = [
+    "xdg-config/gtk-3.0:ro",
+    "xdg-config/gtk-4.0:ro",
+    "xdg-data/icons:ro",
+]
+
+
+def _parse_flatpak_filesystems(snapshot: str) -> set[str]:
+    """Return the set of filesystem base-paths from ``flatpak override --show`` output.
+
+    The output is an INI keyfile where the ``[Context]`` group may contain a
+    ``filesystems`` key with semicolon-separated entries, each optionally
+    suffixed with ``:ro``, ``:rw``, or ``:create``.  Only the base path (before
+    the colon) is returned so comparisons are suffix-agnostic.
+
+    Example input line::
+
+        filesystems=xdg-config/gtk-3.0:ro;xdg-data/icons:ro;
+
+    Returns ``{'xdg-config/gtk-3.0', 'xdg-data/icons'}``.
+    """
+    result: set[str] = set()
+    for line in snapshot.splitlines():
+        line = line.strip()
+        if line.lower().startswith("filesystems="):
+            for entry in line[len("filesystems="):].split(";"):
+                entry = entry.strip()
+                if entry:
+                    result.add(entry.split(":")[0])
+    return result
+
 
 # ---------------------------------------------------------------------------
 # GTK
@@ -126,18 +159,31 @@ def materialize_gtk(design: dict, backup_ts: str, dry_run: bool = False) -> list
 
     # Expose GTK config dirs so Flatpak apps read our settings.ini (--user, no sudo).
     if cmd_exists("flatpak") and design.get("apply_flatpak_overrides", True):
-        flatpak_overrides = [
-            ["--filesystem", "xdg-config/gtk-3.0:ro"],
-            ["--filesystem", "xdg-config/gtk-4.0:ro"],
-            ["--filesystem", "xdg-data/icons:ro"],
+        # Snapshot the current user override state so undo can remove only
+        # the overrides Hermes adds (not any the user already had).
+        rc_snap, snap_out, _ = run_cmd(["flatpak", "override", "--user", "--show"], timeout=10)
+        flatpak_snapshot = snap_out if rc_snap == 0 else ""
+
+        # Parse the snapshot into a set of base paths for exact membership testing.
+        # Using substring search on the raw output risks false positives when one
+        # path is a prefix of another (e.g. "xdg-data/icons" matches inside
+        # "xdg-data/icons/hicolor").
+        existing_fs = _parse_flatpak_filesystems(flatpak_snapshot)
+        # Only track overrides that weren't already present in the snapshot.
+        filesystems_added = [
+            fs for fs in _GTK_FLATPAK_FILESYSTEMS
+            if fs.split(":")[0] not in existing_fs
         ]
+
         ok = True
-        for args in flatpak_overrides:
-            rc, _, _ = run_cmd(["flatpak", "override", "--user"] + args, timeout=10)
+        for fs in _GTK_FLATPAK_FILESYSTEMS:
+            rc, _, _ = run_cmd(["flatpak", "override", "--user", "--filesystem", fs], timeout=10)
             if rc != 0:
                 ok = False
         changes.append({"app": "gtk", "action": "flatpak-override",
-                        "gtk_theme": gtk_theme, "icon_theme": icon_theme, "success": ok})
+                        "gtk_theme": gtk_theme, "icon_theme": icon_theme, "success": ok,
+                        "flatpak_override_snapshot": flatpak_snapshot,
+                        "filesystems_added": filesystems_added})
 
     return changes
 

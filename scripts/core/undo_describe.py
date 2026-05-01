@@ -73,4 +73,30 @@ def _describe_change(change: dict) -> list[str]:
             lines.append(f"  [{app}] gsettings {schema} {key} — no previous value recorded"
                          " (pre-fix manifest), will skip")
 
+    if app == "lnf" and action == "write":
+        prev = change.get("previous_lnf")
+        lnf_path = change.get("lnf_path")
+        lines.append(f"  [lnf] REAPPLY Look-and-Feel: {prev}" if prev
+                     else "  [lnf] No previous Look-and-Feel recorded — will skip restore")
+        if lnf_path:
+            lines.append(f"  [lnf] REMOVE generated package: {lnf_path}")
+
+    if app == "gtk" and action == "flatpak-override":
+        added = change.get("filesystems_added")
+        if added:
+            lines.append(f"  [gtk] REMOVE Flatpak filesystem overrides: {', '.join(added)}")
+        else:
+            lines.append("  [gtk] flatpak-override — no filesystems_added recorded"
+                         " (pre-fix manifest), will skip")
+
+    if app == "hyprland" and action == "set_borders":
+        prev_a = change.get("previous_active_border")
+        prev_i = change.get("previous_inactive_border")
+        if prev_a is not None or prev_i is not None:
+            lines.append(f"  [hyprland] REVERT live col.active_border   → {prev_a}")
+            lines.append(f"  [hyprland] REVERT live col.inactive_border → {prev_i}")
+        else:
+            lines.append("  [hyprland] no previous border values recorded — live state"
+                         " not reverted (config file restore still applied)")
+
     return lines

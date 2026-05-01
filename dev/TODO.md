@@ -2,30 +2,60 @@
 
 ## Recommended Next Tasks
 
-- [ ] **[PRIORITY] Add reusable `gsettings` snapshot/restore support for undo**
+- [x] **[PRIORITY] Add reusable `gsettings` snapshot/restore support for undo**
   Build a generic helper for materializers to record prior `gsettings` values
   before applying changes, plus a matching `ricer_undo.py` restore path. Use this
   as the foundation for GTK, GNOME Shell, and GNOME lockscreen rollback fixes.
+  **Done:** `core/process.py::gsettings_get` reads one key in GVariant format and
+  returns it as a string passable directly to `gsettings set`. All three materializers
+  call it before every `gsettings set` and store `previous_value` in the change record.
+  `ricer_undo.py::_undo_gsettings` restores from `previous_value`; when the field is
+  absent (legacy manifest) the change is skipped with a diagnostic message rather than
+  crashing. `_APP_UNDO_HANDLERS` registers the handler for `gtk`, `gnome_shell`, and
+  `gnome_lockscreen`. `core/undo_describe.py::_describe_change` renders a RESTORE or
+  "pre-fix manifest, will skip" line for simulate-undo. Tests: 9 materializer tests in
+  `test_gtk_materializer.py`, 7 undo-path tests in `test_kde_undo.py::TestUndoGsettings`.
 
-- [ ] **[PRIORITY] Fix GTK non-file-state rollback**
+- [x] **[PRIORITY] Fix GTK non-file-state rollback**
   Update `materialize_gtk()` so changes to
   `org.gnome.desktop.interface` (`gtk-theme`, `icon-theme`, `cursor-theme`) record
   previous values in the manifest and are restored by undo. Add tests for fresh
   manifests and legacy manifests with missing previous-state fields.
+  **Done:** `materialize_gtk` calls `gsettings_get` for each key before applying and
+  stores `previous_value` in the change record. `_undo_gsettings` restores all three
+  keys; legacy manifests (`previous_value=None` or key absent) are skipped gracefully.
+  Fresh-manifest and legacy-manifest undo paths covered by `TestUndoGsettings`.
 
-- [ ] **[PRIORITY] Fix GNOME Shell and GNOME lockscreen rollback**
+- [x] **[PRIORITY] Fix GNOME Shell and GNOME lockscreen rollback**
   Apply the same `gsettings` snapshot/restore pattern to GNOME color-scheme and
   lockscreen color/shading settings so undo fully returns persistent GNOME state to
   its pre-apply values.
+  **Done:** `materialize_gnome_shell` snapshots `color-scheme` before setting it.
+  `materialize_gnome_lockscreen` snapshots all three `org.gnome.desktop.screensaver`
+  keys (`primary-color`, `secondary-color`, `color-shading-type`). Both record
+  `previous_value`; `_undo_gsettings` restores them. Full test coverage in
+  `TestUndoGsettings` and `GnomeShell/GnomeLockscreenGsettingsSnapshotTests`.
 
-- [ ] **[PRIORITY] Make Flatpak GTK/icon overrides reversible**
+- [x] **[PRIORITY] Make Flatpak GTK/icon overrides reversible**
   Snapshot user Flatpak override state before applying GTK/icon filesystem
   overrides, then remove only Hermes-added overrides or restore the prior override
   state during undo.
+  **Done:** `materialize_gtk` snapshots `flatpak override --user --show` before applying
+  and stores `flatpak_override_snapshot` + `filesystems_added` (only overrides not
+  already present) in the manifest. `_undo_flatpak_override` removes only the tracked
+  filesystems via `--nofilesystem`. `_undo_gtk` dispatches both gsettings and
+  flatpak-override records. `_describe_change` renders a REMOVE line for simulate-undo.
+  Tests: `FlatpakOverrideSnapshotTests` (4 materializer tests), `TestUndoFlatpakOverride`
+  (4 undo tests), `TestDescribeChangeNewHandlers` (2 describe tests).
 
-- [ ] **[PRIORITY] Add KDE Look-and-Feel undo handling**
+- [x] **[PRIORITY] Add KDE Look-and-Feel undo handling**
   Register an `lnf` undo handler that reapplies the previous global theme and
   safely cleans up generated Hermes Look-and-Feel packages when appropriate.
+  **Done:** `_undo_lnf` reapplies `previous_lnf` via `plasma-apply-lookandfeel --apply`
+  and removes the generated `hermes-*` LnF package directory only when it is safely
+  under `~/.local/share/plasma/look-and-feel/`. Registered in `_APP_UNDO_HANDLERS`.
+  `_describe_change` renders REAPPLY + REMOVE lines for simulate-undo. Tests:
+  `TestUndoLnf` (4 tests) + 2 describe tests in `TestDescribeChangeNewHandlers`.
 
 - [ ] **[PRIORITY] Improve undo and dry-run risk reporting**
   Ensure dry-run and simulate-undo report non-file state mutations, generated
@@ -1195,47 +1225,43 @@
 
 #### Non-File State Not Fully Restored
 
-- [ ] **[BUG] `materializers/system.py` + `ricer_undo.py`: GTK `gsettings` values are not restored**
+- [x] **[BUG] `materializers/system.py` + `ricer_undo.py`: GTK `gsettings` values are not restored**
   `materialize_gtk()` writes `org.gnome.desktop.interface` keys (`gtk-theme`,
   `icon-theme`, `cursor-theme`) and records the new values, but it does not
   snapshot the previous values. `undo()` therefore cannot restore the pre-apply
   GTK desktop state.
-  **Fix:** Before each `gsettings set`, run `gsettings get <schema> <key>` and
-  store `previous_value` in the manifest. Add a generic `_undo_gsettings()` helper
-  or a GTK-specific handler that restores previous values when present.
+  **Done:** `materialize_gtk` calls `gsettings_get` for all three keys before applying
+  and records `previous_value` per change record. `_undo_gsettings` is registered as
+  the `gtk` undo handler and restores each key. Legacy manifest handling included.
 
-- [ ] **[BUG] `materializers/gnome.py` + `ricer_undo.py`: GNOME Shell `gsettings` values are not restored**
+- [x] **[BUG] `materializers/gnome.py` + `ricer_undo.py`: GNOME Shell `gsettings` values are not restored**
   `materialize_gnome_shell()` sets `org.gnome.desktop.interface color-scheme`,
   but only records the new value. Undo cannot return GNOME's color-scheme
   preference to the prior state.
-  **Fix:** Snapshot the previous `color-scheme` value before applying, record it
-  as `previous_value`, and restore it during undo.
+  **Done:** `materialize_gnome_shell` snapshots `color-scheme` via `gsettings_get`
+  and stores `previous_value`. `_undo_gsettings` (registered for `gnome_shell`)
+  restores it on undo.
 
-- [ ] **[BUG] `materializers/gnome.py` + `ricer_undo.py`: GNOME lockscreen `gsettings` values are not restored**
+- [x] **[BUG] `materializers/gnome.py` + `ricer_undo.py`: GNOME lockscreen `gsettings` values are not restored**
   `materialize_gnome_lockscreen()` sets `org.gnome.desktop.screensaver`
   `primary-color`, `secondary-color`, and `color-shading-type`, but records only
   the new values. Undo leaves those persistent settings behind.
-  **Fix:** Snapshot each previous key value and add a GNOME lockscreen undo path
-  that restores them.
+  **Done:** All three screensaver keys are snapshotted via `gsettings_get` before
+  apply. `_undo_gsettings` (registered for `gnome_lockscreen`) restores all three.
 
-- [ ] **[BUG] `materializers/system.py`: Flatpak GTK/icon overrides are persistent and not undone**
+- [x] **[BUG] `materializers/system.py`: Flatpak GTK/icon overrides are persistent and not undone**
   `materialize_gtk()` may run `flatpak override --user --filesystem ...` for GTK
   config and icon directories. These user overrides persist after undo, and the
   manifest currently records only success/new target state.
-  **Fix:** Snapshot `flatpak override --user --show` before applying. On undo,
-  restore the previous override state or remove only Hermes-added overrides that
-  were absent before apply.
+  **Done:** See "Recommended Next Tasks" entry above.
 
 #### KDE / Plasma State Gaps
 
-- [ ] **[BUG] `materializers/kde_extras.py`: Look-and-Feel (`lnf`) has no undo handler**
+- [x] **[BUG] `materializers/kde_extras.py`: Look-and-Feel (`lnf`) has no undo handler**
   `materialize_lnf()` records `previous_lnf`, `lnf_id`, and `lnf_path`, but
   `_APP_UNDO_HANDLERS` does not include `lnf`. Undo does not reapply the previous
   global theme and leaves the generated package selected or present.
-  **Fix:** Add `_undo_lnf()` and register it. If `previous_lnf` exists, run
-  `plasma-apply-lookandfeel --apply <previous_lnf>`; otherwise clear/delete the
-  `LookAndFeelPackage` key if appropriate. Also clean up generated Hermes LnF
-  packages only when safely under the expected prefix.
+  **Done:** See "Recommended Next Tasks" entry above.
 
 - [ ] **[QUALITY] `materializers/kde_extras.py`: generated icon/LnF/Kvantum assets are not cleaned up on undo**
   Undo restores config pointers for many KDE layers, but generated directories
@@ -1281,13 +1307,17 @@
   other runtime-managed apps, or record explicit previous runtime values where the
   config file alone is insufficient.
 
-- [ ] **[BUG] `materializers/hyprland.py`: live border keywords are not explicitly reverted by undo**
+- [x] **[BUG] `materializers/hyprland.py`: live border keywords are not explicitly reverted by undo**
   `materialize_hyprland()` applies border colors via `hyprctl keyword` immediately
   and also patches `hyprland.conf` when present. Generic undo restores the config,
   but it does not necessarily reset the live Hyprland keywords immediately.
-  **Fix:** Snapshot previous live values via `hyprctl getoption` where available,
-  record them, and add a Hyprland undo handler that reapplies the previous live
-  keywords or reloads Hyprland after config restore.
+  **Done:** `_hyprctl_getoption_gradient` snapshots both border options via
+  `hyprctl getoption` before apply. `previous_active_border` /
+  `previous_inactive_border` are stored in the manifest. `_undo_hyprland` reissues
+  `hyprctl keyword` with the previous values. Legacy manifests (no previous values)
+  are skipped gracefully with a note that the config-file restore still applies.
+  Tests: `HyprlandGeoptionSnapshotTests` (2 materializer tests),
+  `TestUndoHyprland` (3 undo tests), `TestDescribeChangeNewHandlers` (2 describe tests).
 
 #### Dry-Run / Simulation Parity
 
