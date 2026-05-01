@@ -110,12 +110,14 @@ def _load_hermes_config() -> dict:
     # Priority 1: inline api_key in config.yaml providers section
     api_key = cfg.get("providers", {}).get(provider, {}).get("api_key", "")
 
-    if not api_key:
-        # Priority 2: read from ~/.hermes/.env
-        env_vars = _parse_dotenv(Path.home() / ".hermes" / ".env")
-        env_var_name = _PROVIDER_KEY_ENV.get(provider, "")
-        if env_var_name:
-            api_key = env_vars.get(env_var_name, "")
+    # Priority 2: always check ~/.hermes/.env — .env keys are more likely to be
+    # current than inline config.yaml keys, which can go stale.
+    env_vars = _parse_dotenv(Path.home() / ".hermes" / ".env")
+    env_var_name = _PROVIDER_KEY_ENV.get(provider, "")
+    if env_var_name:
+        env_key = env_vars.get(env_var_name, "")
+        if env_key:
+            api_key = env_key
 
     return {
         "base_url": base_url,

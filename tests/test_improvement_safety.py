@@ -29,11 +29,14 @@ def _preset_names() -> list[str]:
 def test_manifest_runtime_packages_cover_script_requirements() -> None:
     requirements = {
         line.strip().split("==", 1)[0].split(">=", 1)[0].lower()
-        for line in (ROOT / "scripts" / "requirements.txt").read_text(encoding="utf-8").splitlines()
+        for line in (ROOT / "requirements.txt").read_text(encoding="utf-8").splitlines()
         if line.strip() and not line.strip().startswith("#")
     }
     manifest = json.loads((ROOT / "manifest.json").read_text(encoding="utf-8"))
-    manifest_packages = {pkg.lower() for pkg in manifest["requirements"]["packages"]}
+    manifest_packages = {
+        pkg.split("==", 1)[0].split(">=", 1)[0].lower()
+        for pkg in manifest["requirements"]["packages"]
+    }
 
     missing = sorted(requirements - manifest_packages)
     assert missing == [], f"manifest.json is missing runtime package(s): {missing}"
@@ -54,7 +57,7 @@ def test_readme_preset_count_matches_presets_source() -> None:
 
 def test_readme_builtin_preset_table_matches_presets_source() -> None:
     readme = (ROOT / "README.md").read_text(encoding="utf-8")
-    section = re.search(r"### Built-in Presets(?P<body>.*?)(?:\n### |\n## |\Z)", readme, re.S)
+    section = re.search(r"## Built-in Presets(?P<body>.*?)(?:\n## |\Z)", readme, re.S)
     assert section, "README.md is missing the Built-in Presets section"
 
     documented = re.findall(r"^\| `([^`]+)` \|", section.group("body"), re.M)

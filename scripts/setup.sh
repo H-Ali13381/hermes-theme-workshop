@@ -21,7 +21,7 @@ fi
 
 SKILL_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 RICER_PY="$SKILL_DIR/scripts/ricer.py"
-REQUIREMENTS="$SKILL_DIR/scripts/requirements.txt"
+REQUIREMENTS="$SKILL_DIR/requirements.txt"
 VENV_DIR="$SKILL_DIR/.venv"
 CACHE_DIR="$HOME/.cache/linux-ricing"
 LOCAL_BIN="$HOME/.local/bin"

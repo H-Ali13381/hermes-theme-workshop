@@ -3,7 +3,7 @@ name: linux-ricing
 description: AI-native Linux desktop design system. The agent acts as designer — auditing the user's machine, exploring creative directions, generating mockups, and implementing a fully personalized desktop end-to-end. The user is the art/UX director.
 trigger: User wants to theme/rice their Linux desktop, mentions changing colors/wallpaper/bar/launcher appearance, asks what their desktop could look like, or invokes /rice.
 version: 3.0.0
-tags: [linux, ricing, theming, desktop, hyprland, kde, waybar, rofi, kitty, animated-wallpaper, generative]
+tags: [linux, ricing, rice, theming, desktop, hyprland, kde, waybar, rofi, kitty, animated-wallpaper, generative]
 ---
 
 # Linux Ricing — AI-Native Desktop Design System
@@ -33,6 +33,12 @@ The user should never have to know what a `kvantum.kvconfig` file is.
 ## 2. Session Workflow — Gateway
 
 > **The workflow is the authority.** This skill is the launch gateway. `workflow/` enforces all quality gates, score thresholds, session checkpointing, and deterministic step sequencing. The model's job here is to start or resume the workflow — not to re-implement the protocol manually.
+
+### Activate the virtual environment
+
+```bash
+source ~/.hermes/skills/creative/linux-ricing/.venv/bin/activate
+```
 
 ### Pre-flight — Start or Resume
 
@@ -95,5 +101,38 @@ Node implementations → `workflow/nodes/`
 State schema → `workflow/state.py`
 Validation gates → `workflow/validators.py`
 Full session state spec → `dev/DESIGN_PHILOSOPHY.md §Session State & Persistence`
+
+### Troubleshooting: LLM Auth Failures (401)
+
+The workflow's `get_llm()` in `workflow/config.py` resolves the API key with this priority:
+1. `RICER_API_KEY` / `RICER_BASE_URL` env vars (bypass all file-based config)
+2. `config.yaml` → `providers.<provider>.api_key` (inline key)
+3. `~/.hermes/.env` → `<PROVIDER>_API_KEY` (only if step 2 returned empty)
+
+**Known pitfall:** If `config.yaml` has a *stale* non-empty API key, the workflow uses it and never falls back to `.env`. The stale key may have worked for Hermes at setup time but since been rotated or invalidated. Hermes itself may resolve keys differently (e.g. credential pool, system env), so the main chat works while the workflow fails with 401.
+
+**Symptoms:** `openai.AuthenticationError: Error code: 401 - {'error': {'message': 'User not found.', 'code': 401}}` during Step 2+ (any LLM call).
+
+**Diagnose:** Compare the two key sources:
+```bash
+python3 -c "
+import sys; sys.path.insert(0, '<skill-dir>')
+from workflow.config import _load_hermes_config, _parse_dotenv
+from pathlib import Path
+h = _load_hermes_config()
+env = _parse_dotenv(Path.home() / '.hermes' / '.env')
+print(f'config.yaml key length: {len(h[\"api_key\"])}')
+print(f'.env key length: {len(env.get(\"OPENROUTER_API_KEY\", \"\"))}')
+print(f'Keys match: {h[\"api_key\"] == env.get(\"OPENROUTER_API_KEY\", \"\")}')
+"
+```
+If keys differ, the `.env` key is the working one.
+
+**Fix:** Pass the working key via env var when launching or resuming:
+```bash
+RICER_API_KEY="$(grep '^OPENROUTER_API_KEY=' ~/.hermes/.env | cut -d= -f2-)" \
+  python3 workflow/run.py [--resume <thread-id>]
+```
+Or set `RICER_API_KEY` + `RICER_BASE_URL` permanently in your shell profile.
 
 **Reference docs** → `README.md` (directory layout, presets, CLI reference, supported targets, safety model, pitfalls, doc index)
