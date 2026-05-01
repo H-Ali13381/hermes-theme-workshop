@@ -57,6 +57,12 @@ def score_element(element: str, spec: dict, design: dict, verify: dict) -> dict:
     else:
         sc["preview_match"] = 0
 
+    # Effective-state gate: a KDE colorscheme file existing is not enough if KDE
+    # is actively using a different scheme.
+    if verify.get("active_match") is False:
+        sc["usability"] = min(sc["usability"], 1)
+        sc["preview_match"] = 0
+
     sc["total"] = sum(v for k, v in sc.items() if k != "total")
     return sc
 

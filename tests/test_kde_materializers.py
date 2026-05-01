@@ -576,6 +576,12 @@ class TestMaterializeKonsole(unittest.TestCase):
                         "[Color0Intense]", "[Color7Intense]"):
             self.assertIn(section, contents[0], f"Missing section {section!r}")
 
+    def test_colorscheme_does_not_write_ignored_opacity_keys(self):
+        _, contents = self._run()
+        self.assertTrue(contents)
+        self.assertNotIn("Opacity=", contents[0])
+        self.assertNotIn("WallpaperOpacity=", contents[0])
+
     def test_dry_run_no_files(self):
         changes, contents = self._run(dry_run=True)
         self.assertEqual(changes[0]["action"], "dry-run")
@@ -586,6 +592,57 @@ class TestMaterializeKonsole(unittest.TestCase):
         write = [c for c in changes if c.get("action") == "write"]
         self.assertIn("profile_path", write[0])
         self.assertEqual(write[0]["previous_profile"], "Default.profile")
+
+    def test_writes_current_default_profile_not_hardcoded_linux_ricing(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp)
+            calls = []
+            with (
+                patch(f"{self._TERM}.HOME", home),
+                patch(f"{self._TERM}.run_cmd", side_effect=lambda cmd, **kw: calls.append(list(cmd)) or (0, "", "")),
+                patch(f"{self._TERM}.backup_file", return_value=None),
+                patch(f"{self._TERM}._get_kwrite", return_value="kwriteconfig6"),
+                patch(f"{self._TERM}.snapshot_konsole_state",
+                      return_value={"default_profile": "Default.profile"}),
+            ):
+                ricer.materialize_konsole(_MINIMAL_DESIGN, backup_ts="ts")
+
+            konsole_dir = home / ".local" / "share" / "konsole"
+            self.assertTrue((konsole_dir / "Default.profile").exists())
+            self.assertFalse((konsole_dir / "linux-ricing.profile").exists())
+            self.assertFalse([c for c in calls if "DefaultProfile" in c],
+                             "existing DefaultProfile should not be rewritten")
+
+
+class TestMaterializeKitty(unittest.TestCase):
+    _TERM = "materializers.terminals"
+
+    def test_existing_inline_palette_is_removed_from_main_config(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp)
+            kitty_dir = home / ".config" / "kitty"
+            kitty_dir.mkdir(parents=True)
+            main = kitty_dir / "kitty.conf"
+            main.write_text(
+                "background #0a0b1a\n"
+                "foreground #ffffff\n"
+                "background_opacity 0.88\n"
+                "color0 #111111\n"
+                "include theme.conf # linux-ricing\n",
+                encoding="utf-8",
+            )
+
+            with patch(f"{self._TERM}.HOME", home), \
+                 patch(f"{self._TERM}.backup_file", return_value=None):
+                changes = ricer.materialize_kitty(_MINIMAL_DESIGN, backup_ts="ts")
+
+            content = main.read_text(encoding="utf-8")
+            self.assertNotIn("#0a0b1a", content)
+            self.assertNotIn("color0 #111111", content)
+            self.assertIn("background_opacity 0.88", content)
+            self.assertEqual(content.count("include theme.conf"), 1)
+            inject = [c for c in changes if c.get("action") == "inject_include"][0]
+            self.assertGreaterEqual(inject["removed_palette_lines"], 3)
 
 
 class TestDiscoverAppsKde(unittest.TestCase):

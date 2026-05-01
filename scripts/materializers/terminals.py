@@ -16,6 +16,23 @@ from materializers.terminal_colors import build_konsole_colorscheme
 # kitty
 # ---------------------------------------------------------------------------
 
+_KITTY_PALETTE_KEYS = {
+    "background", "foreground", "cursor", "cursor_text_color", "url_color",
+    "selection_background", "selection_foreground",
+    "active_tab_background", "active_tab_foreground",
+    "inactive_tab_background", "inactive_tab_foreground",
+    "tab_bar_background",
+    *{f"color{i}" for i in range(16)},
+}
+
+
+def _is_kitty_palette_line(line: str) -> bool:
+    """True for top-level kitty color directives from prior rice runs."""
+    stripped = line.strip()
+    if not stripped or stripped.startswith("#"):
+        return False
+    return stripped.split(maxsplit=1)[0] in _KITTY_PALETTE_KEYS
+
 def materialize_kitty(design: dict, backup_ts: str, dry_run: bool = False) -> list[dict]:
     palette = design["palette"]
     kitty_dir = HOME / ".config" / "kitty"
@@ -65,12 +82,17 @@ color15 {adjust_lightness(palette['foreground'], 1.25)}
 
     include_line = "include theme.conf"
     hermes_marker = "# linux-ricing"
+    removed_palette_lines = 0
     if main_config.exists():
         cleaned = []
         for ln in main_config.read_text(encoding="utf-8").splitlines():
-            if ln.strip() == include_line:
+            stripped = ln.strip()
+            if stripped == include_line or stripped.startswith(include_line + " "):
                 if cleaned and cleaned[-1].strip() == hermes_marker:
                     cleaned.pop()
+                continue
+            if _is_kitty_palette_line(ln):
+                removed_palette_lines += 1
                 continue
             cleaned.append(ln)
         new_text = "\n".join(cleaned).rstrip() + f"\n\n{hermes_marker}\n{include_line}\n"
@@ -81,7 +103,8 @@ color15 {adjust_lightness(palette['foreground'], 1.25)}
 
     changes.append({"app": "kitty", "action": "inject_include", "path": str(main_config),
                     "backup": main_backup, "injected": include_injected,
-                    "include_line": include_line, "marker": hermes_marker})
+                    "include_line": include_line, "marker": hermes_marker,
+                    "removed_palette_lines": removed_palette_lines})
     return changes
 
 
@@ -92,8 +115,13 @@ color15 {adjust_lightness(palette['foreground'], 1.25)}
 def materialize_konsole(design: dict, backup_ts: str, dry_run: bool = False) -> list[dict]:
     palette = design["palette"]
     konsole_dir = HOME / ".local" / "share" / "konsole"
-    profile_name = "linux-ricing"
-    profile_path = konsole_dir / f"{profile_name}.profile"
+    state = snapshot_konsole_state()
+    prev_profile = state["default_profile"]
+    profile_file = Path(prev_profile).name if prev_profile else "linux-ricing.profile"
+    if not profile_file.endswith(".profile"):
+        profile_file = f"{profile_file}.profile"
+    profile_name = Path(profile_file).stem or "linux-ricing"
+    profile_path = konsole_dir / profile_file
     color_scheme_name = f"hermes-{design.get('name', 'ricer')}"
     color_scheme_path = konsole_dir / f"{color_scheme_name}.colorscheme"
     konsolerc = HOME / ".config" / "konsolerc"
@@ -129,13 +157,10 @@ Parent=FALLBACK/
 """
 
     if dry_run:
-        state = snapshot_konsole_state()
         changes.append({"app": "konsole", "action": "dry-run", "profile_path": str(profile_path),
-                        "previous_profile": state["default_profile"]})
+                        "previous_profile": prev_profile})
         return changes
 
-    state = snapshot_konsole_state()
-    prev_profile = state["default_profile"]
     profile_backup = backup_file(profile_path, backup_ts, f"konsole/{profile_name}.profile")
     colors_backup = backup_file(color_scheme_path, backup_ts, f"konsole/{color_scheme_name}.colorscheme")
     konsolerc_backup = backup_file(konsolerc, backup_ts, "konsole/konsolerc")
@@ -145,14 +170,17 @@ Parent=FALLBACK/
     profile_path.write_text(profile_content, encoding="utf-8")
 
     kwrite = _get_kwrite()
-    if kwrite:
+    default_profile_updated = False
+    if kwrite and not prev_profile:
         run_cmd([kwrite, "--file", "konsolerc", "--group", "Desktop Entry",
-                 "--key", "DefaultProfile", f"{profile_name}.profile"])
+                 "--key", "DefaultProfile", profile_file])
+        default_profile_updated = True
 
     changes.append({"app": "konsole", "action": "write",
                     "profile_path": str(profile_path), "color_scheme_path": str(color_scheme_path),
                     "backup_profile": profile_backup, "backup_colors": colors_backup,
-                    "backup_konsolerc": konsolerc_backup, "previous_profile": prev_profile})
+                    "backup_konsolerc": konsolerc_backup, "previous_profile": prev_profile,
+                    "default_profile_updated": default_profile_updated})
     return changes
 
 

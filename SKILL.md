@@ -66,7 +66,69 @@ The workflow restores from its last SQLite checkpoint and continues automaticall
 python3 ~/.hermes/skills/creative/linux-ricing/workflow/run.py
 ```
 
+> **CRITICAL — PTY required:** The workflow's `_run_loop` calls Python's `input()` at every user gate (Steps 2, 4, 5, 6, 8). This blocks silently with zero output when run via `background=true` or without `pty=true`. The agent MUST launch these commands with the terminal tool's `pty=true` parameter and **never** with `background=true`. A hung process at Step 0 with an empty log is the diagnostic signature. If the agent accidentally backgrounded the workflow, kill it and relaunch with `pty=true`.
+
 That's it. The workflow drives Steps 1–8, pausing at approval and score gates for user input. This SKILL.md serves as reference for the workflow's behaviour, quality standards, and environment pitfalls — not as a step-by-step manual.
+
+### Driving the Workflow Programmatically (bridge script)
+
+The terminal tool's PTY mode cannot feed interactive stdin to the workflow — `input()` gets `EOFError` and the process exits immediately. To drive the workflow through the agent chat (collecting user answers in conversation and feeding them to the workflow), use the **bridge script pattern** documented in `references/workflow-bridge-script.md`.
+
+Quick summary: write a small Python script that loads the graph from the SQLite checkpointer and calls `graph.stream(Command(resume=answer), config)` to resume from interrupts. Run it with the skill's venv activated and the usual `RICER_API_KEY`/`RICER_BASE_URL`/`RICER_MODEL` env vars.
+
+**Important:** The bridge reference example uses placeholder model names — always check your actual model in `~/.hermes/config.yaml` under `providers.<provider>.model`. Pass the correct model via `RICER_MODEL`.
+
+**Sudo workaround:** When the bridge hits a `sudo_password` interrupt, feed `"skip"` to skip the package, then install it manually with `sudo pacman -S <pkg>` from the agent terminal (which CAN run sudo). Then resume the workflow via the bridge.
+
+### Presenting Previews to the User
+
+When the plan node generates `plan.html`, open it with `brave <path>` — do NOT use `open`, `xdg-open`, or start an http.server. The user has Brave as their default browser.
+
+### Post-Workflow Manual Implementation
+
+After the workflow completes Step 6, Step 7 cleanup/finalization handles KDE
+post-implementation actions deterministically. Do not improvise manual commands
+outside the workflow unless cleanup reports a skipped/unsupported action.
+
+The workflow now owns:
+
+1. Wallpaper application when a local `wallpaper_path`/`wallpaper` is present
+2. KDE color-scheme reapply and active-state audit
+3. Cursor/icon/Kvantum/Plasma/LnF theming through materializers
+4. Fastfetch `config.jsonc` plus `config.json` compatibility symlink
+5. Plasmashell/KWin liveness checks
+6. Handoff reporting of cleanup actions and effective state
+
+Do **not** broadcast terminal signals such as `pkill -SIGUSR1 kitty`; terminal
+configs apply on next launch unless a user explicitly asks for a targeted reload.
+Do **not** run raw `kwin_wayland --replace`.
+
+### Pitfall: kwin_wayland --replace Kills Plasmashell (Wayland)
+
+On KDE Wayland, running `kwin_wayland --replace` kills `plasmashell` as a side effect. The user loses their panel, taskbar, and desktop widgets immediately.
+
+**After any KWin restart, ALWAYS restart plasmashell within seconds:**
+```bash
+kwin_wayland --replace &
+sleep 2
+plasmashell &
+```
+
+Or better — avoid `kwin_wayland --replace` entirely. Cursor and color scheme changes take effect on next login. Tell the user to re-log rather than hot-swapping KWin.
+
+**If the user reports "desktop parts are gone":** plasmashell is dead. Restart it immediately with `plasmashell &` (background=true in terminal tool).
+
+### Pitfall: Cursor Theme Fallback
+
+Bibata-Modern-Classic is the recommended cursor theme but requires AUR installation (`yay -S bibata-cursor-theme-bin`). If the user doesn't want to install from AUR, Catppuccin cursor themes are often pre-installed on Arch-based systems with Catppuccin desktop setups. Check:
+```bash
+ls /usr/share/icons/ | grep -i catppuccin
+```
+The green variant (`catppuccin-macchiato-green-cursors`) pairs well with mossy/nature palettes.
+
+### Pitfall: sudo in Agent Terminal
+
+The agent terminal CAN run sudo commands (unlike the bridge script which cannot handle sudo_password interrupts). If a package needs installation, try `sudo pacman -U <path>` or `sudo pacman -S <package>` directly — it may work depending on the session's credential state. The handoff document's claim that "user must run workflow directly for sudo step" applies only to the bridge script pattern, not to direct terminal commands.
 
 ---
 
@@ -135,4 +197,233 @@ RICER_API_KEY="$(grep '^OPENROUTER_API_KEY=' ~/.hermes/.env | cut -d= -f2-)" \
 ```
 Or set `RICER_API_KEY` + `RICER_BASE_URL` permanently in your shell profile.
 
+### Troubleshooting: Invalid Model ID (400)
+
+**Symptoms:** `openai.BadRequestError: Error code: 400 - {'error': {'message': '<model-id> is not a valid model ID', 'code': 400}}` during Step 2 (explore) or any other LLM node.
+
+**Root cause:** `workflow/config.py` resolves the LLM model via `get_llm()`. The old implementation had two defects:
+1. The fallback `MODEL` constant was hardcoded to an Anthropic-native identifier (`claude-sonnet-4-5-20251029`) that does not exist on OpenRouter.
+2. `get_llm()` only loaded the Hermes config when **both** `RICER_BASE_URL` and `RICER_API_KEY` env vars were missing. If the agent passed `RICER_API_KEY`/`RICER_BASE_URL` to fix auth, the model name from `~/.hermes/config.yaml` was never read, so the invalid fallback was used.
+
+**Diagnose:** Check which model string the workflow is actually sending:
+```bash
+python3 -c "
+import sys, os
+sys.path.insert(0, os.path.expanduser('~/.hermes/skills/creative/linux-ricing'))
+from workflow.config import get_llm
+llm = get_llm()
+print('Model:', llm.model_name if hasattr(llm, 'model_name') else llm.model)
+"
+```
+
+**Fix:** Ensure `workflow/config.py` always loads Hermes config to fill in the model, even when env vars are present, and that the fallback `MODEL` constant is a valid identifier for the user's provider (e.g. `deepseek/deepseek-v4-pro` for OpenRouter, or `claude-3-5-sonnet-20241022` for Anthropic native).
+
+As a quick workaround, pass the correct model explicitly:
+```bash
+RICER_MODEL="deepseek/deepseek-v4-pro" \
+  RICER_API_KEY="$(grep '^OPENROUTER_API_KEY=' ~/.hermes/.env | cut -d= -f2-)" \
+  RICER_BASE_URL="https://openrouter.ai/api/v1" \
+  python3 workflow/run.py
+```
+
+### Known Platform Bug: Konsole Transparency Broken on KDE Plasma 6 Wayland
+
+**As of 2026-05-01, confirmed on Plasma 6.6.4:**
+
+The `Opacity` key in Konsole `.profile` files is **silently ignored** when Konsole runs as a native Wayland client. This is an upstream KDE regression in the blur-behind Wayland protocol. The following all fail:
+- `Opacity=0.75` in `[Appearance]` of the profile file
+- `konsoleprofile Opacity=0.75` runtime command
+- `BackgroundContrast=true` / `BlurBackground=true`
+
+**Compositor is running fine** — KWin compositing and blur effects are active. The bug is specific to Konsole's Wayland client implementation.
+
+**Workaround:** Use **Kitty** for transparency. Kitty's `background_opacity` works correctly on Wayland. The mossgrown-throne kitty config already sets `background_opacity 0.88`. Recommend Kitty as the primary terminal when transparency is part of the design.
+
+**XWayland workaround** (invasive, not recommended): Force Konsole onto XWayland by overriding `Command=env WAYLAND_DISPLAY= DISPLAY=:1 /bin/bash` in the profile. Breaks Wayland-native features (clipboard, scaling, HiDPI).
+
+**Check for fix:** Run `plasmashell --version` and retest after a future Plasma update. Plasma 6.6.4 was confirmed broken in this environment.
+
+---
+
+### Known Color Application Issues (KDE recipe)
+
+Issues observed during the mossgrown-throne session (2026-05-01) — watch for these:
+
+**1. Kitty: old palette persists alongside theme.conf include**
+The implement node appends `include theme.conf` to the existing `kitty.conf` but does NOT remove the inline palette block. Kitty's include overrides values at parse time, so colors are technically correct — but the old cursor color, tab colors, url_color, and section header remain from the previous theme. The file looks wrong and confuses future edits.
+Fix: After a kitty implement, manually replace the entire inline palette section with the new colors. The `theme.conf` generated by the workflow is the authoritative source.
+
+**2. Konsole: workflow writes wrong profile**
+The workflow targets `hermes-ricer.profile` but `~/.config/konsolerc` may point to a different `DefaultProfile` (e.g. `linux-ricing.profile`). The themed profile is written but never loaded.
+Fix: Always check `kreadconfig6 --file konsolerc --group "Desktop Entry" --key DefaultProfile` before and after theming Konsole. Update THAT profile, not a hardcoded one.
+
+**3. window_decorations:kde: filename mismatch causes false 2/10 score**
+The workflow spec targets `~/.local/share/color-schemes/MossgrownThrone.colors` (CamelCase, no prefix) but the apply node writes `hermes-mossgrown-throne.colors` (kebab-case with hermes- prefix). The verify node checks for the spec path, finds nothing, scores 2/10. The file was actually written correctly.
+Fix: The convention is `hermes-<theme-name>.colors`. The spec, apply, and verify nodes must all agree on this filename. When you see a 2/10 on window_decorations with `files_missing`, check for the hermes- prefixed file before retrying.
+
+---
+
+### Troubleshooting: Stale Session Checkpoints
+
+Crashed or hung workflow runs (e.g. from the PTY pitfall above) leave behind:
+- Session directories at `~/.config/rice-sessions/<thread-id>/`
+- A stale `.current` symlink pointing to the last session dir
+- SQLite checkpoint entries at `~/.local/share/linux-ricing/sessions.sqlite`
+
+`session_manager.py resume-check` queries both filesystem dirs and the SQLite checkpoint store, so orphaned entries survive directory cleanup. To fully remove a stale session:
+
+```bash
+# Remove session directory and .current symlink
+rm -rf ~/.config/rice-sessions/<thread-id>
+# If .current points to the stale session, remove it too
+[ -L ~/.config/rice-sessions/.current ] && rm ~/.config/rice-sessions/.current
+```
+
+SQLite checkpoints are automatically pruned when a new session is run with a fresh invocation — the stale entries from killed processes won't interfere. If `resume-check` still lists deleted sessions, they exist only in the SQLite checkpointer's WAL and are harmless; a fresh workflow run will rotate them out.
+
+### Pitfalls: KDE Implementation Quirks
+
+**kwin_wayland --replace kills plasmashell:** On KDE Wayland, running `kwin_wayland --replace` terminates plasmashell as a side effect. The user sees a blank desktop with no panel, widgets, or wallpaper. Always restart plasmashell immediately after:
+```bash
+kwin_wayland --replace &  # or background=true
+sleep 2 && plasmashell &  # restore desktop shell
+```
+Better: avoid `--replace` entirely if possible. For cursor theme changes, a log out/in is cleaner.
+
+**Kitty config: include vs replace:** The workflow's kitty implementation appends `include theme.conf` at the bottom of `kitty.conf`, but if the file already has a full palette (e.g. from a previous rice), the include may not override all values reliably. After implementation, verify the actual colors in `kitty.conf` — if old palette values remain above the include, replace them inline. Check: `grep -E "^(foreground|background|color[0-9])" ~/.config/kitty/kitty.conf`.
+
+**Fastfetch config.json vs config.jsonc:** The workflow may write `config.jsonc` but fastfetch looks for `config.json`. Fix: `ln -sf ~/.config/fastfetch/config.jsonc ~/.config/fastfetch/config.json`.
+
+**grim fails on KDE Wayland:** `grim` may fail with "compositor doesn't support the screen capture protocol". Use `spectacle --background --fullscreen -o <path>` as fallback for screenshots.
+
 **Reference docs** → `README.md` (directory layout, presets, CLI reference, supported targets, safety model, pitfalls, doc index)
+**LLM error patterns** → `references/workflow-llm-errors.md` (400 invalid model, 401 auth, diagnosis snippets)
+**Chat-agent bridge** → `references/workflow-bridge-script.md` (non-TTY resume helper for agent orchestration)
+**Wallpaper sourcing** → `references/wallpaper-sourcing.md` (Alpha Coders + vision analysis workflow for game-themed wallpapers)
+
+### Post-Implementation Verification (Agent Responsibility)
+
+The workflow's scorecard validates structure and palette presence, but can miss cases where old config values remain (e.g. kitty appending `include theme.conf` while old colors stay inline). After the workflow finishes Step 6 (implement), the agent MUST verify each written config actually reflects the design palette:
+
+```bash
+# Quick palette audit — grep actual color values in each config
+echo "=== kitty ===" && grep -E "^(foreground|background|color[0-9]|cursor )" ~/.config/kitty/kitty.conf 2>/dev/null
+echo "=== starship ===" && head -6 ~/.config/starship.toml 2>/dev/null
+echo "=== rofi ===" && cat ~/.config/rofi/hermes-theme.rasi 2>/dev/null | head -10
+echo "=== fastfetch ===" && python3 -c "import json; d=json.load(open('$HOME/.config/fastfetch/config.jsonc')); print(d.get('color',{}))" 2>/dev/null
+```
+
+If any config still has colors from a previous theme (e.g. Shiva Temple's `#0a0b1a` or `#5b4fcf`), replace them inline. Don't rely on `include` files overriding old values — some terminals parse includes differently.
+
+### Post-Implementation: Manual Elements
+
+#### KWin Replace — CRITICAL
+**NEVER run `kwin_wayland --replace` standalone.** It kills plasmashell on Wayland,
+leaving the user with a bare desktop (no panel, no widgets, no taskbar).
+
+If KWin restart is needed (e.g. to apply cursor theme), always follow immediately with:
+```bash
+kwin_wayland --replace &
+sleep 3
+plasmashell &
+```
+Or skip the kwin restart entirely — cursor theme changes apply on next login anyway.
+
+#### Konsole Theming — Read the Right Profile File
+Konsole uses the profile named in `~/.config/konsolerc` under `[Desktop Entry] DefaultProfile=`.
+**Always check konsolerc first** before editing any profile:
+```bash
+grep DefaultProfile ~/.config/konsolerc
+```
+Then edit that `.profile` file, not a guess.
+
+The `Opacity` key belongs in `[Appearance]` of the `.profile` file — NOT in the `.colorscheme` file.
+The `.colorscheme` file's `Opacity` key is ignored by Konsole.
+
+Correct profile structure:
+```ini
+[Appearance]
+ColorScheme=hermes-mossgrown-throne
+Font=JetBrainsMono Nerd Font,11,-1,5,400,0,0,0,0,0,0,0,0,0,0,1
+Opacity=0.75
+BlurBackground=false
+BackgroundContrast=false
+
+[General]
+Name=linux-ricing
+Parent=FALLBACK/
+```
+
+#### Konsole Transparency Broken on Plasma 6 Wayland (Known Bug)
+**On KDE Plasma 6 with native Wayland, Konsole ignores the `Opacity` key entirely.**
+This is a known upstream regression in the blur-behind Wayland protocol.
+
+Diagnose: confirm Konsole is on native Wayland (not XWayland):
+```bash
+xlsclients | grep -i konsole || echo "Native Wayland — transparency broken"
+```
+
+Workarounds in order of preference:
+1. Use Kitty instead — Kitty's `background_opacity` works correctly on Wayland
+2. Wait for Plasma update (`sudo pacman -Syu`)
+3. Force XWayland via launcher (loses some Wayland benefits)
+
+Do NOT waste time debugging the config — it's a compositor-level bug, not a config error.
+
+**Reference:** `references/konsole-wayland-transparency.md`
+
+#### AUR Package Install via Agent Terminal
+`yay -S` builds the package but fails the final `sudo pacman -U` step (no TTY for password).
+The built package is left in `~/.cache/yay/<pkg>/`. Install it directly:
+```bash
+sudo pacman -U ~/.cache/yay/<pkg>/<pkg>.pkg.tar.zst
+```
+This works from the agent terminal without PTY issues.
+
+### Workflow Gaps: Elements Not in the Default Queue
+
+The audit node builds an `element_queue` from detected apps. Some elements that appear
+in the quality checklist are NOT automatically added to the queue and require manual
+implementation after the workflow finishes:
+
+| Element | In queue? | Notes |
+|---------|-----------|-------|
+| wallpaper | No | Must be sourced separately (see wallpaper-sourcing.md). Applied during implement, not shown in plan.html. |
+| widgets (KDE Plasma) | No | System monitor, weather, notes — manually configure after workflow. |
+| notifications (dunst/mako/swaync) | No | May not be installed. Install + configure manually if needed. |
+| panel/bar (KDE panel) | No | KDE panel styling is recipe-specific but not in the element queue. |
+| cursor theme | No | design.json defaults to "default". Override manually. Catppuccin cursor themes are pre-installed and palette-matched (see below). Bibata requires AUR install + sudo. |
+| Hermes skin | No | Only relevant if user has custom Hermes CLI. |
+
+When the user asks about widgets, notifications, panel, or cursor — tell them these
+will be implemented manually after the workflow's core pass. Collect their preferences
+during the explore/plan phase so you can implement them in the cleanup step.
+
+### Post-Workflow: KDE-Specific Implementation Notes
+
+**Cursor theme:** Bibata-Modern-Classic requires AUR install (`yay -S bibata-cursor-theme-bin`)
+plus `sudo pacman -U` to install the built package. If sudo is unavailable, Catppuccin cursor
+themes are pre-installed and palette-matched. Use the variant that best matches the theme's
+primary/accent color:
+```bash
+# Set cursor via kwriteconfig (no sudo needed)
+kwriteconfig6 --file kcminputrc --group Mouse --key cursorTheme --type string "catppuccin-macchiato-green-cursors"
+# Cursor change takes effect on next login (KDE requirement)
+```
+
+**Notifications:** KDE Plasma has its own notification system (plasmashell). No external daemon
+(dunst/mako/swaync) is needed. The color scheme automatically applies to notifications.
+
+**Panel styling:** KDE Plasma panel inherits the applied color scheme. No manual panel config
+is required — `plasma-apply-colorscheme` handles it.
+
+**Wallpaper:** Use `plasma-apply-wallpaperimage <path>` to set wallpaper on all desktops.
+This is NOT in the element_queue and must be done manually after the workflow finishes.
+
+**Color scheme naming:** The workflow's implement node may write the color scheme file under
+a different name than what `plasma-apply-colorscheme` searches for. Check
+`~/.local/share/color-schemes/` for the actual filename and verify with:
+```bash
+plasma-apply-colorscheme <scheme-name> 2>&1
+# "already set" = working. "does not exist" = name mismatch.
+```

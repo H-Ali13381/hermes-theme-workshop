@@ -31,10 +31,8 @@ Blur=false
 ColorRandomization=false
 Description={color_scheme_name}
 FillStyle=Tile
-Opacity=1
 Wallpaper=
 WallpaperFlipType=NoFlip
-WallpaperOpacity=1
 
 [Color0]
 Color={p['surface']}

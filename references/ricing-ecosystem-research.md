@@ -266,7 +266,8 @@ foreground = "{{ .chezmoi.data.colors.foreground }}"
 swww img "$1" --transition-type grow
 matugen image "$1"         # regenerates all templates
 pkill -SIGUSR2 waybar      # reload CSS
-pkill -SIGUSR1 kitty       # reload config
+# Automated workflows should not broadcast terminal signals. Defer reload to
+# next Kitty launch unless the user explicitly asks for a targeted PID reload.
 hyprctl reload             # hyprland colors
 pkill dunst && dunst &     # restart dunst with new colors
 ```

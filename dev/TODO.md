@@ -62,6 +62,81 @@
   directories, legacy manifest gaps, and reload requirements clearly before users
   apply or rollback a rice.
 
+- [x] **[PRIORITY] Formalize KDE post-workflow finalization as workflow code**
+  The Mossgrown Throne session exposed that Step 8 completion can leave the agent
+  improvising outside the rails. Wallpaper, color-scheme reapply, cursor setting,
+  Kitty reload, Fastfetch `config.json`/`config.jsonc` handling, Konsole theming,
+  and plasmashell/KWin health checks must be represented as a deterministic
+  post-implementation/finalization node or task queue — not free-form agent work.
+  The workflow should know what remains after core `element_queue` implementation,
+  execute it in a fixed order, record outcomes in `impl_log`/handoff, and stop with
+  explicit unsupported/skipped statuses when an item cannot be automated safely.
+
+- [x] **[PRIORITY] Add hard guards for dangerous desktop and terminal commands**
+  Documentation is not enough for destructive desktop operations. Add a safe KDE
+  reload wrapper that is the only allowed path for KWin restarts: never run raw
+  `kwin_wayland --replace`; if it must run, immediately verify/restart
+  `plasmashell` and report both PIDs/statuses. Add process-safety rules/helpers so
+  agents never `pkill`/signal all Konsole/terminal processes or kill the terminal
+  currently hosting the interaction; terminal actions must target an explicitly
+  identified PID/session or be deferred to next launch.
+
+- [x] **[PRIORITY] Verify effective desktop state, not only written files**
+  Score gates currently focus on target files and palette text. Add a post-apply
+  effective-state audit that checks what KDE/apps are actually using: active
+  KDE colorscheme, active Konsole `DefaultProfile` and its `ColorScheme`, Kitty's
+  effective palette after stale inline values are removed, wallpaper path, cursor
+  theme, Fastfetch load path, and whether `plasmashell`/KWin are alive. Feed these
+  checks into scoring/handoff so "file written but not active" cannot pass.
+
+- [x] **[PRIORITY] Finish root-cause fixes for Mossgrown Throne regressions in code + tests**
+  Do not leave session-learned failures as SKILL.md workarounds only. Ensure the
+  actual workflow/materializer code and tests cover: Kitty stale inline palette
+  cleanup when injecting `theme.conf`; Konsole theming using the active
+  `konsolerc [Desktop Entry] DefaultProfile`; KDE `window_decorations:kde` spec,
+  apply, and verify agreeing on `hermes-<theme-name>.colors`; Fastfetch writing or
+  linking the path the installed Fastfetch version loads; and score gates rejecting
+  missing/incorrect active config. Some fixes are present in the working tree —
+  complete, validate, and keep them covered by focused regression tests.
+
+- [x] **[PRIORITY] Consolidate stale Konsole/KDE documentation into one source of truth**
+  `SKILL.md`, `KDE/konsole.md`, and `references/konsole-wayland-transparency.md`
+  can drift. Update stale guidance that implies opacity belongs in a Konsole
+  `.colorscheme` or assumes a hardcoded `linux-ricing.profile`. Canonical rules:
+  read `~/.config/konsolerc` first; edit the active `DefaultProfile`; `Opacity`
+  belongs in `[Appearance]` of the `.profile`; native Plasma 6 Wayland may ignore
+  Konsole opacity entirely; prefer Kitty when transparency is a design requirement.
+
+- [x] **[PRIORITY] Add capability probes and unsupported-feature exits**
+  Before attempting effects like terminal transparency, detect Plasma version,
+  Wayland vs X11/XWayland, compositor/blur state, terminal emulator, and known
+  platform bugs. If a feature is unsupported (e.g. Konsole opacity on native
+  Plasma 6 Wayland), stop after one verified config attempt, mark it unsupported
+  in the handoff, and select the documented workaround instead of repeatedly
+  debugging a known-broken path.
+
+- [x] **[PRIORITY] Make process rails machine-enforced, not agent-memory-based**
+  The skill should make the correct path the only executable path. Encode rails as
+  workflow state, allowed command wrappers, mandatory preflight/postflight checks,
+  retry limits, and regression tests. After Step 8, the agent should not ask
+  "what's next?" from scratch; it should present the remaining tracked tasks,
+  complete the safe ones, and ask only for genuinely required user decisions.
+
+- [x] **[PRIORITY] Harden workflow resume/bridge/model configuration paths**
+  The session hit brittle resume/bridge behavior: stdin-driven retries were awkward,
+  bridge-script docs had previously contained garbled API-key extraction, and model
+  selection can drift from Hermes config. Replace ad hoc bridge usage with a tested
+  resume/control interface, ensure API keys/model are loaded consistently from
+  Hermes config/env, and add tests or smoke checks for retry/accept/skip control
+  paths so recovery from score gates does not require improvisation.
+
+- [x] **[PRIORITY] Add reliable visual verification artifacts**
+  Screenshot capture and visual review were unreliable in the session. Provide a
+  deterministic visual verification path: capture screenshots with KDE-compatible
+  fallbacks (`spectacle` before `grim` on Plasma Wayland), store them in the session
+  directory, reference/open them in the handoff, and make it explicit when automated
+  vision analysis is unavailable rather than looping on unattached local images.
+
 ## Upcoming Features
 
 - [ ] **[FEATURE] EWW widget library expansion + deeper customization**

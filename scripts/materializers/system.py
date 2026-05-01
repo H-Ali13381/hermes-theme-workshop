@@ -2,6 +2,7 @@
 import json
 import re
 import sys
+from pathlib import Path
 
 from core.constants import HOME, TEMPLATES_DIR
 from core.colors import is_dark_palette, yiq_text_color, adjust_lightness
@@ -249,9 +250,9 @@ def materialize_picom(design: dict, backup_ts: str, dry_run: bool = False) -> li
 def materialize_fastfetch(design: dict, backup_ts: str, dry_run: bool = False) -> list[dict]:
     """Rewrite ~/.config/fastfetch/config.jsonc with palette-derived colors.
 
-    Writes to ``config.jsonc`` (fastfetch's preferred and only auto-loaded
-    filename); a legacy ``config.json`` left from older runs is moved to
-    backup so it does not confuse future maintenance.
+    Writes to ``config.jsonc`` and keeps a ``config.json`` compatibility
+    symlink because fastfetch versions/distributions disagree on the default
+    filename they auto-load.
     """
     palette = design["palette"]
     mood_tags = design.get("mood_tags", [])
@@ -295,7 +296,8 @@ def materialize_fastfetch(design: dict, backup_ts: str, dry_run: bool = False) -
     }
 
     if dry_run:
-        changes.append({"app": "fastfetch", "action": "dry-run", "path": str(config_path)})
+        changes.append({"app": "fastfetch", "action": "dry-run", "path": str(config_path),
+                        "compat_path": str(legacy_json_path)})
         return changes
 
     fastfetch_dir.mkdir(parents=True, exist_ok=True)
@@ -303,13 +305,20 @@ def materialize_fastfetch(design: dict, backup_ts: str, dry_run: bool = False) -
     config_path.write_text(json.dumps(config, indent=2, ensure_ascii=False), encoding="utf-8")
     changes.append({"app": "fastfetch", "action": "write", "path": str(config_path), "backup": config_backup})
 
-    # Retire any legacy config.json so future inspectors don't confuse it
-    # with the active config.jsonc that fastfetch actually loads.
-    if legacy_json_path.exists():
-        legacy_backup = backup_file(legacy_json_path, backup_ts, "fastfetch/config.json")
-        legacy_json_path.unlink()
-        changes.append({"app": "fastfetch", "action": "retire-legacy",
-                        "path": str(legacy_json_path), "backup": legacy_backup})
+    symlink_target = Path(config_path.name)
+    already_compatible = legacy_json_path.is_symlink() and legacy_json_path.readlink() in {
+        symlink_target, config_path,
+    }
+    if not already_compatible:
+        legacy_backup = None
+        if legacy_json_path.exists() and not legacy_json_path.is_symlink():
+            legacy_backup = backup_file(legacy_json_path, backup_ts, "fastfetch/config.json")
+        if legacy_json_path.exists() or legacy_json_path.is_symlink():
+            legacy_json_path.unlink()
+        legacy_json_path.symlink_to(symlink_target)
+        changes.append({"app": "fastfetch", "action": "compat-symlink",
+                        "path": str(legacy_json_path), "target": str(symlink_target),
+                        "backup": legacy_backup})
     return changes
 
 

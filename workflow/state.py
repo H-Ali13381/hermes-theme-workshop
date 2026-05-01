@@ -31,6 +31,10 @@ class RiceSessionState(TypedDict, total=False):
     # Step 3 output — 10-key palette + metadata
     design: dict
 
+    # Step 2 fast intake state. Keeps creative exploration structured so the
+    # user experiences one direct chat instead of visible agent handoffs.
+    explore_intake: dict
+
     # Step 4 output
     plan_html_path: str
 
@@ -44,6 +48,12 @@ class RiceSessionState(TypedDict, total=False):
     element_queue: list[str]                           # plain list, overwritten each step
     impl_log: Annotated[list[dict], operator.add]      # append-only completed records
     impl_retry_counts: dict                            # element → retry attempts so far
+
+    # Step 7 — deterministic cleanup/finalization actions performed after Step 6.
+    cleanup_actions: Annotated[list[dict], operator.add]
+    effective_state: dict
+    capability_report: dict
+    visual_artifacts: Annotated[list[dict], operator.add]
 
     # Loop-safety: counts how many times each looping node has been invoked.
     # Keys: "explore", "refine", "plan".  Routing functions check these against

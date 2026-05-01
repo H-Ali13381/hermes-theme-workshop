@@ -37,6 +37,7 @@ def apply_element(element: str, design: dict, session_dir: str) -> dict:
 
 # Elements where category:provider doesn't map directly to the materializer key.
 _PROVIDER_REMAPS: dict[str, str] = {
+    "look_and_feel:kde":      "lnf",
     "lock_screen:kde":        "kde_lockscreen",
     "window_decorations:gnome": "gnome_shell",
     "lock_screen:gnome":      "gnome_lockscreen",
@@ -56,7 +57,11 @@ def _element_to_materializer(element: str) -> str | None:
         return None
 
     aliases = {
-        "gtk_theme": "gtk",
-        "fastfetch": "fastfetch",
+        "gtk_theme":     "gtk",
+        "fastfetch":     "fastfetch",
+        "plasma_theme":  "plasma_theme",
+        "cursor_theme":  "cursor",
+        "icon_theme":    "icon_theme",
+        "kvantum_theme": "kvantum",
     }
     return aliases.get(element)

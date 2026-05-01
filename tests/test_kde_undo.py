@@ -211,6 +211,27 @@ class TestUndoKde(unittest.TestCase):
             self.assertFalse(created.exists())
             self.assertEqual(result["restored"][0]["deleted"], str(created))
 
+    def test_generic_restore_replaces_symlink_with_backed_up_file(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            manifest_path = Path(tmp) / "manifest.json"
+            backup = Path(tmp) / "backup_config.json"
+            target = Path(tmp) / "config.jsonc"
+            dest = Path(tmp) / "config.json"
+            backup.write_text('{"old": true}\n', encoding="utf-8")
+            target.write_text('{"new": true}\n', encoding="utf-8")
+            dest.symlink_to(target.name)
+            _write_manifest(manifest_path, [
+                {"app": "fastfetch", "action": "compat-symlink", "path": str(dest), "backup": str(backup)},
+            ])
+
+            with patch.object(ricer_undo, "CURRENT_DIR", Path(tmp)):
+                result = ricer_undo.undo()
+
+            self.assertEqual(result["status"], "success")
+            self.assertFalse(dest.is_symlink())
+            self.assertEqual(dest.read_text(encoding="utf-8"), '{"old": true}\n')
+            self.assertEqual(target.read_text(encoding="utf-8"), '{"new": true}\n')
+
     def test_dry_run_manifest_is_skipped(self):
         # Dry-run manifests are a soft skip (not a hard error) so that
         # undo_session() can walk past them when rolling back a session.

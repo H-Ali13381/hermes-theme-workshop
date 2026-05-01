@@ -4,6 +4,10 @@ from __future__ import annotations
 from pathlib import Path
 
 from ...state import RiceSessionState
+from .capabilities import probe_capabilities
+from .effective_state import audit_effective_state
+from .kde_finalize import finalize_kde
+from .visual_artifacts import capture_visual_artifacts
 from .reloader import validate_file, reload_waybar, reload_polybar, reload_dunst, reload_mako, reload_swaync, reload_hyprland
 
 
@@ -12,6 +16,7 @@ def cleanup_node(state: RiceSessionState) -> dict:
     print("[Step 7] Running cleanup...", flush=True)
     errors:   list[str] = []
     reloaded: list[str] = []
+    cleanup_actions: list[dict] = []
 
     impl_log = state.get("impl_log", [])
     wm       = state.get("device_profile", {}).get("wm", "")
@@ -65,7 +70,21 @@ def cleanup_node(state: RiceSessionState) -> dict:
         print("  GTK: changes apply to newly opened apps (no live reload)")
         reloaded.append("gtk")
 
+    cleanup_actions.extend(finalize_kde(state, reloaded, errors))
+    effective_state = audit_effective_state(state)
+    capability_report = probe_capabilities(state)
+    visual_artifacts = capture_visual_artifacts(state)
+
     print(f"  Reloaded: {', '.join(reloaded) if reloaded else 'none'}")
     print(f"  Errors: {len(errors)}\n")
 
-    return {"current_step": 7, "errors": errors}
+    result: dict = {"current_step": 7, "cleanup_actions": cleanup_actions}
+    if effective_state:
+        result["effective_state"] = effective_state
+    if capability_report:
+        result["capability_report"] = capability_report
+    if visual_artifacts:
+        result["visual_artifacts"] = visual_artifacts
+    if errors:
+        result["errors"] = errors
+    return result

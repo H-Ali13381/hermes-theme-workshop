@@ -135,6 +135,26 @@ class RicerCliRoutingTests(unittest.TestCase):
         self.assertIn("kde_lockscreen", called_apps)
         self.assertNotIn("kde", called_apps)
 
+    def test_apply_element_maps_kde_manual_subsystems_to_materializers(self):
+        from workflow.nodes.implement.apply import apply_element
+
+        cases = {
+            "look_and_feel:kde": "lnf",
+            "plasma_theme": "plasma_theme",
+            "cursor_theme": "cursor",
+            "icon_theme": "icon_theme",
+            "kvantum_theme": "kvantum",
+        }
+        for element, materializer in cases.items():
+            with self.subTest(element=element), \
+                 patch("workflow.nodes.implement.apply.discover_apps", return_value={materializer: True}), \
+                 patch("workflow.nodes.implement.apply.materialize", return_value={}) as mat:
+                result = apply_element(element, DESIGN, session_dir="")
+
+            self.assertTrue(result["success"], result)
+            called_apps = mat.call_args.kwargs.get("apps") or mat.call_args.args[1]
+            self.assertIn(materializer, called_apps)
+
 
 class DesignFileLoaderTests(unittest.TestCase):
     """Unit tests for load_design_file — JSON and YAML support."""

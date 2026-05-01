@@ -53,6 +53,10 @@ def handoff_node(state: RiceSessionState) -> dict:
     payload = {
         "design": design,
         "implementation_log": impl_log,
+        "cleanup_actions": state.get("cleanup_actions", []),
+        "effective_state": state.get("effective_state", {}),
+        "capability_report": state.get("capability_report", {}),
+        "visual_artifacts": state.get("visual_artifacts", []),
         "errors": state.get("errors", []),
     }
     response = llm.invoke([

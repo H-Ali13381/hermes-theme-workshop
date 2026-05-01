@@ -159,12 +159,16 @@ Firefox picks up GTK colors only for the headerbar and menu bar — not page con
 **Konsole requires a new session to activate theme changes.** Running instances are not affected.
 
 **CRITICAL: `DefaultProfile` activation requires writing the key explicitly.**
-The `.profile` file alone is not enough. Also run:
-`kwriteconfig6 --file konsolerc --group "Desktop Entry" --key DefaultProfile hermes-ricer.profile`
+The `.profile` file alone is not enough. Read the active profile first:
+`kreadconfig6 --file konsolerc --group "Desktop Entry" --key DefaultProfile`
+If no default exists, create one and set that exact profile name with
+`kwriteconfig6 --file konsolerc --group "Desktop Entry" --key DefaultProfile <profile>.profile`.
 
 **Konsole color scheme format uses decimal RGB (`r,g,b`), not hex.** Same rule as KDE `.colors` files.
 
-**kitty live reload:** `kill -SIGUSR1 $(pgrep -x kitty)` — no restart needed.
+**kitty reload safety:** do not broadcast `SIGUSR1` to all Kitty processes from
+automation. Defer to next launch unless the user explicitly asks for a targeted
+reload and the exact PID/session is known.
 
 **CRITICAL: Fastfetch ANSI logo files must contain the actual ESC byte (`\x1b`) before `[` sequences.**
 If only the bare `[38;2;...m` string is written (no ESC), the terminal renders it as literal text.

@@ -47,8 +47,10 @@ from core.session_io import SESSION_HEADER_TEMPLATE, set_current  # noqa: E402
 def main() -> None:
     parser = argparse.ArgumentParser(description="Linux Ricing Workflow")
     parser.add_argument("--resume", metavar="THREAD_ID", help="Resume a paused session")
+    parser.add_argument("--answer", help="Non-interactively answer the next pending interrupt and stop")
     parser.add_argument("--list", action="store_true", help="List all sessions")
     parser.add_argument("--json", action="store_true", help="Output --list results as a JSON array")
+    parser.add_argument("--status-json", action="store_true", help="Print current resume status JSON and exit")
     args = parser.parse_args()
 
     # Ensure DB directory exists
@@ -64,6 +66,12 @@ def main() -> None:
         if args.resume:
             thread_id = args.resume
             config = {"configurable": {"thread_id": thread_id}}
+            if args.status_json and args.answer is None:
+                print(json.dumps(_session_status(graph.get_state(config)), indent=2, default=str))
+                return
+            if args.answer is not None:
+                _run_once(graph, config, args.answer, as_json=args.json or args.status_json)
+                return
             print(f"\nResuming session: {thread_id}\n")
             _run_loop(graph, config, initial_input=None)
         else:
@@ -154,6 +162,70 @@ def _run_loop(graph, config: dict, initial_input) -> None:
         current_input = Command(resume=user_input)
 
 
+def _run_once(graph, config: dict, answer: str, as_json: bool = False) -> None:
+    """Resume once with *answer*, stop at the next interrupt/end, and report status."""
+    current_input = Command(resume=_normalize_resume_answer(answer))
+    try:
+        for chunk in graph.stream(current_input, config, stream_mode="updates"):
+            if not as_json:
+                _print_chunk(chunk)
+    except GraphInterrupt:
+        pass
+    state = graph.get_state(config)
+    status = _session_status(state)
+    if as_json:
+        print(json.dumps(status, indent=2, default=str))
+    else:
+        _display_pending_status(status)
+
+
+def _normalize_resume_answer(answer: str) -> str:
+    """Normalize one noninteractive resume/control answer."""
+    normalized = str(answer).strip()
+    if not normalized:
+        raise ValueError("--answer must not be empty")
+    return normalized
+
+
+def _session_status(state) -> dict:
+    """Return a JSON-serializable snapshot of current graph resume status."""
+    pending_messages = []
+    for task in getattr(state, "tasks", []):
+        for interrupt in getattr(task, "interrupts", []):
+            val = interrupt.value
+            if isinstance(val, dict):
+                pending_messages.append({
+                    "step": val.get("step"),
+                    "type": val.get("type"),
+                    "element": val.get("element"),
+                    "score": val.get("score"),
+                    "message": val.get("message"),
+                })
+            else:
+                pending_messages.append({"message": str(val)})
+    values = getattr(state, "values", {}) or {}
+    return {
+        "next": list(getattr(state, "next", []) or []),
+        "values": {k: values.get(k) for k in (
+            "current_step", "session_dir", "device_profile", "design",
+            "element_queue", "cleanup_actions", "effective_state", "capability_report",
+        ) if k in values},
+        "pending_messages": pending_messages,
+    }
+
+
+def _display_pending_status(status: dict) -> None:
+    if not status.get("next"):
+        print("\nSession has no pending nodes.\n")
+        return
+    pending = status.get("pending_messages", [])
+    if not pending:
+        print("\nSession advanced; no pending interrupt is currently visible.\n")
+        return
+    print("\nNext pending interrupt:\n")
+    _display_interrupt(pending[0])
+
+
 def _print_chunk(chunk: dict) -> None:
     """Print relevant output from a graph update chunk."""
     for node_name, node_update in chunk.items():
@@ -182,6 +254,8 @@ def _display_interrupt(val) -> None:
             print(f"\n{prefix} Score gate — {element}: {score}/10")
         elif itype == "approval":
             print(f"\n{prefix} Approval needed")
+        elif itype == "conversation":
+            print()
         else:
             print(f"\n{prefix}")
 

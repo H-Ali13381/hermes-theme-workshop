@@ -5,11 +5,8 @@ from pathlib import Path
 # ── Module-level constants ────────────────────────────────────────────────────
 # Last-resort model fallback — only used when RICER_MODEL env var is unset
 # AND no Hermes config is present (h["model"] takes priority when available).
-# Must be a valid Anthropic API model identifier.
-# Short aliases like "claude-sonnet-4-6" are Hermes-internal; for a standalone
-# fallback use the full versioned string, e.g. "claude-3-5-sonnet-20241022".
-# Update this constant whenever the target model changes.
-MODEL = os.environ.get("RICER_MODEL", "claude-sonnet-4-5-20251029")
+# Must be a valid OpenRouter / OpenAI-compatible model identifier.
+MODEL = os.environ.get("RICER_MODEL", "deepseek/deepseek-v4-pro")
 
 SKILL_DIR = Path(__file__).parent.parent
 SCRIPTS_DIR = SKILL_DIR / "scripts"
@@ -128,8 +125,8 @@ def _load_hermes_config() -> dict:
     }
 
 
-def get_llm(temperature: float = 0.7, max_tokens: int | None = None):
-    """Return a LangChain chat model inheriting Hermes' active provider.
+def resolve_llm_config() -> dict:
+    """Resolve LLM connection settings from env and Hermes config.
 
     Priority:
       1. RICER_* env vars (bypass Hermes subprocess env blocklist)
@@ -137,16 +134,29 @@ def get_llm(temperature: float = 0.7, max_tokens: int | None = None):
     """
     base_url = os.environ.get("RICER_BASE_URL", "")
     api_key  = os.environ.get("RICER_API_KEY", "")
-    model    = MODEL
+    model    = os.environ.get("RICER_MODEL", "")
     api_mode = ""
 
-    if not (base_url and api_key):
-        h = _load_hermes_config()
-        base_url = base_url or h.get("base_url", "")
-        api_key  = api_key  or h.get("api_key",  "")
-        api_mode = h.get("api_mode", "")
-        if not os.environ.get("RICER_MODEL") and h.get("model"):
-            model = h["model"]
+    # Always load Hermes config so we can fill in missing fields (especially model).
+    h = _load_hermes_config()
+    base_url = base_url or h.get("base_url", "")
+    api_key  = api_key  or h.get("api_key",  "")
+    api_mode = h.get("api_mode", "")
+    if not model and h.get("model"):
+        model = h["model"]
+    if not model:
+        model = MODEL
+
+    return {"base_url": base_url, "api_key": api_key, "model": model, "api_mode": api_mode}
+
+
+def get_llm(temperature: float = 0.7, max_tokens: int | None = None):
+    """Return a LangChain chat model inheriting Hermes' active provider."""
+    resolved = resolve_llm_config()
+    base_url = resolved["base_url"]
+    api_key = resolved["api_key"]
+    model = resolved["model"]
+    api_mode = resolved["api_mode"]
 
     is_anthropic_native = (
         api_mode == "anthropic_messages"

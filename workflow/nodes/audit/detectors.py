@@ -223,6 +223,13 @@ def build_element_queue(wm: str, apps: dict) -> list[str]:
         if apps.get("hyprlock") or apps.get("swaylock"):
             queue.append("lock_screen:hyprlock")
     elif "kde" in wm or "plasma" in wm:
+        queue.extend([
+            "look_and_feel:kde",
+            "plasma_theme",
+            "cursor_theme",
+            "icon_theme",
+            "kvantum_theme",
+        ])
         queue.append("window_decorations:kde")
         queue.append("lock_screen:kde")
     elif "gnome" in wm:

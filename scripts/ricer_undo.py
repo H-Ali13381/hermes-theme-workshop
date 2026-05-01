@@ -98,7 +98,7 @@ def collect_deletable_artifacts(manifest_path: Path) -> list[dict]:
         if change.get("action") == "error":
             continue
         for app, dest, has_backup in _iter_change_artifacts(change):
-            if not has_backup and dest.exists():
+            if not has_backup and (dest.exists() or dest.is_symlink()):
                 out.append({"app": app, "path": str(dest)})
     return out
 
@@ -118,12 +118,15 @@ def _restore_backed_up_files(change: dict, restored: list, failed: list,
                    if k in change and _restore_destination(change, k) == dest), None)
         if has_backup:
             try:
+                if dest.is_symlink():
+                    dest.unlink()
+                dest.parent.mkdir(parents=True, exist_ok=True)
                 shutil.copy2(bp, dest)
                 restored.append({"app": app, "restored": str(dest), "from": bp})
             except (OSError, shutil.Error) as e:
                 failed.append({"app": app, "path": str(dest), "error": str(e)})
         else:
-            if not dest.exists():
+            if not (dest.exists() or dest.is_symlink()):
                 continue
             if not delete_artifacts:
                 restored.append({"app": app, "kept": str(dest),

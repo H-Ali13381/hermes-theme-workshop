@@ -1,11 +1,16 @@
 """Tests for implementation spec structured output and apply element."""
 from __future__ import annotations
 
+import os
+import tempfile
 import unittest
+from pathlib import Path
 from unittest.mock import patch
 
 from workflow.nodes.implement.apply import apply_element
+from workflow.nodes.implement.score import score_element
 from workflow.nodes.implement.spec import ElementSpec, write_spec
+from workflow.nodes.implement.verify import verify_element
 
 
 class _FakeStructuredLLM:
@@ -143,6 +148,48 @@ class ApplyElementTests(unittest.TestCase):
         mock_mat.assert_not_called()
         self.assertFalse(result["success"])
         self.assertIn("not detected", result["error"])
+
+
+class VerifyElementTests(unittest.TestCase):
+    def test_kde_colorscheme_uses_hermes_filename_fallback(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            actual = Path(tmp) / ".local" / "share" / "color-schemes" / "hermes-mossgrown-throne.colors"
+            actual.parent.mkdir(parents=True)
+            actual.write_text("[General]\nName=hermes-mossgrown-throne\nColor=26,27,38\n", encoding="utf-8")
+            stale = Path(tmp) / ".local" / "share" / "color-schemes" / "MossgrownThrone.colors"
+            spec = {"targets": [str(stale)], "palette_keys": ["background"]}
+            design = {"name": "mossgrown-throne", "palette": {"background": "#1a1b26"}}
+
+            with patch.dict(os.environ, {"HOME": tmp}), \
+                 patch("workflow.nodes.implement.verify.subprocess.run", side_effect=FileNotFoundError):
+                verify = verify_element("window_decorations:kde", spec, design)
+                score = score_element("window_decorations:kde", spec, design, verify)
+
+            self.assertEqual(verify["files_missing"], [])
+            self.assertIn(str(actual), verify["files_written"])
+            self.assertIn("resolved_missing_targets", verify)
+            self.assertGreaterEqual(score["total"], 8)
+
+    def test_kde_colorscheme_active_mismatch_scores_below_gate(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp)
+            actual = home / ".local" / "share" / "color-schemes" / "hermes-moss.colors"
+            actual.parent.mkdir(parents=True)
+            actual.write_text("[General]\nName=hermes-moss\nColor=26,27,38\n", encoding="utf-8")
+            kdeglobals = home / ".config" / "kdeglobals"
+            kdeglobals.parent.mkdir(parents=True)
+            kdeglobals.write_text("[General]\nColorScheme=BreezeClassic\n", encoding="utf-8")
+            spec = {"targets": [str(actual)], "palette_keys": ["background"]}
+            design = {"name": "moss", "palette": {"background": "#1a1b26"}}
+
+            with patch.dict(os.environ, {"HOME": tmp}), \
+                 patch("workflow.nodes.implement.verify.subprocess.run", side_effect=FileNotFoundError):
+                verify = verify_element("window_decorations:kde", spec, design)
+                score = score_element("window_decorations:kde", spec, design, verify)
+
+            self.assertEqual(verify["active_colorscheme"], "BreezeClassic")
+            self.assertFalse(verify["active_match"])
+            self.assertLess(score["total"], 8)
 
 
 if __name__ == "__main__":

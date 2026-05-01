@@ -33,13 +33,12 @@ cursor           → accent   (yiq_text_color for cursor_text_color)
 url_color        → primary
 ```
 
-### Live Reload
+### Reload Safety
 
-```bash
-kill -SIGUSR1 $(pgrep -x kitty)
-```
-
-kitty picks up config changes via SIGUSR1 — no restart needed.
+Kitty can reload config with `SIGUSR1`, but automated workflows must not send a
+broad signal to every terminal process. Treat live reload as deferred; new Kitty
+windows pick up the config. Only use a targeted PID/session reload if the user
+explicitly asks and the process is positively identified.
 
 ### Undo
 

@@ -1,106 +1,81 @@
 # Konsole Theming
 
-## File Locations
+## Canonical Rules
 
-- Colorscheme: `~/.local/share/konsole/linux-ricing-colors.colorscheme`
-- Profile: `~/.local/share/konsole/linux-ricing.profile`
-- Default profile config: `~/.config/konsolerc`
+Konsole theming has two separate files:
+
+- Colorscheme: `~/.local/share/konsole/hermes-<theme>.colorscheme`
+- Profile: `~/.local/share/konsole/<active-default-profile>.profile`
+- Default profile pointer: `~/.config/konsolerc` → `[Desktop Entry] DefaultProfile`
+
+**Always read `konsolerc` first.** Do not assume `linux-ricing.profile` or
+`hermes-ricer.profile` is active.
+
+```bash
+kreadconfig6 --file konsolerc --group "Desktop Entry" --key DefaultProfile
+```
+
+Edit the profile named by that key. If no default profile exists, create
+`linux-ricing.profile` and set `DefaultProfile` explicitly.
 
 ## Colorscheme Format
 
-Uses decimal RGB (`r,g,b`) — same as KDE `.colors` files. Always use `hex_to_rgb()` to convert.
+Konsole `.colorscheme` files use decimal RGB (`r,g,b`), same as KDE `.colors`
+files. Always convert palette hex with `hex_to_rgb()`.
 
 ```ini
 [General]
-Description=hermes-void-dragon
-Opacity=1
+Description=hermes-mossgrown-throne
 Wallpaper=
 
 [Background]
-Color=12,18,32
+Color=15,21,20
 
 [Foreground]
-Color=228,240,255
-
-[Color0]
-Color=28,30,42
-
-[Color1]
-Color=204,48,144
-
-[Color2]
-Color=42,128,96
-
-[Color3]
-Color=200,120,32
-
-[Color4]
-Color=122,212,240
-
-[Color5]
-Color=13,46,50
-
-[Color6]
-Color=212,160,18
-
-[Color7]
-Color=228,240,255
-
-[Color0Intense]
-Color=61,34,20
-
-[Color1Intense]
-Color=219,62,158
-
-[Color2Intense]
-Color=55,166,125
-
-[Color3Intense]
-Color=215,140,42
-
-[Color4Intense]
-Color=105,220,245
-
-[Color5Intense]
-Color=20,60,65
-
-[Color6Intense]
-Color=225,175,30
-
-[Color7Intense]
-Color=240,248,255
+Color=209,219,200
 ```
 
-## 10-Key → 16 ANSI Color Mapping
+Do **not** put `Opacity` in the `.colorscheme`; Konsole ignores it there.
 
-Konsole uses the same 10-key → 16 ANSI mapping defined in `shared/design-system.md`.
+## Profile Format
 
-## DefaultProfile Activation
-
-**CRITICAL:** The profile file alone is not enough. You MUST set the DefaultProfile key:
-
-```bash
-kwriteconfig6 --file konsolerc --group "Desktop Entry" --key DefaultProfile linux-ricing.profile
-```
-
-Without this, Konsole ignores the new profile entirely on next launch.
-
-## Profile File
+The profile chooses the colorscheme and terminal runtime options:
 
 ```ini
 [Appearance]
-ColorScheme=linux-ricing-colors
+ColorScheme=hermes-mossgrown-throne
+Opacity=0.75
+BlurBackground=false
+BackgroundContrast=false
 
 [General]
 Name=linux-ricing
 Parent=FALLBACK/
-
-[Scrolling]
-HistoryMode=2
 ```
+
+`Opacity` belongs in `[Appearance]` of the `.profile`, not the `.colorscheme`.
+
+## Plasma 6 Wayland Transparency Bug
+
+As of 2026-05-01, native Wayland Konsole on Plasma 6.6.4 can silently ignore the
+profile `Opacity` key even when the profile is correct and KWin compositing is
+active. This is a platform bug, not a config error.
+
+Preferred workaround: use Kitty when transparent terminal background is a design
+requirement. See `references/konsole-wayland-transparency.md`.
+
+## 10-Key → 16 ANSI Color Mapping
+
+Konsole uses the same 10-key → 16 ANSI mapping defined in
+`shared/design-system.md`. If `primary == warning`, avoid using `primary` as ANSI
+blue (`Color4`); use `secondary` so blue and yellow remain distinguishable.
 
 ## Pitfalls
 
-- **New session required.** Terminal colors activate only in new Konsole sessions after theming. Running instances are not affected.
-- **ANSI color4/color3 collision** on gold-heavy palettes: if `primary==warning`, kitty and konsole color4 (blue) becomes indistinguishable from color3 (yellow). Fix: swap color4 to `secondary`.
-- **Decimal RGB only** — same as all KDE `.colors` files.
+- Running Konsole sessions usually need a new profile/session to pick up theme
+  changes.
+- A written profile is not enough; `konsolerc` must point at it.
+- The active profile may be a user-created name such as `Default.profile` or
+  `linux-ricing.profile`; always read it.
+- Do not debug transparency indefinitely on native Plasma Wayland; detect the
+  platform bug and fall back to Kitty.

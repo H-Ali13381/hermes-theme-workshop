@@ -42,6 +42,19 @@ class AuditNodeStateTests(unittest.TestCase):
         self.assertIn("terminal:kitty", update["element_queue"])
         self.assertIn("gtk_theme", update["element_queue"])
 
+    def test_kde_queue_includes_former_manual_subsystems(self):
+        update = self._run_audit({"element_queue": []})
+        queue = update["element_queue"]
+
+        for element in (
+            "look_and_feel:kde", "plasma_theme", "cursor_theme",
+            "icon_theme", "kvantum_theme", "window_decorations:kde",
+            "lock_screen:kde",
+        ):
+            self.assertIn(element, queue)
+
+        self.assertLess(queue.index("look_and_feel:kde"), queue.index("kvantum_theme"))
+
     def test_resume_audit_does_not_overwrite_existing_element_queue(self):
         # Use a multi-item queue that is clearly non-empty so a returned
         # empty list or a partial list would also fail the assertion.

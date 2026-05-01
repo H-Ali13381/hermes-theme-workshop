@@ -91,10 +91,11 @@ def refine_node(state: RiceSessionState) -> dict:
 
     # Track invocations so routing.after_refine can abort if the loop diverges.
     loop_counts = dict(state.get("loop_counts") or {})
-    loop_counts["refine"] = loop_counts.get("refine", 0) + 1
+    prior_refine_count = loop_counts.get("refine", 0)
+    loop_counts["refine"] = prior_refine_count + 1
 
     new_messages: list = []
-    if not messages:
+    if prior_refine_count == 0 or not messages:
         # Seed with system + direction context
         messages = [
             SystemMessage(content=system_prompt),
