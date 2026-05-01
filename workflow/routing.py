@@ -55,17 +55,58 @@ def after_refine(state: dict) -> str:
 
 
 def after_plan(state: dict) -> str:
-    """Loop until HTML mockup is present and valid; abort if loop limit is hit."""
+    """Dispatch on the plan-feedback classifier signal set by plan_node.
+
+    Routes:
+      - "approve"  → baseline (forward through pipeline)
+      - "refine"   → refine (design.json needs changes)
+      - "explore"  → explore (creative direction needs revision)
+      - "render"   → plan (re-render with same design.json)
+      - unset      → fall back to validator-based check (back-compat for first
+                     pass before plan_node has run, and for older state shapes)
+    Loop limit is checked last so the destination node still gets a fair shot
+    even when the signal asks for a backward jump.
+    """
     if _loop_limit_reached(state, "plan", "Plan"):
         return END
+
+    route = (state.get("plan_feedback_route") or "").strip().lower()
+    if route == "approve":
+        return "baseline"
+    if route == "refine":
+        return "refine"
+    if route == "explore":
+        return "explore"
+    if route == "render":
+        return "plan"
+
+    # No explicit route yet — defer to validator (e.g. state was just primed
+    # without a feedback turn).
     ok, _ = validators.plan_ready(state.get("plan_html_path", ""))
     return "baseline" if ok else "plan"
+
+
+def _next_node_for_queue(state: dict) -> str:
+    """Given a non-empty element queue, return the right processing node."""
+    queue = state.get("element_queue", [])
+    if not queue:
+        return "cleanup"
+    return "craft" if validators.is_craft_element(queue[0]) else "implement"
 
 
 def after_implement(state: dict) -> str:
     """Route after the implement node.
 
-    Loop back to implement while there are still pending elements in the
-    queue; proceed to cleanup when the queue is empty.
+    Loop back to implement (or craft) while there are still pending elements;
+    proceed to cleanup when the queue is empty.
     """
-    return "cleanup" if validators.implement_done(state.get("element_queue", [])) else "implement"
+    if validators.implement_done(state.get("element_queue", [])):
+        return "cleanup"
+    return _next_node_for_queue(state)
+
+
+def after_craft(state: dict) -> str:
+    """Route after the craft node — mirrors after_implement."""
+    if validators.implement_done(state.get("element_queue", [])):
+        return "cleanup"
+    return _next_node_for_queue(state)

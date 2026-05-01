@@ -82,6 +82,7 @@ color15 {adjust_lightness(palette['foreground'], 1.25)}
 
     include_line = "include theme.conf"
     hermes_marker = "# linux-ricing"
+    chrome_lines = _kitty_chrome_lines(design)
     removed_palette_lines = 0
     if main_config.exists():
         cleaned = []
@@ -91,14 +92,20 @@ color15 {adjust_lightness(palette['foreground'], 1.25)}
                 if cleaned and cleaned[-1].strip() == hermes_marker:
                     cleaned.pop()
                 continue
+            if stripped in {"# linux-ricing chrome contract", "hide_window_decorations yes"}:
+                continue
+            if stripped.startswith("window_padding_width "):
+                continue
             if _is_kitty_palette_line(ln):
                 removed_palette_lines += 1
                 continue
             cleaned.append(ln)
-        new_text = "\n".join(cleaned).rstrip() + f"\n\n{hermes_marker}\n{include_line}\n"
+        chrome_block = "\n".join(chrome_lines)
+        new_text = "\n".join(cleaned).rstrip() + f"\n\n{hermes_marker}\n{include_line}\n{chrome_block}\n"
         main_config.write_text(new_text, encoding="utf-8")
     else:
-        main_config.write_text(f"{hermes_marker}\n{include_line}\n", encoding="utf-8")
+        chrome_block = "\n".join(chrome_lines)
+        main_config.write_text(f"{hermes_marker}\n{include_line}\n{chrome_block}\n", encoding="utf-8")
     include_injected = True
 
     changes.append({"app": "kitty", "action": "inject_include", "path": str(main_config),
@@ -106,6 +113,22 @@ color15 {adjust_lightness(palette['foreground'], 1.25)}
                     "include_line": include_line, "marker": hermes_marker,
                     "removed_palette_lines": removed_palette_lines})
     return changes
+
+
+def _kitty_chrome_lines(design: dict) -> list[str]:
+    """Mirror implementable chrome promises in Kitty where possible."""
+    chrome = design.get("chrome_strategy", {}) if isinstance(design, dict) else {}
+    if not isinstance(chrome, dict):
+        return []
+    method = str(chrome.get("method", "")).lower()
+    targets = " ".join(str(t).lower() for t in chrome.get("implementation_targets", []))
+    if not any(term in method or term in targets for term in ("terminal", "kitty", "frame", "border", "overlay")):
+        return []
+    return [
+        "# linux-ricing chrome contract",
+        "hide_window_decorations yes",
+        "window_padding_width 14",
+    ]
 
 
 # ---------------------------------------------------------------------------

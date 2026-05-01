@@ -11,6 +11,7 @@ _DETECTED_APPS = {
     "kitty": True,
     "waybar": False,
     "polybar": False,
+    "eww": False,
     "rofi": False,
     "wofi": False,
     "dunst": False,
@@ -54,6 +55,7 @@ class AuditNodeStateTests(unittest.TestCase):
             self.assertIn(element, queue)
 
         self.assertLess(queue.index("look_and_feel:kde"), queue.index("kvantum_theme"))
+        self.assertNotIn("widgets:eww", queue, "EWW is design-driven, not mandatory at audit time")
 
     def test_resume_audit_does_not_overwrite_existing_element_queue(self):
         # Use a multi-item queue that is clearly non-empty so a returned

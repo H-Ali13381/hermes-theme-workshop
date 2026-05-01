@@ -95,9 +95,10 @@ The workflow now owns:
 1. Wallpaper application when a local `wallpaper_path`/`wallpaper` is present
 2. KDE color-scheme reapply and active-state audit
 3. Cursor/icon/Kvantum/Plasma/LnF theming through materializers
-4. Fastfetch `config.jsonc` plus `config.json` compatibility symlink
-5. Plasmashell/KWin liveness checks
-6. Handoff reporting of cleanup actions and effective state
+4. KDE custom EWW chrome (`widgets:eww`) when the design calls for widgets, terminal frames, borders, or overlays
+5. Fastfetch `config.jsonc` plus `config.json` compatibility symlink
+6. Plasmashell/KWin liveness checks
+7. Handoff reporting of cleanup actions and effective state
 
 Do **not** broadcast terminal signals such as `pkill -SIGUSR1 kitty`; terminal
 configs apply on next launch unless a user explicitly asks for a targeted reload.
@@ -136,8 +137,10 @@ The agent terminal CAN run sudo commands (unlike the bridge script which cannot 
 
 - **Privacy:** the `audit` node reads only non-sensitive system facts silently. Personal history, memory files, and screenshots require explicit user consent before the workflow accesses them. Secrets are never logged — only `set` / `not set`.
 - **Visual preview:** `plan_node` must produce a real HTML mockup (`plan.html`) before any config is written. A text plan is not a preview.
+- **Preview honesty:** `plan.html` must not show app/window chrome the workflow will not implement. macOS traffic-light titlebar controls are rejected unless a matching window-decoration implementation exists; rounded windows, terminal frames, and custom borders are allowed only when `chrome_strategy` names an implementable method.
 - **Baseline:** `baseline_node` runs `desktop_state_audit.py` before `install_node` starts. No implementation begins without an immutable rollback snapshot.
 - **Element gate:** every element in `implement_node` must score ≥ 8/10 across the 5-category scorecard (Palette, Shape, Diegesis, Usability, Preview integration — each 0–2). Below threshold, the workflow interrupts and the user must explicitly accept the deviation or retry. Silent skips are not possible.
+- **KDE originality gate:** KDE `design.json` is invalid unless it includes `originality_strategy` and `chrome_strategy`: at least three user-specific non-default moves, and an implementable plan for any previewed rounded corners, custom borders, titlebars, terminal frames, widgets, or panel chrome. Widgets are optional; originality is mandatory.
 - **Quality Bar:** every applicable theming checklist item (terminal, bar, launcher, notifications, window decorations, GTK, wallpaper, lock screen, fastfetch, cursor, shell prompt, widgets, Hermes skin) ends the session in one logged terminal state — `✓ verified`, `✓ accepted-deviation`, or `SKIP <reason>` — before `handoff_node` runs.
 
 ---
@@ -150,8 +153,8 @@ The 8-step pipeline in `workflow/graph.py`:
 |------|------|--------------|
 | 1 | `audit` | Silent machine scan: WM, GPU, screens, apps, FAL key. Classifies desktop recipe (kde / hyprland / gnome / other). Builds element queue. Routes to END immediately for unsupported desktops. |
 | 2 | `explore` | Multi-turn creative dialogue (LLM, temperature 0.7). Converges on stance, mood, reference anchor. Loops until `<<DIRECTION_CONFIRMED>>` sentinel detected. |
-| 3 | `refine` | Produces and validates `design.json` — 10-key palette + recipe-specific fields. Loops until schema passes `validator.design_complete()`. Writes `design.json` to session dir. |
-| 4 | `plan` | Generates self-contained `plan.html` mockup (palette board, terminal, bar, launcher). Interrupts for user approval; loops on `regenerate` or change requests. |
+| 3 | `refine` | Produces and validates `design.json` — 10-key palette + recipe-specific fields. KDE requires `originality_strategy` and `chrome_strategy`; widgets/panels are design-driven, not mandatory. Loops until schema passes `validator.design_complete()`. Writes `design.json` to session dir. |
+| 4 | `plan` | Generates self-contained `plan.html` full desktop mockup (palette, terminal, custom chrome/composition, launcher, optional widgets). Interrupts for user approval; loops on `regenerate` or change requests. |
 | 4.5 | `baseline` | Runs `desktop_state_audit.py`. Immutable pre-implementation snapshot. Warns but does not abort on failure. |
 | 5 | `install` | Resolves required packages from design + profile. Shows list, interrupts for confirmation. Handles sudo via env var → cached creds → masked prompt escalation. |
 | 6 | `implement` | Processes one element per invocation: spec → apply → verify → score → gate. Interrupts below threshold. Loops via `_after_implement` until element queue is empty. |
@@ -380,24 +383,26 @@ sudo pacman -U ~/.cache/yay/<pkg>/<pkg>.pkg.tar.zst
 ```
 This works from the agent terminal without PTY issues.
 
-### Workflow Gaps: Elements Not in the Default Queue
+### Workflow Gaps: Elements Requiring Attention
 
-The audit node builds an `element_queue` from detected apps. Some elements that appear
-in the quality checklist are NOT automatically added to the queue and require manual
-implementation after the workflow finishes:
+The audit node builds an initial `element_queue` from detected apps. Step 3 may then
+add design-driven elements such as `widgets:eww` when the user vision calls for EWW
+widgets, terminal frames, custom borders, or overlay chrome. Do not add generic widgets
+just to satisfy a checklist; use them when they make the concept less boring and more true.
 
 | Element | In queue? | Notes |
 |---------|-----------|-------|
 | wallpaper | No | Must be sourced separately (see wallpaper-sourcing.md). Applied during implement, not shown in plan.html. |
-| widgets (KDE Plasma) | No | System monitor, weather, notes — manually configure after workflow. |
+| widgets / EWW chrome (KDE Plasma) | Design-driven | `widgets:eww` is added after `design.json` only when `widget_layout` or `chrome_strategy` calls for custom overlays, frames, borders, or widgets. |
 | notifications (dunst/mako/swaync) | No | May not be installed. Install + configure manually if needed. |
-| panel/bar (KDE panel) | No | KDE panel styling is recipe-specific but not in the element queue. |
+| panel/bar (KDE panel) | Design-driven | Use `panel_layout` when the concept changes panel composition. Prefer original overlay/dock/rail chrome over the normal KDE toolbar when it fits the user brief. |
 | cursor theme | No | design.json defaults to "default". Override manually. Catppuccin cursor themes are pre-installed and palette-matched (see below). Bibata requires AUR install + sudo. |
 | Hermes skin | No | Only relevant if user has custom Hermes CLI. |
 
-When the user asks about widgets, notifications, panel, or cursor — tell them these
-will be implemented manually after the workflow's core pass. Collect their preferences
-during the explore/plan phase so you can implement them in the cleanup step.
+When the user asks about widgets, panels, rounded windows, or custom borders, treat them
+as visual promises. Collect preferences during explore/plan, preview them in `plan.html`,
+and ensure `chrome_strategy` maps the promise to an implementable target such as EWW
+frames, Kitty decoration settings, Kvantum, or KDE color/window decoration settings.
 
 ### Post-Workflow: KDE-Specific Implementation Notes
 
@@ -414,8 +419,12 @@ kwriteconfig6 --file kcminputrc --group Mouse --key cursorTheme --type string "c
 **Notifications:** KDE Plasma has its own notification system (plasmashell). No external daemon
 (dunst/mako/swaync) is needed. The color scheme automatically applies to notifications.
 
-**Panel styling:** KDE Plasma panel inherits the applied color scheme. No manual panel config
-is required — `plasma-apply-colorscheme` handles it.
+**Originality/chrome composition:** KDE Plasma color inheritance is not enough. The
+workflow requires `originality_strategy` and `chrome_strategy`; optional `panel_layout`
+and `widget_layout` are used only when they serve the user vision. If the preview shows
+rounded windows, custom terminal frames, ornamental borders, or non-stock panel chrome,
+the final output must implement them through EWW frames, terminal config, Kvantum, or KDE
+decoration/color settings. Do not call a palette-only panel “done.”
 
 **Wallpaper:** Use `plasma-apply-wallpaperimage <path>` to set wallpaper on all desktops.
 This is NOT in the element_queue and must be done manually after the workflow finishes.

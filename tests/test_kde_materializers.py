@@ -644,6 +644,49 @@ class TestMaterializeKitty(unittest.TestCase):
             inject = [c for c in changes if c.get("action") == "inject_include"][0]
             self.assertGreaterEqual(inject["removed_palette_lines"], 3)
 
+    def test_custom_chrome_strategy_hides_native_kitty_decorations(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp)
+            kitty_dir = home / ".config" / "kitty"
+            kitty_dir.mkdir(parents=True)
+            main = kitty_dir / "kitty.conf"
+            main.write_text("hide_window_decorations yes\nwindow_padding_width 4\n", encoding="utf-8")
+            design = {
+                **_MINIMAL_DESIGN,
+                "chrome_strategy": {
+                    "method": "eww_frame + terminal_config",
+                    "implementation_targets": ["terminal:kitty", "widgets:eww"],
+                },
+            }
+
+            with patch(f"{self._TERM}.HOME", home), \
+                 patch(f"{self._TERM}.backup_file", return_value=None):
+                ricer.materialize_kitty(design, backup_ts="ts")
+
+            content = main.read_text(encoding="utf-8")
+            self.assertEqual(content.count("hide_window_decorations yes"), 1)
+            self.assertIn("window_padding_width 14", content)
+
+
+class TestMaterializeEwwWindows(unittest.TestCase):
+    def test_windows_are_design_driven_not_mandatory_widgets(self):
+        from materializers.widgets import _windows_for_design
+
+        chrome_only = {
+            "chrome_strategy": {
+                "method": "eww_frame",
+                "implementation_targets": ["terminal border", "window frame"],
+            }
+        }
+
+        self.assertEqual(_windows_for_design(chrome_only), ["hermes-terminal-frame", "hermes-window-frame"])
+
+        widget_design = {**chrome_only, "widget_layout": [{"name": "one"}]}
+        windows = _windows_for_design(widget_design)
+
+        self.assertIn("hermes-top-bar", windows)
+        self.assertIn("hermes-terminal-frame", windows)
+
 
 class TestDiscoverAppsKde(unittest.TestCase):
 

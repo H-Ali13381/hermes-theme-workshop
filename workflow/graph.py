@@ -14,9 +14,10 @@ from .state import RiceSessionState
 from .nodes import (
     audit_node, explore_node, refine_node, plan_node,
     baseline_node, install_node, implement_node, cleanup_node, handoff_node,
+    craft_node,
 )
 from .routing import (
-    after_audit, after_explore, after_refine, after_plan, after_implement,
+    after_audit, after_explore, after_refine, after_plan, after_implement, after_craft,
 )
 
 
@@ -45,6 +46,9 @@ def build_graph(checkpointer: SqliteSaver):
     # ── Step 6 — Per-element implementation (one element per invocation) ─────
     builder.add_node("implement", implement_node)
 
+    # ── Step 6/craft — Agentic implementation for advanced elements ──────────
+    builder.add_node("craft",     craft_node)
+
     # ── Step 7 — Validate & reload desktop services ──────────────────────────
     builder.add_node("cleanup",   cleanup_node)
 
@@ -60,6 +64,7 @@ def build_graph(checkpointer: SqliteSaver):
     builder.add_edge("baseline", "install")
     builder.add_edge("install",  "implement")
     builder.add_conditional_edges("implement", after_implement)
+    builder.add_conditional_edges("craft",     after_craft)
     builder.add_edge("cleanup",  "handoff")
     builder.add_edge("handoff",  END)
 

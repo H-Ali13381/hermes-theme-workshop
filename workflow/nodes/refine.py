@@ -24,6 +24,7 @@ from ..config import (
     SUPPORTED_DESKTOP_RECIPES,
 )
 from ..state import RiceSessionState
+from ..validators import design_complete
 
 DESIGN_SENTINEL = "<<DESIGN_READY>>"
 
@@ -61,6 +62,13 @@ Produce a JSON object with exactly these top-level keys:
 - primary is the main accent — most visible interactive element color
 - No two palette slots may share the same hex value
 - danger should be in red-hue family (hue 330-30°), success green (90-150°), warning amber (30-70°)
+
+## Creativity Rules — especially for KDE Plasma
+- A valid KDE rice is NOT a palette swap. Follow the user's vision and make at least 3 specific non-default moves.
+- Widgets are powerful but optional: use EWW/widgets only when they serve the brief. Do not add generic clocks/meters just to satisfy a checklist.
+- If you preview rounded windows, custom titlebars, terminal frames, ornamental borders, or panel chrome, chrome_strategy must say exactly how those visuals will be implemented.
+- Favor original, theme-specific composition over boilerplate docks, average bars, and normal KDE/Breeze defaults.
+- Do not use "default", "stock", "Breeze", "unchanged", or "normal" as layout decisions unless the user explicitly demanded defaults.
 
 ## Workflow
 1. Show the refined design in a code block
@@ -111,6 +119,7 @@ def refine_node(state: RiceSessionState) -> dict:
     if response.content and DESIGN_SENTINEL in response.content:
         design = _extract_design_json(response.content, recipe)
         if design:
+            queue = _queue_design_elements(state.get("element_queue", []), design)
             session_dir = state.get("session_dir", "")
             if session_dir:
                 _write_design_json(session_dir, design)
@@ -118,6 +127,7 @@ def refine_node(state: RiceSessionState) -> dict:
             return {
                 "messages": new_messages + [AIMessage(content=response.content.split(DESIGN_SENTINEL)[0].strip())],
                 "design": design,
+                "element_queue": queue,
                 "current_step": 3,
                 "loop_counts": loop_counts,
             }
@@ -161,12 +171,8 @@ def _extract_design_json(content: str, recipe: str = "kde") -> dict | None:
 def _validate_design(d: dict, recipe: str = "kde") -> bool:
     if recipe not in SUPPORTED_DESKTOP_RECIPES:
         return False
-    required_keys = BASE_REQUIRED_KEYS + RECIPE_REQUIRED_KEYS[recipe]
-    if not all(k in d for k in required_keys):
-        return False
-    if not all(k in d.get("palette", {}) for k in PALETTE_SLOTS):
-        return False
-    return True
+    ok, _ = design_complete(d, {"desktop_recipe": recipe})
+    return ok
 
 
 def _write_design_json(session_dir: str, design: dict) -> None:
@@ -185,3 +191,16 @@ def _write_design_json(session_dir: str, design: dict) -> None:
         if tmp_path:
             Path(tmp_path).unlink(missing_ok=True)
         raise
+
+
+def _queue_design_elements(queue: list[str], design: dict) -> list[str]:
+    """Add optional design-driven implementers without making widgets mandatory."""
+    updated = list(queue or [])
+    chrome = design.get("chrome_strategy", {}) if isinstance(design, dict) else {}
+    method = str(chrome.get("method", "")).lower() if isinstance(chrome, dict) else ""
+    targets = " ".join(str(x).lower() for x in chrome.get("implementation_targets", [])) if isinstance(chrome, dict) else ""
+    uses_eww = any(term in method or term in targets for term in ("eww", "overlay", "frame", "border"))
+    if (design.get("widget_layout") or uses_eww) and "widgets:eww" not in updated:
+        insert_at = 1 if updated else 0
+        updated.insert(insert_at, "widgets:eww")
+    return updated

@@ -38,6 +38,12 @@ class RiceSessionState(TypedDict, total=False):
     # Step 4 output
     plan_html_path: str
 
+    # Step 4 — transient routing signal set by plan_node after the user's
+    # feedback at the approval interrupt has been classified. Read by
+    # after_plan to dispatch to plan / refine / explore / baseline.
+    # One of: "approve", "render", "refine", "explore", "" (unset).
+    plan_feedback_route: str
+
     # Step 4.5 output
     baseline_ts: str
 
@@ -47,6 +53,7 @@ class RiceSessionState(TypedDict, total=False):
     # Step 6 — element loop
     element_queue: list[str]                           # plain list, overwritten each step
     impl_log: Annotated[list[dict], operator.add]      # append-only completed records
+    craft_log: Annotated[list[dict], operator.add]     # append-only craft node records
     impl_retry_counts: dict                            # element → retry attempts so far
 
     # Step 7 — deterministic cleanup/finalization actions performed after Step 6.

@@ -51,8 +51,10 @@ def _element_to_materializer(element: str) -> str | None:
 
     if ":" in element:
         category, provider = element.split(":", 1)
-        if category in {"terminal", "bar", "launcher", "notifications", "shell_prompt",
-                        "window_decorations", "lock_screen"}:
+        if category in {
+            "terminal", "bar", "launcher", "notifications", "shell_prompt", "widgets",
+            "window_decorations", "lock_screen",
+        }:
             return provider
         return None
 

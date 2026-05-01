@@ -53,6 +53,54 @@ def design_complete(design: dict, profile: dict | None = None) -> tuple[bool, st
     if bad_hex:
         return False, f"invalid hex values for: {bad_hex}"
 
+    if recipe == "kde":
+        ok, reason = _kde_creativity_complete(design)
+        if not ok:
+            return False, reason
+
+    return True, ""
+
+
+def _kde_creativity_complete(design: dict) -> tuple[bool, str]:
+    """KDE must follow the user's vision with non-boilerplate, implementable chrome."""
+    banned = {"default", "stock", "breeze", "standard", "unchanged", "normal", "generic"}
+
+    originality = design.get("originality_strategy")
+    if not isinstance(originality, dict):
+        return False, "kde originality_strategy must describe user-specific non-default moves"
+    moves = originality.get("non_default_moves")
+    if not isinstance(moves, list) or len(moves) < 3:
+        return False, "kde originality_strategy needs at least 3 non_default_moves"
+    if not originality.get("vision_alignment"):
+        return False, "kde originality_strategy must explain vision_alignment"
+    moves_text = " ".join(str(v).lower() for v in moves)
+    if any(word in moves_text for word in banned):
+        return False, "kde originality_strategy contains boilerplate/default moves"
+
+    chrome = design.get("chrome_strategy")
+    if not isinstance(chrome, dict):
+        return False, "kde chrome_strategy must declare implementable window/terminal/panel chrome"
+    if not chrome.get("method") or not chrome.get("implementation_targets"):
+        return False, "kde chrome_strategy needs method and implementation_targets"
+
+    panel = design.get("panel_layout")
+    if panel is not None:
+        if not isinstance(panel, dict):
+            return False, "kde panel_layout must be an object when present"
+        panel_text = " ".join(str(v).lower() for v in panel.values())
+        if any(word in panel_text for word in banned):
+            return False, "kde panel_layout may not preserve stock/default Plasma toolbar aesthetics"
+
+    widgets = design.get("widget_layout", [])
+    if widgets:
+        if not isinstance(widgets, list):
+            return False, "kde widget_layout must be a list when present"
+        for i, widget in enumerate(widgets, start=1):
+            if not isinstance(widget, dict):
+                return False, f"kde widget_layout[{i}] must be an object"
+            missing = [k for k in ("name", "position", "data", "visual") if not widget.get(k)]
+            if missing:
+                return False, f"kde widget_layout[{i}] missing fields: {missing}"
     return True, ""
 
 
@@ -74,11 +122,21 @@ def plan_ready(path_str: str) -> tuple[bool, str]:
     return True, ""
 
 
-# ── Step 6 — Implement ──────────────────────────────────────────────────
+# ── Step 6 — Implement / Craft ──────────────────────────────────────────
 
 def implement_done(element_queue: list) -> bool:
     """True when all elements have been processed."""
     return not element_queue
+
+
+def is_craft_element(element: str) -> bool:
+    """True when *element* should be routed to craft_node instead of implement_node.
+
+    Imported lazily to avoid a circular-import chain — craft.frameworks does
+    not import from workflow.validators.
+    """
+    from .nodes.craft.frameworks import is_craft_element as _is_craft  # noqa: PLC0415
+    return _is_craft(element)
 
 
 # Backward-compatible class wrapper — tests import WorkflowValidator directly.
@@ -89,6 +147,7 @@ class WorkflowValidator:
     design_complete     = staticmethod(design_complete)
     plan_ready          = staticmethod(plan_ready)
     implement_done      = staticmethod(implement_done)
+    is_craft_element    = staticmethod(is_craft_element)
 
 
 # Legacy singleton kept for backward compatibility.

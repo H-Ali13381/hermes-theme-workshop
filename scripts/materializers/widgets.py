@@ -1,20 +1,20 @@
 """EWW (ElKowars Wacky Widgets) materializer.
 
 Writes two files into ~/.config/eww/:
-  hermes-palette.scss  — 10-slot palette as SCSS variables + default widget styles
-  hermes-theme.yuck    — working clock overlay (defpoll + defwidget + defwindow)
+  hermes-palette.scss  — 10-slot palette as SCSS variables + custom chrome
+  hermes-theme.yuck    — EWW top bar, side telemetry, focus card, and dock
 
 Then injects:
   @import "hermes-palette.scss";   into eww.scss  (creates the file if absent)
   (include "./hermes-theme.yuck")  into eww.yuck  (creates the file if absent)
 
-Finally runs `eww reload` if the EWW daemon is already running, so SCSS
-changes take effect without a full restart.
+Finally starts/reloads EWW and opens the generated windows so KDE has visible
+custom widget chrome instead of only a stock Plasma toolbar.
 
 Undo:
   - "write"          changes → _restore_backed_up_files restores / deletes the file
   - "inject_include" changes → _undo_injections removes the marker + directive line
-  - "reload"         changes → _undo_eww closes hermes-clock and reloads the daemon
+  - "open"           changes → _undo_eww closes Hermes windows and reloads the daemon
                                so the live state drops the now-removed config
 """
 from __future__ import annotations
@@ -31,8 +31,11 @@ from core.templates import render_template
 # Public materializer
 # ---------------------------------------------------------------------------
 
+HERMES_WIDGET_WINDOWS = ["hermes-top-bar", "hermes-side-stack", "hermes-focus-card", "hermes-bottom-dock"]
+HERMES_CHROME_WINDOWS = ["hermes-terminal-frame", "hermes-window-frame"]
+
 def materialize_eww(design: dict, backup_ts: str, dry_run: bool = False) -> list[dict]:
-    """Generate and install EWW palette + default clock widget from the design system."""
+    """Generate and install EWW custom chrome from the design system."""
     palette    = design["palette"]
     typography = design.get("typography", {})
     eww_dir    = HOME / ".config" / "eww"
@@ -66,6 +69,7 @@ def materialize_eww(design: dict, backup_ts: str, dry_run: bool = False) -> list
         changes.append({
             "app": "eww", "action": "dry-run",
             "path": str(palette_path), "yuck_path": str(yuck_path),
+            "windows": _windows_for_design(design),
         })
         return changes
 
@@ -125,16 +129,37 @@ def materialize_eww(design: dict, backup_ts: str, dry_run: bool = False) -> list
         "injected": yuck_injected, "import_line": include_line, "marker": yuck_marker,
     })
 
-    # ── Reload EWW daemon (SCSS changes — no full restart needed) ────────────
+    # ── Start/reload/open EWW windows so the widget chrome is actually visible ─
     if cmd_exists("eww"):
-        rc, _, _ = run_cmd(["eww", "reload"], timeout=5)
-        if rc == 0:
-            changes.append({"app": "eww", "action": "reload"})
+        run_cmd(["eww", "daemon"], timeout=5)
+        reload_rc, _, _ = run_cmd(["eww", "reload"], timeout=5)
+        windows = _windows_for_design(design)
+        opened: list[str] = []
+        for window in windows:
+            rc, _, _ = run_cmd(["eww", "open", window], timeout=5)
+            if rc == 0:
+                opened.append(window)
+        if reload_rc == 0 or opened:
+            changes.append({"app": "eww", "action": "open", "windows": opened})
         else:
             print(
                 "[eww] EWW installed but daemon not running — "
-                "start with: eww daemon && eww open hermes-clock",
+                "start with: eww daemon && eww open-many " + " ".join(windows),
                 file=sys.stderr,
             )
 
     return changes
+
+
+def _windows_for_design(design: dict) -> list[str]:
+    """Open only the EWW surfaces justified by the user's design."""
+    chrome = design.get("chrome_strategy", {}) if isinstance(design, dict) else {}
+    method = str(chrome.get("method", "")).lower() if isinstance(chrome, dict) else ""
+    targets = " ".join(str(t).lower() for t in chrome.get("implementation_targets", [])) if isinstance(chrome, dict) else ""
+    needs_chrome = any(term in method or term in targets for term in ("frame", "border", "overlay", "eww"))
+    windows: list[str] = []
+    if design.get("widget_layout") or design.get("panel_layout"):
+        windows.extend(HERMES_WIDGET_WINDOWS)
+    if needs_chrome:
+        windows.extend(HERMES_CHROME_WINDOWS)
+    return windows or HERMES_CHROME_WINDOWS

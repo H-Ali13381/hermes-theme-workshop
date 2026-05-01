@@ -27,6 +27,9 @@ def resolve_packages(design: dict, profile: dict) -> list[str]:
     _match(design.get("cursor_theme",   ""), _CURSOR_PACKAGES,  pkgs)
     _match(design.get("icon_theme",     ""), _ICON_PACKAGES,    pkgs)
 
+    if profile.get("desktop_recipe") == "kde" and _design_needs_eww(design) and not shutil.which("eww"):
+        pkgs.add("eww")
+
     return sorted(pkgs)
 
 
@@ -164,3 +167,14 @@ def _match(value: str, table: dict[str, str], pkgs: set[str]) -> None:
         if key in value.lower():
             pkgs.add(pkg)
             return
+
+
+def _design_needs_eww(design: dict) -> bool:
+    if design.get("widget_layout"):
+        return True
+    chrome = design.get("chrome_strategy", {})
+    if not isinstance(chrome, dict):
+        return False
+    method = str(chrome.get("method", "")).lower()
+    targets = " ".join(str(t).lower() for t in chrome.get("implementation_targets", []))
+    return any(term in method or term in targets for term in ("eww", "overlay", "frame", "border"))

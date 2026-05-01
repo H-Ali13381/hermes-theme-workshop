@@ -22,6 +22,26 @@ def _valid_design() -> dict:
         "cursor_theme": "default",
         "icon_theme": "Papirus-Dark",
         "gtk_theme": "Adwaita-dark",
+        "originality_strategy": {
+            "vision_alignment": "quiet signal-desk, not generic KDE",
+            "non_default_moves": ["signal rail", "floating command frame", "terminal border ritual"],
+        },
+        "chrome_strategy": {
+            "method": "eww_frame + terminal_config",
+            "rounded_corners": {"enabled": True, "radius_px": 28},
+            "implementation_targets": ["widgets:eww", "terminal:kitty"],
+        },
+        "panel_layout": {
+            "mode": "eww-overlay",
+            "placement": "top command strip plus bottom dock",
+            "shape": "floating capsule chrome",
+            "controls": ["workspaces", "launcher", "system meters"],
+        },
+        "widget_layout": [
+            {"name": "clock altar", "position": "top right", "data": "time", "visual": "glowing capsule"},
+            {"name": "system spine", "position": "left rail", "data": "cpu ram", "visual": "stacked gauges"},
+            {"name": "focus card", "position": "bottom right", "data": "date note", "visual": "floating plaque"},
+        ],
     }
 
 
@@ -46,11 +66,13 @@ class RefinePromptHandoffTests(unittest.TestCase):
                 "design": {"stance": "Ghost", "name_hypothesis": "shadow-signal"},
                 "device_profile": {"desktop_recipe": "kde"},
                 "loop_counts": {},
+                "element_queue": ["terminal:kitty", "gtk_theme"],
             })
 
         self.assertIn("complete design_system JSON", fake.messages[0].content)
         self.assertEqual(update["current_step"], 3)
         self.assertEqual(update["design"]["name"], "Shadow Signal")
+        self.assertIn("widgets:eww", update["element_queue"])
 
 
 if __name__ == "__main__":

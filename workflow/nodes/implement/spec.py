@@ -62,6 +62,11 @@ Fields:
 - font: family and size (if applicable, else "N/A")
 - radii: border radius in px (if applicable, else "N/A")
 - notes: any non-obvious detail (e.g. "requires daemon restart")
+
+For element "widgets:eww", targets must include ~/.config/eww/hermes-palette.scss
+and ~/.config/eww/hermes-theme.yuck, and notes should mention the generated EWW
+overlay/frame windows. EWW is used when the user vision or chrome_strategy calls for
+custom widgets, terminal frames, or borders; it is not mandatory decoration.
 """
 
 

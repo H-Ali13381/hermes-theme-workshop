@@ -2,7 +2,7 @@
 
 Importing a specific sub-module (e.g. ``workflow.nodes.cleanup.reloader``)
 must not trigger the full LangGraph/typing_extensions dependency chain.
-All nine node symbols are still accessible as ``workflow.nodes.<name>``
+All node symbols are still accessible as ``workflow.nodes.<name>``
 via the module-level ``__getattr__`` hook; they are only loaded on first
 access rather than eagerly at import time.
 """
@@ -16,6 +16,7 @@ _NODE_MAP: dict[str, tuple[str, str]] = {
     "baseline_node":  ("workflow.nodes.baseline",  "baseline_node"),
     "install_node":   ("workflow.nodes.install",   "install_node"),
     "implement_node": ("workflow.nodes.implement", "implement_node"),
+    "craft_node":     ("workflow.nodes.craft",     "craft_node"),
     "cleanup_node":   ("workflow.nodes.cleanup",   "cleanup_node"),
     "handoff_node":   ("workflow.nodes.handoff",   "handoff_node"),
 }

@@ -84,7 +84,7 @@ def detect_gpu() -> dict:
 def detect_apps() -> dict[str, bool]:
     apps = [
         "kitty", "alacritty", "konsole", "foot", "wezterm",
-        "waybar", "polybar",
+        "waybar", "polybar", "eww",
         "rofi", "wofi",
         "dunst", "mako", "swaync",
         "hyprlock", "swaylock",

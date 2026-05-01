@@ -292,20 +292,25 @@ def _undo_eww(change: dict, restored: list, failed: list, skipped: list) -> None
     Generic handlers already restore/delete the written files
     (``hermes-palette.scss``, ``hermes-theme.yuck``) and strip the
     ``@import`` / ``(include)`` injections from ``eww.scss`` /
-    ``eww.yuck``.  This handler then closes the ``hermes-clock``
-    window if it was opened and reloads the daemon so the live
+    ``eww.yuck``.  This handler then closes the generated Hermes
+    EWW windows if they were opened and reloads the daemon so the live
     config reflects the cleaned files.
     """
-    if change.get("action") != "reload":
+    if change.get("action") not in {"reload", "open"}:
         return
     if not cmd_exists("eww"):
         skipped.append({"app": "eww", "note": "eww binary not found"})
         return
-    run_cmd(["eww", "close", "hermes-clock"], timeout=5)
+    windows = change.get("windows") or [
+        "hermes-top-bar", "hermes-side-stack", "hermes-focus-card",
+        "hermes-bottom-dock", "hermes-terminal-frame", "hermes-window-frame", "hermes-clock",
+    ]
+    for window in windows:
+        run_cmd(["eww", "close", str(window)], timeout=5)
     rc, _, _ = run_cmd(["eww", "reload"], timeout=5)
     if rc == 0:
-        restored.append({"app": "eww", "action": "closed_window_and_reloaded",
-                         "window": "hermes-clock"})
+        restored.append({"app": "eww", "action": "closed_windows_and_reloaded",
+                         "windows": windows})
     else:
         skipped.append({"app": "eww",
                         "note": "eww reload exit != 0 (daemon may not be running)"})

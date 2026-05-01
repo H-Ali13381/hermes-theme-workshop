@@ -58,10 +58,18 @@ def verify_element(element: str, spec: dict, design: dict) -> dict:
 
 def _fallback_targets(element: str, design: dict) -> list[Path]:
     """Known deterministic outputs for specs that used stale filenames."""
-    if element != "window_decorations:kde":
-        return []
-    name = design.get("name", "ricer")
-    return [Path.home() / ".local" / "share" / "color-schemes" / f"hermes-{name}.colors"]
+    if element == "window_decorations:kde":
+        name = design.get("name", "ricer")
+        return [Path.home() / ".local" / "share" / "color-schemes" / f"hermes-{name}.colors"]
+    if element == "widgets:eww":
+        eww_dir = Path.home() / ".config" / "eww"
+        return [
+            eww_dir / "hermes-palette.scss",
+            eww_dir / "hermes-theme.yuck",
+            eww_dir / "eww.scss",
+            eww_dir / "eww.yuck",
+        ]
+    return []
 
 
 def _is_kde_colorscheme_spec(path: str) -> bool:

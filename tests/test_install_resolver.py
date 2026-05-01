@@ -124,6 +124,24 @@ class InstallPackagesTests(unittest.TestCase):
         self.assertEqual(errors, [])
         self.assertGreaterEqual(mock_run.call_count, 3)
 
+    def test_resolve_packages_adds_eww_for_kde_widget_layout(self):
+        from workflow.nodes.install.resolver import resolve_packages
+
+        design = {"widget_layout": [{"name": "clock"}]}
+        with patch("workflow.nodes.install.resolver.shutil.which", return_value=False):
+            pkgs = resolve_packages(design, {"desktop_recipe": "kde"})
+
+        self.assertIn("eww", pkgs)
+
+    def test_resolve_packages_adds_eww_for_custom_chrome_strategy(self):
+        from workflow.nodes.install.resolver import resolve_packages
+
+        design = {"chrome_strategy": {"method": "eww_frame", "implementation_targets": ["window border"]}}
+        with patch("workflow.nodes.install.resolver.shutil.which", return_value=False):
+            pkgs = resolve_packages(design, {"desktop_recipe": "kde"})
+
+        self.assertIn("eww", pkgs)
+
 
 class CanSudoNoninteractiveTests(unittest.TestCase):
     def test_returns_true_when_sudo_n_succeeds(self):

@@ -49,6 +49,10 @@ Speak in vibes, not taxonomy. Reference films, music, games, spaces — not soft
 BRIEF_STAGE = "brief"
 PROPOSE_STAGE = "propose"
 FINALIZE_STAGE = "finalize"
+# Re-entry stage triggered when plan_node routes feedback back to explore.
+# Skips the brief; LLM sees prior direction + rejection feedback and proposes
+# revised directions before flowing into FINALIZE_STAGE.
+REVISE_STAGE = "revise"
 
 
 def explore_node(state: RiceSessionState) -> dict:
@@ -84,6 +88,30 @@ def explore_node(state: RiceSessionState) -> dict:
             HumanMessage(content=_proposal_prompt(intake, profile)),
         ])
         proposal = (response.content or "").strip() or _fallback_proposal(intake)
+        user_reply = interrupt({
+            "step": 2,
+            "type": "conversation",
+            "message": proposal,
+        })
+        intake.update({
+            "stage": FINALIZE_STAGE,
+            "proposal": proposal,
+            "choice": str(user_reply),
+        })
+        return {
+            "messages": [AIMessage(content=proposal), HumanMessage(content=str(user_reply))],
+            "explore_intake": intake,
+            "current_step": 2,
+            "loop_counts": loop_counts,
+        }
+
+    if stage == REVISE_STAGE:
+        llm = get_llm(0.7)
+        response = llm.invoke([
+            SystemMessage(content=SYSTEM_PROMPT),
+            HumanMessage(content=_revise_prompt(intake, profile)),
+        ])
+        proposal = (response.content or "").strip() or _fallback_revise_proposal(intake)
         user_reply = interrupt({
             "step": 2,
             "type": "conversation",
@@ -172,6 +200,34 @@ def _fallback_proposal(intake: dict) -> str:
         "3. Soft Ruin — worn-in, atmospheric, calm; Garden+Ghost.\n\n"
         f"Based on: {brief}\n"
         "Pick 1, 2, 3, combine, or tweak."
+    )
+
+
+def _revise_prompt(intake: dict, profile: dict) -> str:
+    """Prompt for REVISE_STAGE — preserve brief + prior direction, layer rejection feedback on top."""
+    prior = intake.get("prior_direction") or {}
+    rejection = intake.get("rejection_feedback", "")
+    return (
+        "The user previously confirmed a creative direction, then rejected the "
+        "rendered preview because the overall vibe was off. Keep the original brief "
+        "intact; revise the direction to address the rejection.\n\n"
+        "Output 1 to 3 revised directions (use 1 if the fix is small, 3 if the vibe "
+        "needs to shift). Same format as the proposal stage: number, 2-4 word name, "
+        "one vivid sentence, stance/blend.\n"
+        "End with: Pick 1 (or 2/3 if multiple), combine, or tweak.\n\n"
+        f"Original brief:\n{intake.get('brief', '')}\n\n"
+        f"Previously confirmed direction:\n{json.dumps(prior, indent=2) if prior else '(none recorded)'}\n\n"
+        f"User rejection feedback on the preview:\n{rejection}\n\n"
+        f"Machine profile:\n{_format_device_context(profile)}"
+    )
+
+
+def _fallback_revise_proposal(intake: dict) -> str:
+    rejection = intake.get("rejection_feedback", "their previous feedback")
+    return (
+        "1. Same direction, dialed back — softer accents, less saturation.\n\n"
+        f"Adjusting based on: {rejection}\n"
+        "Pick 1, combine, or tweak."
     )
 
 

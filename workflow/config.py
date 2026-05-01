@@ -20,17 +20,24 @@ if str(SCRIPTS_DIR) not in sys.path:
 from core.constants import REQUIRED_PALETTE_KEYS as PALETTE_SLOTS  # noqa: E402
 BASE_REQUIRED_KEYS = ["name", "description", "palette", "mood_tags"]
 RECIPE_REQUIRED_KEYS = {
-    "kde": ["kvantum_theme", "plasma_theme", "cursor_theme", "icon_theme", "gtk_theme"],
+    "kde": [
+        "kvantum_theme", "plasma_theme", "cursor_theme", "icon_theme", "gtk_theme",
+        "originality_strategy", "chrome_strategy",
+    ],
     "gnome": ["gtk_theme", "cursor_theme", "icon_theme"],
     "hyprland": ["gtk_theme", "cursor_theme", "icon_theme"],
 }
 RECIPE_PROMPT_FIELDS = {
     "kde": [
         '- kvantum_theme: e.g. "KvDark"',
-        '- plasma_theme: e.g. "default"',
+        '- plasma_theme: e.g. "default" (theme package only; NOT a substitute for layout work)',
         '- cursor_theme: e.g. "default"',
         '- icon_theme: e.g. "Papirus-Dark"',
         '- gtk_theme: e.g. "Adwaita-dark"',
+        '- originality_strategy: object with vision_alignment and at least 3 non_default_moves that are specific to the user brief',
+        '- chrome_strategy: object declaring any previewed rounded corners, custom borders, titlebars, terminal frames, panel chrome, and how they will be implemented',
+        '- panel_layout: optional object if the concept changes the panel/dock/toolbar; include mode, placement, shape, and visible controls',
+        '- widget_layout: optional list of custom widgets/overlays only when they serve the user vision; each item needs name, position, data/source, and visual metaphor',
     ],
     "gnome": [
         '- gtk_theme: e.g. "Adwaita-dark"',
@@ -59,6 +66,54 @@ MAX_IMPLEMENT_RETRIES = 3
 # the routing function aborts the workflow to END.  This prevents infinite LLM
 # loops when a sentinel appears in the response but JSON parsing consistently fails.
 MAX_LOOP_ITERATIONS = 10
+
+# ── Step 4 — Plan feedback classifier ────────────────────────────────────────
+# Number of feedback turns the plan node includes verbatim in its prompt before
+# falling back to summarization. Older turns above this threshold are summarized
+# but the most recent 2 turns are always preserved verbatim.
+PLAN_FEEDBACK_VERBATIM_TURNS = 6
+
+# Routing labels the plan-feedback classifier may emit.
+PLAN_FEEDBACK_LABELS = ("approve", "render", "refine", "explore", "ambiguous")
+
+PLAN_FEEDBACK_CLASSIFIER_PROMPT = """\
+You are classifying user feedback on a Linux desktop theme preview to decide what to revise.
+
+The pipeline has three artifacts:
+- direction: stance, mood, reference anchor (the creative vibe).
+- design.json: 10-key palette + chrome strategy + originality + optional widgets/panel.
+- plan.html: a rendered preview of the design.
+
+Pick the SINGLE label that best matches the user's feedback:
+
+- "approve": user accepts the preview as-is (e.g. "looks good", "ship it").
+- "render": user wants the preview re-rendered without changing the underlying design
+  (e.g. "the screenshot is glitchy", "regenerate", "try the same thing again").
+- "refine": feedback targets the design.json — palette, colors, chrome, widgets, panel,
+  specific layout pieces (e.g. "too cold", "drop the widgets", "make accent purple",
+  "rounded corners look wrong", "add a panel on the left").
+- "explore": feedback rejects the overall direction/vibe — stance, mood, reference anchor
+  (e.g. "this whole thing feels wrong", "I wanted something cyberpunk not cottagecore",
+  "different vibe entirely", "let's start over").
+- "ambiguous": you cannot confidently choose between two or more of the above.
+
+Output ONLY a JSON object on a single line: {"label": "<one-of-the-labels>", "reason": "<one-short-sentence>"}
+No prose, no fences, no extra keys.
+"""
+
+PLAN_FEEDBACK_SUMMARIZER_PROMPT = """\
+You are summarizing prior user feedback on a Linux desktop theme preview so the
+designer LLM can produce a better next iteration.
+
+You will receive a sequence of older user feedback turns. Produce a compact
+bulleted summary that preserves:
+- What the user explicitly REJECTED (colors, chrome, widgets, vibe).
+- What the user explicitly LIKED or asked to keep.
+- Any HARD constraints ("never use neon", "must keep widgets off").
+
+Drop pleasantries, hedging, and meta-talk. Keep it under 8 bullets.
+Output ONLY the bullets, no preamble.
+"""
 
 
 def _parse_dotenv(path: Path) -> dict:

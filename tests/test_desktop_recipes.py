@@ -37,6 +37,26 @@ def design_with(*keys: str) -> dict:
         "gtk_theme": "Adwaita-dark",
         "cursor_theme": "default",
         "icon_theme": "Papirus-Dark",
+        "originality_strategy": {
+            "vision_alignment": "matches a user-requested instrument panel instead of a generic desktop",
+            "non_default_moves": ["asymmetric command rail", "ritual terminal frame", "hidden utility dock"],
+        },
+        "chrome_strategy": {
+            "method": "eww_frame + terminal_config",
+            "rounded_corners": {"enabled": True, "radius_px": 28},
+            "implementation_targets": ["widgets:eww", "terminal:kitty"],
+        },
+        "panel_layout": {
+            "mode": "eww-overlay",
+            "placement": "top command strip plus bottom dock",
+            "shape": "floating capsule chrome",
+            "controls": ["workspaces", "launcher", "system meters"],
+        },
+        "widget_layout": [
+            {"name": "clock altar", "position": "top right", "data": "time", "visual": "glowing capsule"},
+            {"name": "system spine", "position": "left rail", "data": "cpu ram", "visual": "stacked gauges"},
+            {"name": "focus card", "position": "bottom right", "data": "date note", "visual": "floating plaque"},
+        ],
     }
     for key in keys:
         design[key] = values[key]
@@ -74,13 +94,16 @@ class DesktopRecipeTests(unittest.TestCase):
         validator = WorkflowValidator()
 
         kde_ok, kde_reason = validator.design_complete(
-            design_with("kvantum_theme", "plasma_theme", "gtk_theme", "cursor_theme", "icon_theme"),
+            design_with(
+                "kvantum_theme", "plasma_theme", "gtk_theme", "cursor_theme",
+                "icon_theme", "originality_strategy", "chrome_strategy",
+            ),
             {"desktop_recipe": "kde"},
         )
         self.assertTrue(kde_ok, kde_reason)
 
         kde_missing_ok, kde_missing_reason = validator.design_complete(
-            design_with("kvantum_theme", "gtk_theme", "cursor_theme", "icon_theme"),
+            design_with("kvantum_theme", "gtk_theme", "cursor_theme", "icon_theme", "originality_strategy", "chrome_strategy"),
             {"desktop_recipe": "kde"},
         )
         self.assertFalse(kde_missing_ok)
@@ -113,23 +136,63 @@ class DesktopRecipeTests(unittest.TestCase):
 
         self.assertIn("plasma_theme", kde_prompt)
         self.assertIn("kvantum_theme", kde_prompt)
+        self.assertIn("originality_strategy", kde_prompt)
+        self.assertIn("chrome_strategy", kde_prompt)
         self.assertNotIn("plasma_theme", gnome_prompt)
         self.assertNotIn("kvantum_theme", gnome_prompt)
         self.assertNotIn("plasma_theme", hyprland_prompt)
 
     def test_refine_json_validation_uses_recipe(self):
         self.assertTrue(_validate_design(
-            design_with("kvantum_theme", "plasma_theme", "gtk_theme", "cursor_theme", "icon_theme"),
+            design_with(
+                "kvantum_theme", "plasma_theme", "gtk_theme", "cursor_theme",
+                "icon_theme", "originality_strategy", "chrome_strategy",
+            ),
             "kde",
         ))
         self.assertFalse(_validate_design(
-            design_with("kvantum_theme", "gtk_theme", "cursor_theme", "icon_theme"),
+            design_with("kvantum_theme", "gtk_theme", "cursor_theme", "icon_theme", "originality_strategy", "chrome_strategy"),
             "kde",
         ))
         self.assertTrue(_validate_design(
             design_with("gtk_theme", "cursor_theme", "icon_theme"),
             "gnome",
         ))
+
+    def test_kde_validation_rejects_stock_panel_and_weak_originality(self):
+        validator = WorkflowValidator()
+        stock = design_with(
+            "kvantum_theme", "plasma_theme", "gtk_theme", "cursor_theme",
+            "icon_theme", "originality_strategy", "chrome_strategy", "panel_layout",
+        )
+        stock["panel_layout"] = {"mode": "stock", "placement": "bottom", "shape": "normal"}
+
+        ok, reason = validator.design_complete(stock, {"desktop_recipe": "kde"})
+
+        self.assertFalse(ok)
+        self.assertIn("stock", reason.lower())
+
+        weak = design_with(
+            "kvantum_theme", "plasma_theme", "gtk_theme", "cursor_theme",
+            "icon_theme", "originality_strategy", "chrome_strategy",
+        )
+        weak["originality_strategy"]["non_default_moves"] = ["one move"]
+
+        ok, reason = validator.design_complete(weak, {"desktop_recipe": "kde"})
+
+        self.assertFalse(ok)
+        self.assertIn("3 non_default_moves", reason)
+
+    def test_kde_validation_allows_no_widgets_when_originality_and_chrome_are_strong(self):
+        validator = WorkflowValidator()
+        design = design_with(
+            "kvantum_theme", "plasma_theme", "gtk_theme", "cursor_theme",
+            "icon_theme", "originality_strategy", "chrome_strategy",
+        )
+
+        ok, reason = validator.design_complete(design, {"desktop_recipe": "kde"})
+
+        self.assertTrue(ok, reason)
 
 
 if __name__ == "__main__":
