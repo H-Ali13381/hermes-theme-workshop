@@ -5,7 +5,7 @@ import sys
 
 from core.constants import HOME, TEMPLATES_DIR
 from core.colors import is_dark_palette, yiq_text_color, adjust_lightness
-from core.process import run_cmd, cmd_exists
+from core.process import run_cmd, cmd_exists, gsettings_get
 from core.backup import backup_file
 from core.templates import render_template
 
@@ -116,8 +116,13 @@ def materialize_gtk(design: dict, backup_ts: str, dry_run: bool = False) -> list
     if cmd_exists("gsettings"):
         schema = "org.gnome.desktop.interface"
         for key, val in [("gtk-theme", gtk_theme), ("icon-theme", icon_theme), ("cursor-theme", cursor_theme)]:
+            previous_value = gsettings_get(schema, key)
             rc, _, _ = run_cmd(["gsettings", "set", schema, key, val])
-            changes.append({"app": "gtk", "action": "gsettings", "key": key, "value": val, "success": rc == 0})
+            changes.append({
+                "app": "gtk", "action": "gsettings",
+                "schema": schema, "key": key, "value": val,
+                "previous_value": previous_value, "success": rc == 0,
+            })
 
     # Expose GTK config dirs so Flatpak apps read our settings.ini (--user, no sudo).
     if cmd_exists("flatpak") and design.get("apply_flatpak_overrides", True):

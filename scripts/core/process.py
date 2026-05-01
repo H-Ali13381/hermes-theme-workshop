@@ -25,6 +25,24 @@ def _get_kwrite() -> str | None:
     return None
 
 
+def gsettings_get(schema: str, key: str) -> str | None:
+    """Read one gsettings key; return the raw GVariant output string or None.
+
+    The value is returned in GVariant format as ``gsettings get`` prints it
+    (e.g. ``'Adwaita-dark'`` for a string).  This can be passed directly as
+    the VALUE argument to ``gsettings set``, which also accepts GVariant syntax,
+    making round-trip snapshot/restore straightforward.
+
+    Returns None when ``gsettings`` is not installed or the key is unset.
+    """
+    if not cmd_exists("gsettings"):
+        return None
+    rc, out, _ = run_cmd(["gsettings", "get", schema, key])
+    if rc == 0 and out:
+        return out
+    return None
+
+
 def _kread(file: str, group: str, key: str) -> str | None:
     """Read one key from a KDE config file via kreadconfig6 or kreadconfig5.
 

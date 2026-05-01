@@ -99,7 +99,7 @@ Or inline with `"type": "raw"` and the braille text directly in `"source"`.
 
 ```bash
 # Generate braille logo (40 wide, 18 tall)
-python3 ~/.hermes/skills/autonomous-ai-agents/hermes-cli-skin/scripts/img_to_braille.py \
+python3 ~/.hermes/skills/creative/hermes-cli-skin/scripts/img_to_braille.py \
   --input ~/Pictures/logo.png \
   --width 40 --height 18 \
   --output ~/.config/fastfetch/logo.txt

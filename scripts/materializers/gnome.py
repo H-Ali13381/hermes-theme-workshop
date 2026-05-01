@@ -11,7 +11,7 @@ from __future__ import annotations
 
 from core.constants import HOME
 from core.colors import is_dark_palette
-from core.process import run_cmd, cmd_exists
+from core.process import run_cmd, cmd_exists, gsettings_get
 from core.backup import backup_file
 
 
@@ -141,10 +141,13 @@ def materialize_gnome_shell(design: dict, backup_ts: str, dry_run: bool = False)
     })
 
     if cmd_exists("gsettings"):
-        rc, _, _ = run_cmd(["gsettings", "set", "org.gnome.desktop.interface", "color-scheme", color_scheme])
+        _schema = "org.gnome.desktop.interface"
+        previous_value = gsettings_get(_schema, "color-scheme")
+        rc, _, _ = run_cmd(["gsettings", "set", _schema, "color-scheme", color_scheme])
         changes.append({
             "app": "gnome_shell", "action": "gsettings",
-            "key": "color-scheme", "value": color_scheme, "success": rc == 0,
+            "schema": _schema, "key": "color-scheme", "value": color_scheme,
+            "previous_value": previous_value, "success": rc == 0,
         })
 
     return changes
@@ -187,10 +190,12 @@ def materialize_gnome_lockscreen(design: dict, backup_ts: str, dry_run: bool = F
         return changes
 
     for schema, key, val in gsettings_pairs:
+        previous_value = gsettings_get(schema, key)
         rc, _, _ = run_cmd(["gsettings", "set", schema, key, val])
         changes.append({
             "app": "gnome_lockscreen", "action": "gsettings",
-            "schema": schema, "key": key, "value": val, "success": rc == 0,
+            "schema": schema, "key": key, "value": val,
+            "previous_value": previous_value, "success": rc == 0,
         })
 
     return changes

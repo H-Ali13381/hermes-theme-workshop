@@ -235,8 +235,8 @@ class LiveBugReproducers(unittest.TestCase):
 
         Expected labels (flattened filenames in baseline_dir): kdeglobals,
         plasmarc, kcminputrc, kvantum.kvconfig, gtk-3.0-settings,
-        gtk-4.0-settings, fastfetch.config.json, dunstrc, rofi.config.rasi,
-        waybar.style.css.
+        gtk-4.0-settings, fastfetch.config.json, fastfetch.config.jsonc,
+        dunstrc, rofi.config.rasi, waybar.style.css, starship.toml.
         """
         self.assertTrue(AUDIT_PY.exists(), f"audit script missing: {AUDIT_PY}")
 
@@ -256,8 +256,10 @@ class LiveBugReproducers(unittest.TestCase):
             "gtk-3.0-settings":        HOME / ".config/gtk-3.0/settings.ini",
             "gtk-4.0-settings":        HOME / ".config/gtk-4.0/settings.ini",
             "fastfetch.config.json":   HOME / ".config/fastfetch/config.json",
+            "fastfetch.config.jsonc":  HOME / ".config/fastfetch/config.jsonc",
             "dunstrc":                 HOME / ".config/dunst/dunstrc",
             "rofi.config.rasi":        HOME / ".config/rofi/config.rasi",
+            "starship.toml":           HOME / ".config/starship.toml",
         }
         missing = []
         for label, source in required_if_source_exists.items():

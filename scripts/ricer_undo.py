@@ -308,6 +308,45 @@ def _undo_eww(change: dict, restored: list, failed: list, skipped: list) -> None
                         "note": "eww reload exit != 0 (daemon may not be running)"})
 
 
+def _undo_gsettings(change: dict, restored: list, failed: list, skipped: list) -> None:
+    """Restore a single gsettings key to its pre-apply value.
+
+    Handles ``action == "gsettings"`` change records produced by
+    ``materialize_gtk``, ``materialize_gnome_shell``, and
+    ``materialize_gnome_lockscreen``.  The ``previous_value`` field must be
+    the raw GVariant string captured by ``gsettings_get`` before apply; it is
+    passed directly to ``gsettings set`` which accepts GVariant syntax.
+    """
+    if change.get("action") != "gsettings":
+        return
+    app    = change.get("app", "unknown")
+    schema = change.get("schema")
+    key    = change.get("key")
+    previous_value = change.get("previous_value")
+
+    if not schema or not key:
+        skipped.append({"app": app,
+                        "note": f"gsettings change missing schema/key — cannot restore: {change}"})
+        return
+    if previous_value is None:
+        skipped.append({"app": app,
+                        "note": f"no previous_value recorded for {schema} {key} "
+                                "(pre-fix manifest) — cannot restore"})
+        return
+    if not cmd_exists("gsettings"):
+        skipped.append({"app": app, "note": "gsettings not found"})
+        return
+
+    rc, _, err = run_cmd(["gsettings", "set", schema, key, previous_value])
+    if rc == 0:
+        restored.append({"app": app, "action": "restored_gsettings",
+                         "schema": schema, "key": key, "value": previous_value})
+    else:
+        failed.append({"app": app, "action": "restore_gsettings",
+                       "schema": schema, "key": key,
+                       "error": err or f"exit code {rc}"})
+
+
 def _undo_wallpaper(change: dict, restored: list, failed: list, skipped: list) -> None:
     if change.get("action") != "set":
         return
@@ -345,14 +384,18 @@ def _undo_wallpaper(change: dict, restored: list, failed: list, skipped: list) -
 
 # Registry: app key → undo handler function
 _APP_UNDO_HANDLERS: dict[str, object] = {
-    "kde":            _undo_kde,
-    "kvantum":        _undo_kvantum,
-    "plasma_theme":   _undo_plasma_theme,
-    "cursor":         _undo_cursor,
-    "icon_theme":     _undo_icon_theme,
-    "kde_lockscreen": _undo_kde_lockscreen,
-    "wallpaper":      _undo_wallpaper,
-    "eww":            _undo_eww,
+    "kde":              _undo_kde,
+    "kvantum":          _undo_kvantum,
+    "plasma_theme":     _undo_plasma_theme,
+    "cursor":           _undo_cursor,
+    "icon_theme":       _undo_icon_theme,
+    "kde_lockscreen":   _undo_kde_lockscreen,
+    "wallpaper":        _undo_wallpaper,
+    "eww":              _undo_eww,
+    # gsettings-based apps — same handler dispatches on action == "gsettings"
+    "gtk":              _undo_gsettings,
+    "gnome_shell":      _undo_gsettings,
+    "gnome_lockscreen": _undo_gsettings,
 }
 
 

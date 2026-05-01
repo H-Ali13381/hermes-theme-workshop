@@ -3,12 +3,14 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import sys
 import tempfile
 import unittest
 from pathlib import Path
 from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(ROOT / "scripts"))  # make 'core' importable when run in isolation
 # Undo logic now lives in scripts/ricer_undo.py (extracted from ricer.py).
 # We load it directly so patches target the correct module namespace.
 RICER_UNDO_PY = ROOT / "scripts" / "ricer_undo.py"
@@ -207,6 +209,160 @@ class TestUndoKde(unittest.TestCase):
         result, _, _ = self._undo([], dry_run=True)
         self.assertEqual(result["status"], "skipped")
         self.assertIn("dry-run", result["message"].lower())
+
+
+class TestUndoGsettings(unittest.TestCase):
+    """Undo restore paths for gsettings-based change records.
+
+    Covers gtk, gnome_shell, and gnome_lockscreen apps which all share the
+    _undo_gsettings handler.  Tests use the same manifest/mock pattern as
+    TestUndoKde so patches land in the correct ricer_undo namespace.
+    """
+
+    def _undo(self, changes, run_cmd_fn=None, cmd_exists_fn=None):
+        """Write a manifest, run undo() with I/O mocked, return result."""
+        calls = []
+        default_run = lambda cmd, **kw: calls.append(list(cmd)) or (0, "", "")
+        default_exists = lambda n: n == "gsettings"
+        with tempfile.TemporaryDirectory() as tmp:
+            manifest_path = Path(tmp) / "manifest.json"
+            _write_manifest(manifest_path, changes)
+            with (
+                patch.object(ricer_undo, "CURRENT_DIR", Path(tmp)),
+                patch.object(ricer_undo, "run_cmd",
+                             side_effect=run_cmd_fn or default_run),
+                patch.object(ricer_undo, "cmd_exists",
+                             side_effect=cmd_exists_fn or default_exists),
+                patch.object(ricer_undo, "_get_kwrite", return_value=None),
+            ):
+                result = ricer_undo.undo()
+        return result, calls
+
+    # ------------------------------------------------------------------
+    # Happy path — fresh manifest with previous_value present
+    # ------------------------------------------------------------------
+
+    def test_gtk_gsettings_restored_for_all_three_keys(self):
+        """Fresh GTK manifest: gsettings set called once per key with previous_value."""
+        changes = [
+            {"app": "gtk", "action": "gsettings", "schema": "org.gnome.desktop.interface",
+             "key": "gtk-theme",    "value": "Adwaita-dark",  "previous_value": "'Adwaita'"},
+            {"app": "gtk", "action": "gsettings", "schema": "org.gnome.desktop.interface",
+             "key": "icon-theme",   "value": "Papirus-Dark",  "previous_value": "'Papirus'"},
+            {"app": "gtk", "action": "gsettings", "schema": "org.gnome.desktop.interface",
+             "key": "cursor-theme", "value": "Bibata-Modern", "previous_value": "'default'"},
+        ]
+        result, calls = self._undo(changes)
+
+        gs_calls = [c for c in calls if c[:2] == ["gsettings", "set"]]
+        self.assertEqual(len(gs_calls), 3)
+
+        restored_actions = [r["action"] for r in result["restored"]]
+        self.assertEqual(restored_actions.count("restored_gsettings"), 3)
+
+        restored_values = {r["key"]: r["value"] for r in result["restored"]}
+        self.assertEqual(restored_values["gtk-theme"],    "'Adwaita'")
+        self.assertEqual(restored_values["icon-theme"],   "'Papirus'")
+        self.assertEqual(restored_values["cursor-theme"], "'default'")
+        self.assertEqual(result["status"], "success")
+
+    def test_gnome_shell_color_scheme_restored(self):
+        """Fresh gnome_shell manifest: color-scheme restored to previous_value."""
+        result, calls = self._undo([{
+            "app": "gnome_shell", "action": "gsettings",
+            "schema": "org.gnome.desktop.interface",
+            "key": "color-scheme", "value": "prefer-dark", "previous_value": "'default'",
+        }])
+        gs_calls = [c for c in calls if c[:2] == ["gsettings", "set"]]
+        self.assertEqual(len(gs_calls), 1)
+        self.assertEqual(gs_calls[0],
+                         ["gsettings", "set", "org.gnome.desktop.interface",
+                          "color-scheme", "'default'"])
+        self.assertEqual(result["status"], "success")
+
+    def test_gnome_lockscreen_all_keys_restored(self):
+        """Fresh gnome_lockscreen manifest: all three screensaver keys restored."""
+        changes = [
+            {"app": "gnome_lockscreen", "action": "gsettings",
+             "schema": "org.gnome.desktop.screensaver",
+             "key": "primary-color",   "value": "#1a1b26", "previous_value": "'#000000'"},
+            {"app": "gnome_lockscreen", "action": "gsettings",
+             "schema": "org.gnome.desktop.screensaver",
+             "key": "secondary-color", "value": "#24283b", "previous_value": "'#000000'"},
+            {"app": "gnome_lockscreen", "action": "gsettings",
+             "schema": "org.gnome.desktop.screensaver",
+             "key": "color-shading-type", "value": "solid", "previous_value": "'solid'"},
+        ]
+        result, calls = self._undo(changes)
+        gs_calls = [c for c in calls if c[:2] == ["gsettings", "set"]]
+        self.assertEqual(len(gs_calls), 3)
+        self.assertEqual(result["restored"][0]["schema"], "org.gnome.desktop.screensaver")
+        self.assertEqual(result["status"], "success")
+
+    # ------------------------------------------------------------------
+    # Legacy manifest — previous_value absent
+    # ------------------------------------------------------------------
+
+    def test_skips_gracefully_when_previous_value_is_none(self):
+        """Legacy manifest (previous_value=None): goes to skipped, not failed or crash."""
+        result, calls = self._undo([{
+            "app": "gtk", "action": "gsettings",
+            "schema": "org.gnome.desktop.interface",
+            "key": "gtk-theme", "value": "Adwaita-dark", "previous_value": None,
+        }])
+        gs_calls = [c for c in calls if c[:2] == ["gsettings", "set"]]
+        self.assertEqual(gs_calls, [], "gsettings set must not be called for a legacy record")
+        skipped_apps = [s["app"] for s in result["skipped"]]
+        self.assertIn("gtk", skipped_apps)
+        self.assertEqual(result["status"], "success")
+
+    def test_skips_gracefully_when_previous_value_key_absent(self):
+        """Pre-fix manifest with no previous_value key at all: same skip behaviour."""
+        result, calls = self._undo([{
+            "app": "gnome_shell", "action": "gsettings",
+            "schema": "org.gnome.desktop.interface",
+            "key": "color-scheme", "value": "prefer-dark",
+            # previous_value key entirely absent — simulates a pre-fix manifest
+        }])
+        gs_calls = [c for c in calls if c[:2] == ["gsettings", "set"]]
+        self.assertEqual(gs_calls, [])
+        self.assertIn("gnome_shell", [s["app"] for s in result["skipped"]])
+
+    # ------------------------------------------------------------------
+    # gsettings binary absent
+    # ------------------------------------------------------------------
+
+    def test_skips_when_gsettings_not_installed(self):
+        """If gsettings binary is absent, change goes to skipped."""
+        result, calls = self._undo(
+            [{"app": "gtk", "action": "gsettings",
+              "schema": "org.gnome.desktop.interface",
+              "key": "gtk-theme", "value": "Adwaita-dark", "previous_value": "'Adwaita'"}],
+            cmd_exists_fn=lambda n: False,
+        )
+        gs_calls = [c for c in calls if c[:2] == ["gsettings", "set"]]
+        self.assertEqual(gs_calls, [])
+        self.assertIn("gtk", [s["app"] for s in result["skipped"]])
+
+    # ------------------------------------------------------------------
+    # gsettings set failure
+    # ------------------------------------------------------------------
+
+    def test_records_failure_when_gsettings_set_returns_nonzero(self):
+        """A non-zero gsettings exit code goes to failed, not silently swallowed."""
+        def failing_run(cmd, **kw):
+            return (1, "", "permission denied")
+
+        result, _ = self._undo(
+            [{"app": "gtk", "action": "gsettings",
+              "schema": "org.gnome.desktop.interface",
+              "key": "gtk-theme", "value": "Adwaita-dark", "previous_value": "'Adwaita'"}],
+            run_cmd_fn=failing_run,
+        )
+        self.assertEqual(result["status"], "partial")
+        self.assertEqual(len(result["failed"]), 1)
+        self.assertEqual(result["failed"][0]["action"], "restore_gsettings")
+        self.assertIn("permission denied", result["failed"][0]["error"])
 
 
 if __name__ == "__main__":

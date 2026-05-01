@@ -89,7 +89,7 @@ Map classified colors to the design system palette for theme-coherent output.
 
 ## 7. Available Scripts
 
-Located in the `hermes-cli-skin` skill (`~/.hermes/skills/autonomous-ai-agents/hermes-cli-skin/scripts/`):
+Located in the `hermes-cli-skin` skill (`~/.hermes/skills/creative/hermes-cli-skin/scripts/`):
 
 - **`img_to_braille.py`** — production braille converter with luminance+saturation thresholding, per-cell hue colorization, auto-tight bounding box, braille-blank padding
 - **`image_to_hero.py`** — traditional ASCII ramp converter (classic/doom/blocky ramps)
@@ -102,13 +102,13 @@ Located in the `hermes-cli-skin` skill (`~/.hermes/skills/autonomous-ai-agents/h
 
 ```bash
 # Braille art for fastfetch (40 wide, 18 tall)
-python3 ~/.hermes/skills/autonomous-ai-agents/hermes-cli-skin/scripts/img_to_braille.py \
+python3 ~/.hermes/skills/creative/hermes-cli-skin/scripts/img_to_braille.py \
   --input ~/Pictures/logo.png \
   --width 40 --height 18 \
   --output ~/.config/fastfetch/logo.txt
 
 # Braille art for Hermes banner_hero (exact 30×15)
-python3 ~/.hermes/skills/autonomous-ai-agents/hermes-cli-skin/scripts/img_to_braille.py \
+python3 ~/.hermes/skills/creative/hermes-cli-skin/scripts/img_to_braille.py \
   --input ~/Pictures/mascot.png \
   --width 30 --height 15 \
   --out-yaml

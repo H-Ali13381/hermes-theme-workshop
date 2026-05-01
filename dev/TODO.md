@@ -1,5 +1,37 @@
 # linux-ricing TODO
 
+## Recommended Next Tasks
+
+- [ ] **[PRIORITY] Add reusable `gsettings` snapshot/restore support for undo**
+  Build a generic helper for materializers to record prior `gsettings` values
+  before applying changes, plus a matching `ricer_undo.py` restore path. Use this
+  as the foundation for GTK, GNOME Shell, and GNOME lockscreen rollback fixes.
+
+- [ ] **[PRIORITY] Fix GTK non-file-state rollback**
+  Update `materialize_gtk()` so changes to
+  `org.gnome.desktop.interface` (`gtk-theme`, `icon-theme`, `cursor-theme`) record
+  previous values in the manifest and are restored by undo. Add tests for fresh
+  manifests and legacy manifests with missing previous-state fields.
+
+- [ ] **[PRIORITY] Fix GNOME Shell and GNOME lockscreen rollback**
+  Apply the same `gsettings` snapshot/restore pattern to GNOME color-scheme and
+  lockscreen color/shading settings so undo fully returns persistent GNOME state to
+  its pre-apply values.
+
+- [ ] **[PRIORITY] Make Flatpak GTK/icon overrides reversible**
+  Snapshot user Flatpak override state before applying GTK/icon filesystem
+  overrides, then remove only Hermes-added overrides or restore the prior override
+  state during undo.
+
+- [ ] **[PRIORITY] Add KDE Look-and-Feel undo handling**
+  Register an `lnf` undo handler that reapplies the previous global theme and
+  safely cleans up generated Hermes Look-and-Feel packages when appropriate.
+
+- [ ] **[PRIORITY] Improve undo and dry-run risk reporting**
+  Ensure dry-run and simulate-undo report non-file state mutations, generated
+  directories, legacy manifest gaps, and reload requirements clearly before users
+  apply or rollback a rice.
+
 ## Upcoming Features
 
 - [ ] **[FEATURE] EWW widget library expansion + deeper customization**

@@ -63,4 +63,14 @@ def _describe_change(change: dict) -> list[str]:
         lines.append(f"  [kde_lockscreen] RESTORE: {prev}" if prev
                      else "  [kde_lockscreen] No previous lock screen theme recorded — will skip")
 
+    if action == "gsettings":
+        schema = change.get("schema", "?")
+        key    = change.get("key", "?")
+        prev   = change.get("previous_value")
+        if prev is not None:
+            lines.append(f"  [{app}] RESTORE gsettings {schema} {key} → {prev}")
+        else:
+            lines.append(f"  [{app}] gsettings {schema} {key} — no previous value recorded"
+                         " (pre-fix manifest), will skip")
+
     return lines
