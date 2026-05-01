@@ -22,6 +22,13 @@ from pathlib import Path
 SKILL_DIR = Path(__file__).parent.parent
 sys.path.insert(0, str(SKILL_DIR))
 
+# Fail fast on non-Linux before pulling in heavy deps (langgraph, langchain).
+_SCRIPTS_DIR = str(SKILL_DIR / "scripts")
+if _SCRIPTS_DIR not in sys.path:
+    sys.path.insert(0, _SCRIPTS_DIR)
+from core.constants import require_linux  # noqa: E402
+require_linux()
+
 from langgraph.checkpoint.sqlite import SqliteSaver
 from langgraph.errors import GraphInterrupt
 from langgraph.types import Command

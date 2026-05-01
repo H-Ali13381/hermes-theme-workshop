@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-from __future__ import annotations
 """
 session_manager.py — Linux ricing session state manager.
 
@@ -49,6 +48,7 @@ Usage:
 
 Session tracking: ~/.config/rice-sessions/.current → symlink to active session dir.
 """
+from __future__ import annotations
 
 import json
 import re
@@ -62,6 +62,7 @@ _SCRIPTS_DIR = str(Path(__file__).parent)
 if _SCRIPTS_DIR not in sys.path:
     sys.path.insert(0, _SCRIPTS_DIR)
 
+from core.constants import require_linux                  # noqa: E402
 from core.session_io import (                             # noqa: E402
     SESSIONS_ROOT, CURRENT_LINK,
     ensure_sessions_root, session_md, set_current, get_current_session,
@@ -226,6 +227,7 @@ def cmd_workflow_run(thread_id: str | None = None) -> None:
 
 
 def main():
+    require_linux()
     if len(sys.argv) < 2:
         print(__doc__)
         sys.exit(0)

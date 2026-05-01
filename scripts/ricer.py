@@ -25,7 +25,7 @@ if str(_SCRIPTS_DIR) not in sys.path:
     sys.path.insert(0, str(_SCRIPTS_DIR))
 
 # ── core utilities ────────────────────────────────────────────────────────────
-from core.constants import BACKUP_DIR, CURRENT_DIR        # noqa: E402
+from core.constants import BACKUP_DIR, CURRENT_DIR, require_linux  # noqa: E402
 from core.discovery import discover_apps, discover         # noqa: E402
 from core.session_io import load_design_file               # noqa: E402
 from core.snapshots import snapshot_kde_state              # noqa: E402
@@ -155,6 +155,7 @@ def materialize(
 # ---------------------------------------------------------------------------
 
 def main():
+    require_linux()
     parser = argparse.ArgumentParser(description="Hermes Ricer — AI-Native Desktop Theming")
     subparsers = parser.add_subparsers(dest="command")
 

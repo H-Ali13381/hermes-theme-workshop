@@ -8,6 +8,17 @@
 # =============================================================================
 set -euo pipefail
 
+# ── Platform guard ──────────────────────────────────────────────────────────
+if [[ "$(uname -s)" != "Linux" ]]; then
+    echo "ERROR: linux-ricing requires a Linux desktop environment." >&2
+    echo "Detected platform: $(uname -s)" >&2
+    echo "" >&2
+    echo "This skill customises Linux window managers (KDE Plasma, GNOME," >&2
+    echo "Hyprland) and depends on Linux-specific tools and config paths." >&2
+    echo "It cannot run on $(uname -s)." >&2
+    exit 1
+fi
+
 SKILL_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 RICER_PY="$SKILL_DIR/scripts/ricer.py"
 REQUIREMENTS="$SKILL_DIR/scripts/requirements.txt"

@@ -2,6 +2,49 @@
 from pathlib import Path
 import sys
 
+# ---------------------------------------------------------------------------
+# PLATFORM GUARD
+# ---------------------------------------------------------------------------
+
+_PLATFORM_NAMES = {
+    "darwin": "macOS",
+    "win32": "Windows",
+    "cygwin": "Windows (Cygwin)",
+    "msys": "Windows (MSYS2)",
+    "android": "Android",
+    "ios": "iOS",
+    "freebsd": "FreeBSD",
+}
+
+
+def require_linux() -> None:
+    """Exit immediately with a clear message on non-Linux platforms.
+
+    Call this at the top of every user-facing entry point (ricer.py,
+    session_manager.py, workflow/run.py) so Windows/macOS users get an
+    explanation instead of cryptic import errors or missing-file tracebacks.
+    """
+    if sys.platform.startswith("linux"):
+        return
+    # Exact match first, then prefix match (handles e.g. 'freebsd13').
+    os_name = _PLATFORM_NAMES.get(sys.platform)
+    if os_name is None:
+        for prefix, name in _PLATFORM_NAMES.items():
+            if sys.platform.startswith(prefix):
+                os_name = name
+                break
+        else:
+            os_name = sys.platform
+    print(
+        f"ERROR: linux-ricing requires a Linux desktop environment.\n"
+        f"Detected platform: {os_name}\n\n"
+        f"This skill customises Linux window managers (KDE Plasma, GNOME,\n"
+        f"Hyprland) and depends on Linux-specific tools and config paths.\n"
+        f"It cannot run on {os_name}.",
+        file=sys.stderr,
+    )
+    sys.exit(1)
+
 # Resolve to scripts/ regardless of how this module is imported (symlink-safe).
 _SCRIPTS_DIR = Path(__file__).resolve().parent.parent  # scripts/core/ -> scripts/
 if str(_SCRIPTS_DIR) not in sys.path:
