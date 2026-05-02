@@ -16,6 +16,7 @@ import argparse
 import json
 import shutil
 import sys
+import traceback
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -114,6 +115,13 @@ def materialize(
                 changes = mat_fn(design, backup_ts=backup_ts, dry_run=dry_run)
                 all_changes.extend(changes)
             except Exception as e:
+                # Surface the failure to stderr so workflow logs capture it;
+                # the manifest entry alone is invisible to interactive callers.
+                print(
+                    f"[ricer] materializer '{app_name}' failed: {e}",
+                    file=sys.stderr,
+                )
+                traceback.print_exc(file=sys.stderr)
                 all_changes.append({"app": app_name, "action": "error", "error": str(e)})
 
     if wallpaper:

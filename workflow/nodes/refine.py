@@ -16,13 +16,14 @@ except ImportError:  # LangGraph not installed (e.g. during unit tests)
 from ..config import (
     BASE_REQUIRED_KEYS,
     get_llm,
+    judge_design_creativity,
     MAX_LOOP_ITERATIONS,
     PALETTE_SLOTS,
     RECIPE_PROMPT_FIELDS,
     RECIPE_REQUIRED_KEYS,
     SUPPORTED_DESKTOP_RECIPES,
 )
-from ..logging import get_logger, truncate_for_log
+from ..log_setup import get_logger, truncate_for_log
 from ..state import RiceSessionState
 from ..validators import design_complete
 
@@ -73,8 +74,7 @@ Produce a JSON object with exactly these top-level keys:
 - A valid KDE rice is NOT a palette swap. Follow the user's vision and make at least 3 specific non-default moves.
 - Widgets are powerful but optional: use EWW/widgets only when they serve the brief. Do not add generic clocks/meters just to satisfy a checklist.
 - If you preview rounded windows, custom titlebars, terminal frames, ornamental borders, or panel chrome, chrome_strategy must say exactly how those visuals will be implemented.
-- Favor original, theme-specific composition over boilerplate docks, average bars, and normal KDE/Breeze defaults.
-- Do not use "default", "stock", "Breeze", "unchanged", or "normal" as layout decisions unless the user explicitly demanded defaults.
+- Favor original, theme-specific composition over generic docks, average bars, and stock defaults.
 
 ## Output
 Output ONLY the design_system JSON. Do not narrate the design, do not preview the
@@ -103,7 +103,16 @@ def refine_node(state: RiceSessionState) -> dict:
     messages = list(state.get("messages", []))
     direction = state.get("design", {})
     profile = state.get("device_profile", {})
-    recipe = profile.get("desktop_recipe", "kde")
+    # Fail closed: refusing to generate a design at all is safer than silently
+    # producing a KDE design on a non-KDE machine (likely on resume from a
+    # checkpoint that lost its device_profile, or a state-loading bug).
+    recipe = profile.get("desktop_recipe")
+    if not recipe:
+        raise ValueError(
+            "refine_node: device_profile is missing 'desktop_recipe'. "
+            "This usually means setup_node didn't run or the checkpoint was "
+            "loaded without a device profile. Re-run setup before refining."
+        )
     system_prompt = build_system_prompt(recipe)
 
     # Track invocations so routing.after_refine can abort if the loop diverges.
@@ -133,6 +142,8 @@ def refine_node(state: RiceSessionState) -> dict:
     response = llm.invoke(working_messages)
     log.debug("attempt 1 raw response:\n%s", truncate_for_log(response.content or ""))
     design, reason = _extract_design_json(response.content or "", recipe)
+    if design:
+        design, reason = _judge_or_reject(design, direction, recipe, log)
 
     for attempt in range(MAX_REFINE_RETRIES):
         if design:
@@ -146,6 +157,8 @@ def refine_node(state: RiceSessionState) -> dict:
             attempt + 2, truncate_for_log(response.content or ""),
         )
         design, reason = _extract_design_json(response.content or "", recipe)
+        if design:
+            design, reason = _judge_or_reject(design, direction, recipe, log)
 
     if design:
         queue = _queue_design_elements(
@@ -178,6 +191,25 @@ def refine_node(state: RiceSessionState) -> dict:
         "messages": new_messages + [response, HumanMessage(content=str(user_reply))],
         "loop_counts": loop_counts,
     }
+
+
+def _judge_or_reject(
+    design: dict, direction: dict, recipe: str, log,
+) -> tuple[dict | None, str]:
+    """Run the LLM creativity judge on a structurally-valid design.
+
+    Returns ``(design, "")`` on pass / fail-open, or ``(None, reason)`` on a
+    confident reject so the outer retry loop can prompt the model again.
+    Only KDE currently has semantic creativity rules; other recipes pass.
+    """
+    if recipe != "kde":
+        return design, ""
+    ok, reasons = judge_design_creativity(design, direction or {})
+    if ok:
+        return design, ""
+    joined = "; ".join(reasons)
+    log.warning("creativity judge rejected design: %s", joined)
+    return None, f"creativity judge rejected: {joined}"
 
 
 def _extract_design_json(content: str, recipe: str = "kde") -> tuple[dict | None, str]:

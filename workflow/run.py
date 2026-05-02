@@ -15,7 +15,7 @@ import os
 import sys
 import traceback
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 
 # Ensure SKILL_DIR is importable
@@ -310,7 +310,7 @@ def _list_sessions(checkpointer, as_json: bool = False) -> None:
 
 
 def _new_thread_id() -> str:
-    ts = datetime.now().strftime("%Y%m%d-%H%M")
+    ts = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M")
     return f"rice-{ts}-{uuid.uuid4().hex[:6]}"
 
 
@@ -319,7 +319,7 @@ def _init_session_dir(thread_id: str) -> Path:
     session_dir.mkdir(parents=True, exist_ok=True)
     header = SESSION_HEADER_TEMPLATE.format(
         theme_name=thread_id,
-        started=datetime.now().isoformat(timespec="seconds"),
+        started=datetime.now(timezone.utc).isoformat(timespec="seconds"),
         session_dir=str(session_dir),
     )
     (session_dir / "session.md").write_text(header, encoding="utf-8")

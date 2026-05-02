@@ -6,7 +6,7 @@ import shutil
 import subprocess
 
 
-def run_cmd(cmd: list[str], timeout: int = 5) -> tuple[int, str, str]:
+def run_cmd(cmd: list[str], timeout: int = 15) -> tuple[int, str, str]:
     try:
         result = subprocess.run(
             cmd, capture_output=True, text=True, encoding="utf-8", timeout=timeout

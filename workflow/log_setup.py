@@ -5,7 +5,7 @@ node can emit structured diagnostics without each node reinventing the wheel.
 
 Usage::
 
-    from workflow.logging import get_logger, truncate_for_log
+    from workflow.log_setup import get_logger, truncate_for_log
     log = get_logger("refine", state)  # state is optional
     log.info("starting attempt %d", n)
     log.debug("raw response:\\n%s", truncate_for_log(content))

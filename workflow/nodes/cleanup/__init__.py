@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from ...logging import get_logger
+from ...log_setup import get_logger
 from ...state import RiceSessionState
 from .capabilities import probe_capabilities
 from .effective_state import audit_effective_state

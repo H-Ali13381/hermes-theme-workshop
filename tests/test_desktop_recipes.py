@@ -160,19 +160,12 @@ class DesktopRecipeTests(unittest.TestCase):
             "gnome",
         ))
 
-    def test_kde_validation_rejects_stock_panel_and_weak_originality(self):
+    def test_kde_validation_rejects_weak_originality_structurally(self):
+        # Semantic checks (panel boilerplate, banlists) now run via the LLM
+        # creativity judge, not in the deterministic validator. The
+        # deterministic validator must still catch structural shortfalls like
+        # too few non_default_moves.
         validator = WorkflowValidator()
-        stock = design_with(
-            "kvantum_theme", "plasma_theme", "gtk_theme", "cursor_theme",
-            "icon_theme", "originality_strategy", "chrome_strategy", "panel_layout",
-        )
-        stock["panel_layout"] = {"mode": "stock", "placement": "bottom", "shape": "normal"}
-
-        ok, reason = validator.design_complete(stock, {"desktop_recipe": "kde"})
-
-        self.assertFalse(ok)
-        self.assertIn("stock", reason.lower())
-
         weak = design_with(
             "kvantum_theme", "plasma_theme", "gtk_theme", "cursor_theme",
             "icon_theme", "originality_strategy", "chrome_strategy",
@@ -183,6 +176,41 @@ class DesktopRecipeTests(unittest.TestCase):
 
         self.assertFalse(ok)
         self.assertIn("3 non_default_moves", reason)
+
+    def test_kde_validation_no_longer_substring_rejects_default_keyword(self):
+        # Regression: the substring banlist used to false-reject a perfectly
+        # valid move that merely *named* the default it was replacing.
+        validator = WorkflowValidator()
+        design = design_with(
+            "kvantum_theme", "plasma_theme", "gtk_theme", "cursor_theme",
+            "icon_theme", "originality_strategy", "chrome_strategy",
+        )
+        design["originality_strategy"]["non_default_moves"] = [
+            "replace the default Plasma toolbar with a vertical command stave",
+            "swap Breeze chrome for hand-drawn ornamental borders",
+            "fold notifications into a side ledger instead of stock toasts",
+        ]
+
+        ok, reason = validator.design_complete(design, {"desktop_recipe": "kde"})
+
+        self.assertTrue(ok, reason)
+
+    def test_kde_validation_accepts_widgets_with_alternate_field_names(self):
+        # Regression: the validator used to require literal keys "data" and
+        # "visual"; that semantic check now lives in the LLM judge, not here.
+        validator = WorkflowValidator()
+        design = design_with(
+            "kvantum_theme", "plasma_theme", "gtk_theme", "cursor_theme",
+            "icon_theme", "originality_strategy", "chrome_strategy",
+        )
+        design["widget_layout"] = [
+            {"name": "core monitor", "position": "top",
+             "data_source": "cpu", "visual_metaphor": "ember gauge"},
+        ]
+
+        ok, reason = validator.design_complete(design, {"desktop_recipe": "kde"})
+
+        self.assertTrue(ok, reason)
 
     def test_kde_validation_allows_no_widgets_when_originality_and_chrome_are_strong(self):
         validator = WorkflowValidator()

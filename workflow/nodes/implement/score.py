@@ -5,7 +5,7 @@ import json
 import re
 from pathlib import Path
 
-from ...logging import get_logger
+from ...log_setup import get_logger
 from ...utils import strip_jsonc_comments as _strip_jsonc_comments
 from ...utils import css_braces_balanced as _css_braces_balanced
 

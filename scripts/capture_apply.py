@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import json
 import subprocess
+
 import time
 from pathlib import Path
 
@@ -106,10 +107,11 @@ def close_stray_windows() -> None:
 
 
 def raise_window_by_title(title_substring: str) -> None:
+    js_literal = json.dumps(title_substring)  # safe: escapes " and \ in title
     kwin_script = f"""
     var clients = workspace.windowList();
     for (var i = 0; i < clients.length; i++) {{
-        if (clients[i].caption.indexOf("{title_substring}") !== -1) {{
+        if (clients[i].caption.indexOf({js_literal}) !== -1) {{
             var c = clients[i];
             var newX = Math.round((1920 - c.width) / 2);
             var newY = Math.round((1080 - c.height) / 2);

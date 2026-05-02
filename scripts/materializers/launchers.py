@@ -152,19 +152,26 @@ element-text {{
 
     theme_ref = f'@theme "{theme_path}"'
     hermes_marker = "/* linux-ricing */"
+    hermes_marker_end = "/* end-linux-ricing */"
     injected = False
     if config_path.exists():
         conf_text = config_path.read_text(encoding="utf-8")
         if str(theme_path) not in conf_text:
-            config_path.write_text(conf_text + f"\n{hermes_marker}\n{theme_ref}\n", encoding="utf-8")
+            config_path.write_text(
+                conf_text + f"\n{hermes_marker}\n{theme_ref}\n{hermes_marker_end}\n",
+                encoding="utf-8",
+            )
             injected = True
     else:
-        config_path.write_text(f"{hermes_marker}\n{theme_ref}\n", encoding="utf-8")
+        config_path.write_text(
+            f"{hermes_marker}\n{theme_ref}\n{hermes_marker_end}\n", encoding="utf-8"
+        )
         injected = True
 
     changes.append({"app": "rofi", "action": "inject_theme", "path": str(config_path),
                     "backup": config_backup, "injected": injected,
-                    "theme_ref": theme_ref, "marker": hermes_marker})
+                    "theme_ref": theme_ref, "marker": hermes_marker,
+                    "marker_end": hermes_marker_end})
     return changes
 
 

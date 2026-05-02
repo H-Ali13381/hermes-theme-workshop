@@ -13,7 +13,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from ...logging import get_logger
+from ...log_setup import get_logger
 
 _REPO_ROOT = Path(__file__).resolve().parents[3]
 _TEMPLATES_ROOT = _REPO_ROOT / "templates"

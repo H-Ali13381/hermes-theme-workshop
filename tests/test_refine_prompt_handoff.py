@@ -76,7 +76,8 @@ class RefinePromptHandoffTests(unittest.TestCase):
     def test_refine_seeds_own_prompt_after_explore_messages(self):
         fake = _FakeLLM()
 
-        with patch("workflow.nodes.refine.get_llm", return_value=fake):
+        with patch("workflow.nodes.refine.get_llm", return_value=fake), \
+             patch("workflow.nodes.refine.judge_design_creativity", return_value=(True, [])):
             update = refine_node({
                 "messages": [HumanMessage(content="explore chatter")],
                 "design": {"stance": "Ghost", "name_hypothesis": "shadow-signal"},
@@ -96,7 +97,8 @@ class RefinePromptHandoffTests(unittest.TestCase):
         good = f"{DESIGN_SENTINEL}\n```json\n{json.dumps(_valid_design())}\n```"
         scripted = _ScriptedLLM(["Here is the design — I'll confirm shortly.", good])
 
-        with patch("workflow.nodes.refine.get_llm", return_value=scripted):
+        with patch("workflow.nodes.refine.get_llm", return_value=scripted), \
+             patch("workflow.nodes.refine.judge_design_creativity", return_value=(True, [])):
             update = refine_node({
                 "messages": [HumanMessage(content="explore chatter")],
                 "design": {"stance": "Ghost", "name_hypothesis": "shadow-signal"},

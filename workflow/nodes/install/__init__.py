@@ -8,7 +8,7 @@ try:
 except ImportError:  # LangGraph not installed (e.g. during unit tests)
     interrupt = None  # type: ignore[assignment]
 
-from ...logging import get_logger
+from ...log_setup import get_logger
 from ...state import RiceSessionState
 from .resolver import resolve_packages, install_packages, can_sudo_noninteractive
 

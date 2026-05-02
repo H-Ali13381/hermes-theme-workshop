@@ -11,7 +11,7 @@ from __future__ import annotations
 from langgraph.graph import END
 
 from .config import MAX_LOOP_ITERATIONS
-from .logging import get_logger
+from .log_setup import get_logger
 from . import validators
 
 
@@ -91,6 +91,20 @@ def _next_node_for_queue(state: dict) -> str:
     if not queue:
         return "cleanup"
     return "craft" if validators.is_craft_element(queue[0]) else "implement"
+
+
+def after_install(state: dict) -> str:
+    """Route after the install node.
+
+    The first queued element may be a craft element (eww/quickshell/conky
+    widgets, waybar) — in that case we must enter craft_node directly,
+    bypassing implement_node which has no codegen path. An unconditional
+    install→implement edge would hand the craft element to the materializer
+    and skip the agentic build entirely.
+    """
+    if validators.implement_done(state.get("element_queue", [])):
+        return "cleanup"
+    return _next_node_for_queue(state)
 
 
 def after_implement(state: dict) -> str:

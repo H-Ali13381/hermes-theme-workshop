@@ -6,7 +6,7 @@ import sys
 from datetime import datetime, timezone
 
 from ..config import SCRIPTS_DIR
-from ..logging import get_logger
+from ..log_setup import get_logger
 from ..state import RiceSessionState
 
 

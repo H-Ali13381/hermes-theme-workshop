@@ -62,34 +62,32 @@ def design_complete(design: dict, profile: dict | None = None) -> tuple[bool, st
 
 
 def _kde_creativity_complete(design: dict) -> tuple[bool, str]:
-    """KDE must follow the user's vision with non-boilerplate, implementable chrome."""
-    banned = {"default", "stock", "breeze", "standard", "unchanged", "normal", "generic"}
+    """Structural-only KDE shape check.
 
+    Semantic creativity (originality of moves, meaningfulness of widgets, panel
+    boilerplate) is judged separately by ``judge_design_creativity`` after this
+    check passes.  Substring banlists and literal field-name checks were
+    removed because they false-rejected valid designs that merely *named* the
+    defaults they were replacing, and because LLM output is paraphrastic.
+    """
     originality = design.get("originality_strategy")
     if not isinstance(originality, dict):
-        return False, "kde originality_strategy must describe user-specific non-default moves"
+        return False, "kde originality_strategy must be an object"
     moves = originality.get("non_default_moves")
     if not isinstance(moves, list) or len(moves) < 3:
         return False, "kde originality_strategy needs at least 3 non_default_moves"
     if not originality.get("vision_alignment"):
         return False, "kde originality_strategy must explain vision_alignment"
-    moves_text = " ".join(str(v).lower() for v in moves)
-    if any(word in moves_text for word in banned):
-        return False, "kde originality_strategy contains boilerplate/default moves"
 
     chrome = design.get("chrome_strategy")
     if not isinstance(chrome, dict):
-        return False, "kde chrome_strategy must declare implementable window/terminal/panel chrome"
+        return False, "kde chrome_strategy must be an object"
     if not chrome.get("method") or not chrome.get("implementation_targets"):
         return False, "kde chrome_strategy needs method and implementation_targets"
 
     panel = design.get("panel_layout")
-    if panel is not None:
-        if not isinstance(panel, dict):
-            return False, "kde panel_layout must be an object when present"
-        panel_text = " ".join(str(v).lower() for v in panel.values())
-        if any(word in panel_text for word in banned):
-            return False, "kde panel_layout may not preserve stock/default Plasma toolbar aesthetics"
+    if panel is not None and not isinstance(panel, dict):
+        return False, "kde panel_layout must be an object when present"
 
     widgets = design.get("widget_layout", [])
     if widgets:
@@ -98,9 +96,6 @@ def _kde_creativity_complete(design: dict) -> tuple[bool, str]:
         for i, widget in enumerate(widgets, start=1):
             if not isinstance(widget, dict):
                 return False, f"kde widget_layout[{i}] must be an object"
-            missing = [k for k in ("name", "position", "data", "visual") if not widget.get(k)]
-            if missing:
-                return False, f"kde widget_layout[{i}] missing fields: {missing}"
     return True, ""
 
 

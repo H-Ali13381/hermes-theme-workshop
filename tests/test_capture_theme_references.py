@@ -1,10 +1,18 @@
 import importlib.util
+import sys
 import unittest
 from pathlib import Path
 
 _SCRIPTS = Path(__file__).parent.parent / "scripts"
 SCRIPT_PATH = _SCRIPTS / "capture_theme_references.py"
 REFERENCE_WINDOW_SCRIPT = _SCRIPTS / "reference_capture_window.py"
+
+# Scripts are designed to run with scripts/ as the import root (ricer.py
+# bootstrap prepends it). Tests that load these as standalone modules must
+# replicate that, otherwise their internal `from capture_constants ...` /
+# `from core.X ...` imports fail.
+if str(_SCRIPTS) not in sys.path:
+    sys.path.insert(0, str(_SCRIPTS))
 
 
 def load_module():

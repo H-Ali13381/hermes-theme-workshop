@@ -221,24 +221,29 @@ def materialize_picom(design: dict, backup_ts: str, dry_run: bool = False) -> li
     changes.append({"app": "picom", "action": "write", "path": str(fragment_path), "backup": fragment_backup})
 
     hermes_marker = "# linux-ricing"
+    hermes_marker_end = "# end-linux-ricing"
     include_line = f'@include "{fragment_path}";'
     injected = False
     if picom_conf.exists():
         picom_text = picom_conf.read_text(encoding="utf-8")
         if "hermes-picom.conf" not in picom_text:
-            picom_conf.write_text(f"{hermes_marker}\n{include_line}\n\n" + picom_text, encoding="utf-8")
+            picom_conf.write_text(
+                f"{hermes_marker}\n{include_line}\n{hermes_marker_end}\n\n" + picom_text,
+                encoding="utf-8",
+            )
             injected = True
     else:
         picom_conf.write_text(
-            f"{hermes_marker}\n{include_line}\n\n"
+            f"{hermes_marker}\n{include_line}\n{hermes_marker_end}\n\n"
             "# Hermes wrote this starter config. Add your own settings below:\n"
             'backend = "glx";\nvsync = true;\n',
-            encoding="utf-8"
+            encoding="utf-8",
         )
         injected = True
 
     changes.append({"app": "picom", "action": "inject_include", "path": str(picom_conf),
-                    "backup": picom_backup, "injected": injected, "marker": hermes_marker})
+                    "backup": picom_backup, "injected": injected,
+                    "marker": hermes_marker, "marker_end": hermes_marker_end})
     run_cmd(["pkill", "-HUP", "picom"], timeout=3)
     return changes
 

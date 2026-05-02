@@ -92,41 +92,51 @@ def materialize_eww(design: dict, backup_ts: str, dry_run: bool = False) -> list
     })
 
     # ── Inject @import into eww.scss ─────────────────────────────────────────
-    scss_marker  = "/* linux-ricing */"
+    scss_marker     = "/* linux-ricing */"
+    scss_marker_end = "/* end-linux-ricing */"
     import_line  = '@import "hermes-palette.scss";'
     scss_injected = False
     if eww_scss.exists():
         scss_text = eww_scss.read_text(encoding="utf-8")
         if scss_marker not in scss_text:
             eww_scss.write_text(
-                f"{scss_marker}\n{import_line}\n\n" + scss_text, encoding="utf-8"
+                f"{scss_marker}\n{import_line}\n{scss_marker_end}\n\n" + scss_text,
+                encoding="utf-8",
             )
             scss_injected = True
     else:
-        eww_scss.write_text(f"{scss_marker}\n{import_line}\n", encoding="utf-8")
+        eww_scss.write_text(
+            f"{scss_marker}\n{import_line}\n{scss_marker_end}\n", encoding="utf-8"
+        )
         scss_injected = True
     changes.append({
         "app": "eww", "action": "inject_include", "path": str(eww_scss),
-        "injected": scss_injected, "import_line": import_line, "marker": scss_marker,
+        "injected": scss_injected, "import_line": import_line,
+        "marker": scss_marker, "marker_end": scss_marker_end,
     })
 
     # ── Inject (include ...) into eww.yuck ──────────────────────────────────
-    yuck_marker   = "; linux-ricing"
+    yuck_marker     = "; linux-ricing"
+    yuck_marker_end = "; end-linux-ricing"
     include_line  = '(include "./hermes-theme.yuck")'
     yuck_injected = False
     if eww_yuck.exists():
         yuck_text = eww_yuck.read_text(encoding="utf-8")
         if yuck_marker not in yuck_text:
             eww_yuck.write_text(
-                f"{yuck_marker}\n{include_line}\n\n" + yuck_text, encoding="utf-8"
+                f"{yuck_marker}\n{include_line}\n{yuck_marker_end}\n\n" + yuck_text,
+                encoding="utf-8",
             )
             yuck_injected = True
     else:
-        eww_yuck.write_text(f"{yuck_marker}\n{include_line}\n", encoding="utf-8")
+        eww_yuck.write_text(
+            f"{yuck_marker}\n{include_line}\n{yuck_marker_end}\n", encoding="utf-8"
+        )
         yuck_injected = True
     changes.append({
         "app": "eww", "action": "inject_include", "path": str(eww_yuck),
-        "injected": yuck_injected, "import_line": include_line, "marker": yuck_marker,
+        "injected": yuck_injected, "import_line": include_line,
+        "marker": yuck_marker, "marker_end": yuck_marker_end,
     })
 
     # ── Start/reload/open EWW windows so the widget chrome is actually visible ─

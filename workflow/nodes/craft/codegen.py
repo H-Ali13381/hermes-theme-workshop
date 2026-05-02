@@ -13,7 +13,7 @@ import json
 import re
 
 from ...config import get_llm
-from ...logging import get_logger
+from ...log_setup import get_logger
 
 
 _SYSTEM = """\

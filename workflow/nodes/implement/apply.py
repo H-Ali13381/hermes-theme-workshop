@@ -4,7 +4,7 @@ from __future__ import annotations
 import sys
 
 from ...config import SCRIPTS_DIR
-from ...logging import get_logger
+from ...log_setup import get_logger
 
 # Ensure scripts/ is importable regardless of cwd — same bootstrap ricer.py uses.
 if str(SCRIPTS_DIR) not in sys.path:
@@ -32,7 +32,7 @@ def apply_element(element: str, design: dict, session_dir: str) -> dict:
         manifest = materialize(design, apps={materializer: apps[materializer]})
         return {"success": True, "manifest": manifest}
     except Exception as e:  # noqa: BLE001
-        get_logger("implement.apply").warning("materializer error: %s", e)
+        get_logger("implement.apply").exception("materializer error: %s", e)
         return {"success": False, "error": str(e)}
 
 

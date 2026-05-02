@@ -21,7 +21,7 @@ except ImportError:
     interrupt = None  # type: ignore[assignment]
 
 from ...config import SCORE_PASS_THRESHOLD, MAX_IMPLEMENT_RETRIES
-from ...logging import get_logger
+from ...log_setup import get_logger
 from ...session import append_item
 from ...state import RiceSessionState
 from .frameworks import get_reference, config_dir
@@ -142,7 +142,7 @@ def craft_node(state: RiceSessionState) -> dict:
             "  'accept' — accept and continue\n"
             "  'skip'   — skip this element\n"
             "  'retry'  — regenerate from scratch\n"
-            "  or describe specific changes"
+            "Anything else is treated as 'accept'."
         )
         if interrupt is not None:
             decision = interrupt({"step": 6, "type": "craft_gate", "element": element,

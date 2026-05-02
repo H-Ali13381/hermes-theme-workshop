@@ -18,11 +18,18 @@ from __future__ import annotations
 import colorsys
 import importlib.util
 import shutil
+import sys
 import tempfile
 import unittest
 from pathlib import Path
 
-SCRIPT_PATH = Path(__file__).parent.parent / "scripts" / "palette_extractor.py"
+_SCRIPTS = Path(__file__).parent.parent / "scripts"
+SCRIPT_PATH = _SCRIPTS / "palette_extractor.py"
+
+# palette_extractor.py imports `from core.palette_primitives ...` which only
+# resolves when scripts/ is the import root (ricer.py bootstrap prepends it).
+if str(_SCRIPTS) not in sys.path:
+    sys.path.insert(0, str(_SCRIPTS))
 
 
 def load_module():

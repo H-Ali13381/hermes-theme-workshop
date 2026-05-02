@@ -1352,6 +1352,118 @@
 
 ---
 
+### Comprehensive Audit Findings (2026-05-02)
+
+#### Correctness / Logic Bugs
+
+- [x] **[BUG] `workflow/graph.py`: `install → implement` edge bypasses `craft_node` for first element**
+  `builder.add_edge("install", "implement")` is unconditional. If `element_queue[0]` is a
+  craft element (`widgets:eww`, `widgets:quickshell`, `widgets:conky`, `bar:waybar`),
+  `implement_node` processes it through the materializer path, never entering `craft_node`.
+  The `is_craft_element` check only fires on the *subsequent* routing decision — too late.
+  **Fix:** Replace `add_edge("install", "implement")` with `add_conditional_edges("install",
+  after_install)` reusing `routing._next_node_for_queue`. Add `after_install` to
+  `routing.py`.
+
+- [x] **[BUG] `workflow/nodes/implement/__init__.py` + `craft/__init__.py`: free-form score-gate feedback silently becomes "accepted-deviation"**
+  Both gate prompts advertise `"or describe specific changes"` but any input that
+  isn't `"skip"` or `"retry"` falls into the `else` branch and becomes
+  `accepted-deviation`. The description is discarded; no re-apply happens.
+  **Fix:** Either remove the misleading prompt line, or treat unrecognized non-empty text
+  as `retry` and inject the feedback string into `write_spec` / `generate_files` so the
+  next attempt incorporates the user's instructions.
+
+- [x] **[BUG] `scripts/ricer_undo.py`: `undo()` marks manifest `undone=True` on partial failure**
+  Lines 694-696 unconditionally set `manifest["undone"] = True`, even when `failed` is
+  non-empty. A subsequent `undo_session()` call silently skips the manifest as "already
+  undone", making partial failures unrecoverable via normal means.
+  **Fix:** Only set `undone=True` when `not failed`. When `failed` is non-empty, set
+  `partial=True` (and keep `undone` absent or False) so re-runs can retry the failed entries.
+
+- [x] **[BUG] `scripts/core/backup.py`: `_remove_injected_block` removes a fixed two lines, fragile for multi-line injections**
+  The function assumes one marker line + one directive line per injection. If a materializer
+  ever injects a multi-line block, cleanup leaves orphan lines. No end-marker exists to
+  delimit the block boundary.
+  **Fix:** Adopt a start/end marker pair: `# hermes:start:<id>` / `# hermes:end:<id>`.
+  Remove all lines between (and including) the pair. Update all materializer inject sites.
+
+- [x] **[BUG] `scripts/capture_apply.py`: JS code injection in `raise_window_by_title`**
+  `title_substring` is interpolated directly into a KWin JS string via f-string. A title
+  containing `"` or `\` corrupts or breaks the script; adversarial input could execute
+  arbitrary KWin JS.
+  **Fix:** Replace `"{title_substring}"` with `{json.dumps(title_substring)}` (add
+  `import json` if needed).
+
+- [x] **[BUG] `workflow/nodes/refine.py`: recipe silently defaults to `"kde"` when `device_profile` is missing**
+  `recipe = profile.get("desktop_recipe", "kde")` with an empty/missing profile causes
+  the workflow to generate a KDE design on a non-KDE machine on checkpoint resume.
+  **Fix:** When `device_profile` is absent or `desktop_recipe` is unset, log a clear
+  warning and route to END rather than guessing.
+
+- [x] **[BUG] `workflow/nodes/plan.py`: `_get_html_path` collision across concurrent sessions**
+  When `session_dir` is empty, `plan.html` is written to the fixed path
+  `Path(tempfile.gettempdir()) / "linux-ricing-plan.html"`. Two simultaneous sessions
+  clobber each other's preview.
+  **Fix:** Include the session thread_id or a random suffix to make the path unique, or
+  create the file via `tempfile.mkstemp`.
+
+#### Hardening / Robustness
+
+- [x] **[QUALITY] `scripts/core/process.py`: `run_cmd` default `timeout=5` too short**
+  A 5-second default budget is tight for `kwriteconfig6` on cold boots, `plasma-apply-*`
+  on slow KDE sessions, and `gsettings set` under heavy load. Call sites that forget an
+  explicit timeout will fail spuriously.
+  **Fix:** Bump default to `timeout=15`, or remove the default and require all callers to
+  pass an explicit value (grep for bare `run_cmd(` to audit).
+
+- [x] **[QUALITY] `workflow/nodes/install/resolver.py`: `_try_arch` tries `pacman` before `yay` for AUR-only packages**
+  Known AUR packages (`catppuccin-cursors-git`, `tela-icon-theme-git`) will always fail
+  `pacman -S` before falling back to `yay`. This adds a guaranteed extra subprocess
+  per package install.
+  **Fix:** When `yay` is available, try it first. Or maintain a set of known-AUR package
+  prefixes and skip pacman for those.
+
+- [x] **[BUG] `scripts/ricer_undo.py`: hyprpaper re-launch races against IPC socket cleanup**
+  `_undo_wallpaper` runs `pkill -x hyprpaper` then immediately launches a new
+  `subprocess.Popen(["hyprpaper"])`. The new instance can fail to bind its socket if the
+  old process hasn't fully exited.
+  **Fix:** After `pkill`, poll `$XDG_RUNTIME_DIR/hypr/hyprpaper.lock` (or equivalent)
+  with a short timeout before re-launching.
+
+- [x] **[BUG] `scripts/ricer_undo.py`: `_restart_plasmashell` does not verify the relaunch succeeded**
+  `subprocess.Popen(["plasmashell"])` is called but `proc.poll()` is never checked.
+  If plasmashell crashes immediately (common after major theme changes), the user is
+  left with no panel and no error in the undo report.
+  **Fix:** Sleep 1s after `Popen`, call `proc.poll()`, and if it has already exited,
+  append to `failed` with the return code.
+
+#### Code Quality / Maintainability
+
+- [x] **[QUALITY] `scripts/ricer_undo.py`: KDE app set hardcoded in `undo_session`**
+  `kde_apps = {"kde", "kvantum", "plasma_theme", "cursor", "icon_theme", "kde_lockscreen", "lnf"}`
+  duplicates the keys of `_APP_UNDO_HANDLERS` minus `eww`/`hyprland`. They can drift.
+  **Fix:** Derive: `_KDE_APPS = set(_APP_UNDO_HANDLERS) - {"eww", "hyprland", "wallpaper"}`
+  as a module-level constant and use it in `undo_session`.
+
+- [x] **[QUALITY] `workflow/nodes/implement/apply.py`: `apply_element` swallows exception without full traceback**
+  `except Exception as e: return {"success": False, "error": str(e)}` discards the stack.
+  When a materializer crashes, `workflow.log` shows no traceback.
+  **Fix:** Add `log.exception("materializer error")` before the return (or alongside the
+  existing `log.warning`).
+
+- [x] **[QUALITY] `workflow/nodes/plan.py`: loop_counts reset duplicated in `_dispatch_feedback`**
+  The `"refine"` branch resets `plan` and `refine`; the `"explore"` branch resets all
+  three. Extract `_reset_counts(loop_counts, *names) -> dict` helper to remove
+  the repetition and make future resets one-liners.
+
+- [x] **[QUALITY] `workflow/config.py` + `workflow/validators.py`: no guard against new recipe missing from `RECIPE_REQUIRED_KEYS`**
+  Adding a recipe to `SUPPORTED_DESKTOP_RECIPES` without a matching entry in
+  `RECIPE_REQUIRED_KEYS` causes a `KeyError` at runtime, not import time.
+  **Fix:** Add `assert SUPPORTED_DESKTOP_RECIPES <= set(RECIPE_REQUIRED_KEYS)` at
+  module import in `config.py`, or use `.get(recipe, [])` with a loud warning.
+
+---
+
 ### Rollback / Undo Hardening Backlog -- 2026-04-30
 
 #### Non-File State Not Fully Restored

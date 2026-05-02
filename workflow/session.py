@@ -9,7 +9,7 @@ import re
 import sys
 from pathlib import Path
 
-from .logging import get_logger
+from .log_setup import get_logger
 
 # Single source of truth — also used by scripts/session_manager.py.
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts"))

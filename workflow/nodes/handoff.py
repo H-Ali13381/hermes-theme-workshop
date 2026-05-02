@@ -9,7 +9,7 @@ from pathlib import Path
 from langchain_core.messages import HumanMessage, SystemMessage
 
 from ..config import get_llm
-from ..logging import get_logger
+from ..log_setup import get_logger
 from ..session import mark_complete
 from ..state import RiceSessionState
 

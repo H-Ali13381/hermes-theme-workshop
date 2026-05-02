@@ -7,7 +7,7 @@ from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 from langgraph.types import interrupt
 
 from ..config import get_llm
-from ..logging import get_logger, truncate_for_log
+from ..log_setup import get_logger, truncate_for_log
 from ..state import RiceSessionState
 
 DIRECTION_SENTINEL = "<<DIRECTION_CONFIRMED>>"

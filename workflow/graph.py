@@ -17,7 +17,8 @@ from .nodes import (
     craft_node,
 )
 from .routing import (
-    after_audit, after_explore, after_refine, after_plan, after_implement, after_craft,
+    after_audit, after_explore, after_refine, after_plan,
+    after_install, after_implement, after_craft,
 )
 
 
@@ -62,7 +63,7 @@ def build_graph(checkpointer: SqliteSaver):
     builder.add_conditional_edges("refine",    after_refine)
     builder.add_conditional_edges("plan",      after_plan)
     builder.add_edge("baseline", "install")
-    builder.add_edge("install",  "implement")
+    builder.add_conditional_edges("install",   after_install)
     builder.add_conditional_edges("implement", after_implement)
     builder.add_conditional_edges("craft",     after_craft)
     builder.add_edge("cleanup",  "handoff")

@@ -68,18 +68,25 @@ window#waybar {{
     main_style = waybar_dir / "style.css"
     import_line = f'@import "{style_path}";'
     hermes_marker = "/* linux-ricing */"
+    hermes_marker_end = "/* end-linux-ricing */"
     injected = False
     if main_style.exists():
         css_text = main_style.read_text(encoding="utf-8")
         if hermes_marker not in css_text:
-            main_style.write_text(f"{hermes_marker}\n{import_line}\n\n" + css_text, encoding="utf-8")
+            main_style.write_text(
+                f"{hermes_marker}\n{import_line}\n{hermes_marker_end}\n\n" + css_text,
+                encoding="utf-8",
+            )
             injected = True
     else:
-        main_style.write_text(f"{hermes_marker}\n{import_line}\n", encoding="utf-8")
+        main_style.write_text(
+            f"{hermes_marker}\n{import_line}\n{hermes_marker_end}\n", encoding="utf-8"
+        )
         injected = True
 
     changes.append({"app": "waybar", "action": "inject_include", "path": str(main_style),
-                    "injected": injected, "import_line": import_line, "marker": hermes_marker})
+                    "injected": injected, "import_line": import_line,
+                    "marker": hermes_marker, "marker_end": hermes_marker_end})
     run_cmd(["pkill", "-SIGUSR2", "waybar"], timeout=3)
     return changes
 
@@ -114,20 +121,26 @@ def materialize_polybar(design: dict, backup_ts: str, dry_run: bool = False) -> 
     changes.append({"app": "polybar", "action": "write", "path": str(colors_path), "backup": colors_backup})
 
     hermes_marker = "; linux-ricing"
+    hermes_marker_end = "; end-linux-ricing"
     include_line = f"include-file = {colors_path}"
     injected = False
     if config_path.exists():
         config_text = config_path.read_text(encoding="utf-8")
         if "hermes-colors.ini" not in config_text:
-            config_path.write_text(f"{hermes_marker}\n{include_line}\n\n" + config_text, encoding="utf-8")
+            config_path.write_text(
+                f"{hermes_marker}\n{include_line}\n{hermes_marker_end}\n\n" + config_text,
+                encoding="utf-8",
+            )
             injected = True
     else:
         config_path.write_text(
-            f"{hermes_marker}\n{include_line}\n\n; Add your [bar/...] and [module/...] configs below\n",
-            encoding="utf-8"
+            f"{hermes_marker}\n{include_line}\n{hermes_marker_end}\n\n"
+            "; Add your [bar/...] and [module/...] configs below\n",
+            encoding="utf-8",
         )
         injected = True
 
     changes.append({"app": "polybar", "action": "inject_include", "path": str(config_path),
-                    "backup": config_backup, "injected": injected, "marker": hermes_marker})
+                    "backup": config_backup, "injected": injected,
+                    "marker": hermes_marker, "marker_end": hermes_marker_end})
     return changes

@@ -55,20 +55,26 @@ def materialize_dunst(design: dict, backup_ts: str, dry_run: bool = False) -> li
 
     include_line = f"include = {fragment_path}"
     hermes_marker = "# linux-ricing"
+    hermes_marker_end = "# end-linux-ricing"
     injected = False
     if dunstrc.exists():
         dunstrc_text = dunstrc.read_text(encoding="utf-8")
         if str(fragment_path) not in dunstrc_text:
             if "[global]" in dunstrc_text:
-                dunstrc_text = dunstrc_text.replace("[global]", f"{hermes_marker}\n{include_line}\n\n[global]", 1)
+                dunstrc_text = dunstrc_text.replace(
+                    "[global]",
+                    f"{hermes_marker}\n{include_line}\n{hermes_marker_end}\n\n[global]",
+                    1,
+                )
             else:
-                dunstrc_text += f"\n{hermes_marker}\n{include_line}\n"
+                dunstrc_text += f"\n{hermes_marker}\n{include_line}\n{hermes_marker_end}\n"
             dunstrc.write_text(dunstrc_text, encoding="utf-8")
             injected = True
 
     changes.append({"app": "dunst", "action": "inject_include", "path": str(dunstrc),
                     "backup": dunstrc_backup, "injected": injected,
-                    "include_line": include_line, "marker": hermes_marker})
+                    "include_line": include_line,
+                    "marker": hermes_marker, "marker_end": hermes_marker_end})
     run_cmd(["pkill", "-USR1", "dunst"], timeout=3)
     return changes
 

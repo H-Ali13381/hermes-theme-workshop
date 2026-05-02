@@ -14,6 +14,7 @@ from __future__ import annotations
 
 # ── stdlib ───────────────────────────────────────────────────────────────────
 import json
+import os
 import shutil
 import subprocess
 import time
@@ -52,18 +53,27 @@ def _restart_plasmashell(restored: list, failed: list, skipped: list) -> None:
     run_cmd(["killall", "plasmashell"], timeout=5)
     time.sleep(1)
 
-    # Relaunch detached so it outlives this process
+    # Relaunch detached so it outlives this process; poll briefly to catch an
+    # immediate crash (happens after major theme changes on some KDE builds).
     try:
-        subprocess.Popen(
+        proc = subprocess.Popen(
             ["plasmashell"],
             stdin=subprocess.DEVNULL,
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
             start_new_session=True,
         )
-        restored.append({"app": "plasmashell",
-                         "action": "restarted",
-                         "note": "flushed in-memory color/icon state"})
+        time.sleep(1.5)
+        rc = proc.poll()
+        if rc is not None:
+            # Crashed immediately
+            failed.append({"app": "plasmashell",
+                           "action": "restart",
+                           "error": f"plasmashell exited immediately with code {rc}"})
+        else:
+            restored.append({"app": "plasmashell",
+                             "action": "restarted",
+                             "note": "flushed in-memory color/icon state"})
     except OSError as e:
         failed.append({"app": "plasmashell",
                        "action": "restart",
@@ -189,8 +199,9 @@ def _undo_injections(change: dict, restored: list, skipped: list) -> None:
         return
     app = change.get("app", "unknown")
     path, marker = change.get("path"), change.get("marker")
+    marker_end = change.get("marker_end")  # None for old-format manifests
     if path and marker:
-        if _remove_injected_block(Path(path), marker):
+        if _remove_injected_block(Path(path), marker, marker_end=marker_end):
             restored.append({"app": app, "action": "removed_injection", "path": path})
         else:
             skipped.append({"app": app, "path": path,
@@ -601,7 +612,15 @@ def _undo_wallpaper(change: dict, restored: list, failed: list, skipped: list) -
                             "note": f"binary not available for method {method!r}: {binary}"})
     elif method == "hyprpaper-config-rewrite":
         run_cmd(["pkill", "-x", "hyprpaper"])
-        time.sleep(1)
+        # Poll until the hyprpaper socket is gone (max ~2 s) to avoid a bind
+        # race where the new instance tries to create its socket before the
+        # old one finishes cleanup.
+        runtime_dir = os.environ.get("XDG_RUNTIME_DIR", f"/run/user/{os.getuid()}")
+        socket_path = Path(runtime_dir) / "hypr" / "hyprpaper.lock"
+        for _ in range(20):
+            if not socket_path.exists():
+                break
+            time.sleep(0.1)
         if cmd_exists("hyprpaper"):
             subprocess.Popen(["hyprpaper"], stdin=subprocess.DEVNULL,
                              stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
@@ -637,6 +656,12 @@ _APP_UNDO_HANDLERS: dict[str, _UndoHandler] = {
     "eww":              _undo_eww,
     "hyprland":         _undo_hyprland,
 }
+
+# Apps whose undo handler performs KDE-specific live-state cleanup (colorscheme
+# reload, icon reload, etc.). Derived from the handler registry so it never drifts
+# when new KDE handlers are added. Non-KDE apps are excluded by name.
+_NON_KDE_APPS: frozenset[str] = frozenset({"eww", "hyprland", "wallpaper"})
+_KDE_APPS: frozenset[str] = frozenset(_APP_UNDO_HANDLERS) - _NON_KDE_APPS
 
 
 # ---------------------------------------------------------------------------
@@ -691,8 +716,14 @@ def undo(manifest_path: Path | None = None,
         if app_handler:
             app_handler(change, restored, failed, skipped)
 
-    manifest["undone"]    = True
-    manifest["undone_at"] = datetime.now(timezone.utc).isoformat()
+    # Mark fully undone only when nothing failed so a re-run can retry failures.
+    # Partial results are flagged with partial=True; undone stays absent/False.
+    if not failed:
+        manifest["undone"]    = True
+        manifest["undone_at"] = datetime.now(timezone.utc).isoformat()
+    else:
+        manifest["partial"]    = True
+        manifest["partial_at"] = datetime.now(timezone.utc).isoformat()
     manifest_path.write_text(json.dumps(manifest, indent=2), encoding="utf-8")
 
     return {
@@ -794,10 +825,8 @@ def undo_session(all_history: bool = False,
         total_restored += len(result.get("restored", []))
         total_failed   += len(result.get("failed", []))
         # Detect whether any KDE-family element was touched in this manifest
-        kde_apps = {"kde", "kvantum", "plasma_theme", "cursor", "icon_theme",
-                    "kde_lockscreen", "lnf"}
         for entry in result.get("restored", []) + result.get("failed", []):
-            if entry.get("app") in kde_apps:
+            if entry.get("app") in _KDE_APPS:
                 kde_touched = True
                 break
 
@@ -854,6 +883,7 @@ def simulate_undo_session(all_history: bool = False) -> dict:
             "timestamp":  data.get("timestamp", "unknown"),
             "backup_dir": data.get("backup_dir", "unknown"),
             "undone":     bool(data.get("undone")),
+            "partial":    bool(data.get("partial")),
             "dry_run":    bool(data.get("dry_run")),
             "apps":       sorted({c.get("app", "?")
                                   for c in data.get("changes", [])}),
@@ -864,6 +894,15 @@ def simulate_undo_session(all_history: bool = False) -> dict:
         elif data.get("undone"):
             entry["status"] = "skipped"
             entry["reason"] = "already undone"
+        elif data.get("partial"):
+            entry["status"] = "partial"
+            entry["reason"] = f"partial undo at {data.get('partial_at', '?')} — retry to finish"
+            entry["change_descriptions"] = [
+                line
+                for change in data.get("changes", [])
+                if change.get("action") != "error"
+                for line in _describe_change(change)
+            ]
         else:
             entry["status"] = "would_undo"
             entry["change_descriptions"] = [

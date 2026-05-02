@@ -5,7 +5,7 @@ import shutil
 import subprocess
 from pathlib import Path
 
-from ...logging import get_logger
+from ...log_setup import get_logger
 
 _KVANTUM_PACKAGES = {
     "catppuccin": "kvantum-theme-catppuccin",
@@ -19,6 +19,20 @@ _ICON_PACKAGES = {
     "papirus": "papirus-icon-theme",
     "tela":    "tela-icon-theme-git",
 }
+
+# Packages that only live in the AUR — pacman -S will always fail for these,
+# so on Arch we skip the pacman attempt entirely and go straight to yay.
+# Any package matched against _CURSOR_PACKAGES / _ICON_PACKAGES with a -git or
+# -bin suffix is also treated as AUR-only by _is_aur_only().
+_AUR_ONLY_PACKAGES = frozenset({
+    "catppuccin-cursors-git",
+    "tela-icon-theme-git",
+})
+
+
+def _is_aur_only(pkg: str) -> bool:
+    """Heuristic: treat -git/-bin suffixes and the explicit allow-list as AUR-only."""
+    return pkg in _AUR_ONLY_PACKAGES or pkg.endswith(("-git", "-bin"))
 
 
 def resolve_packages(design: dict, profile: dict) -> list[str]:
@@ -124,8 +138,11 @@ def _sudo_run(cmd: list[str], sudo_password: str) -> bool:
 
 
 def _try_arch(pkg: str, sudo_password: str) -> bool:
-    if _sudo_run(["pacman", "-S", "--noconfirm", "--needed", pkg], sudo_password):
-        return True
+    # Skip the pacman attempt for known-AUR packages — it would always fail
+    # and adds a guaranteed extra subprocess per package install.
+    if not _is_aur_only(pkg):
+        if _sudo_run(["pacman", "-S", "--noconfirm", "--needed", pkg], sudo_password):
+            return True
     if shutil.which("yay"):
         try:
             return subprocess.run(

@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import os
 import re
 import tempfile
 from pathlib import Path
@@ -17,7 +18,7 @@ from ..config import (
     PLAN_FEEDBACK_SUMMARIZER_PROMPT,
     PLAN_FEEDBACK_VERBATIM_TURNS,
 )
-from ..logging import get_logger
+from ..log_setup import get_logger
 from ..session import append_step
 from ..state import RiceSessionState
 
@@ -293,6 +294,14 @@ def _make_feedback_message(text: str) -> HumanMessage:
     return HumanMessage(content=f"{PLAN_FEEDBACK_MARKER}{text}")
 
 
+def _reset_counts(loop_counts: dict, *names: str) -> dict:
+    """Return a copy of loop_counts with the named keys zeroed."""
+    result = dict(loop_counts)
+    for name in names:
+        result[name] = 0
+    return result
+
+
 def _dispatch_feedback(
     *,
     label: str,
@@ -329,9 +338,7 @@ def _dispatch_feedback(
     if label == "refine":
         # Reset plan + refine loop counts so the backward jump and subsequent
         # re-render aren't aborted by counts accumulated during the initial pass.
-        new_counts = dict(loop_counts)
-        new_counts["plan"] = 0
-        new_counts["refine"] = 0
+        new_counts = _reset_counts(loop_counts, "plan", "refine")
         seed = (
             "The user reviewed the rendered preview and rejected it.\n\n"
             f"User feedback:\n{feedback_text}\n\n"
@@ -352,10 +359,7 @@ def _dispatch_feedback(
     # label == "explore"
     # Reset all three so revise → finalize → refine → plan can run cleanly
     # regardless of how many turns the initial pass consumed.
-    new_counts = dict(loop_counts)
-    new_counts["plan"] = 0
-    new_counts["refine"] = 0
-    new_counts["explore"] = 0
+    new_counts = _reset_counts(loop_counts, "plan", "refine", "explore")
     intake = dict(explore_intake)
     intake["stage"] = "revise"
     intake["prior_direction"] = prior_design if isinstance(prior_design, dict) else {}
@@ -372,9 +376,10 @@ def _dispatch_feedback(
 def _get_html_path(session_dir: str) -> Path:
     if session_dir:
         return Path(session_dir) / "plan.html"
-    # No session directory yet — write to the OS temp dir so we don't pollute
-    # ~/.config/rice-sessions with a stray file.
-    return Path(tempfile.gettempdir()) / "linux-ricing-plan.html"
+    # No session directory yet — write to the OS temp dir keyed on PID so two
+    # concurrent workflow runs (each its own process) don't clobber each
+    # other's preview. Stable within a process so plan_node re-entries reuse it.
+    return Path(tempfile.gettempdir()) / f"linux-ricing-plan-{os.getpid()}.html"
 
 
 def _extract_html(content: str) -> str:

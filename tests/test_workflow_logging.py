@@ -8,7 +8,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from workflow.logging import _SESSION_HANDLERS, get_logger, truncate_for_log
+from workflow.log_setup import _SESSION_HANDLERS, get_logger, truncate_for_log
 
 
 class TruncateForLogTests(unittest.TestCase):

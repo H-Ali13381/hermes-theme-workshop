@@ -4,7 +4,7 @@ from __future__ import annotations
 import os
 
 from ...config import UNSUPPORTED_DESKTOP_MESSAGE
-from ...logging import get_logger
+from ...log_setup import get_logger
 from ...state import RiceSessionState
 from .detectors import (
     detect_wm, detect_session_type, detect_chassis, detect_screens, detect_gpu,

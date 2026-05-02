@@ -12,7 +12,7 @@ from __future__ import annotations
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
-from ...logging import get_logger
+from ...log_setup import get_logger
 from .frameworks import get_reference, config_dir
 
 

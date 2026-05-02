@@ -83,6 +83,7 @@ color15 {adjust_lightness(palette['foreground'], 1.25)}
 
     include_line = "include theme.conf"
     hermes_marker = "# linux-ricing"
+    hermes_marker_end = "# end-linux-ricing"
     chrome_lines = _kitty_chrome_lines(design)
     removed_palette_lines = 0
     if main_config.exists():
@@ -93,7 +94,8 @@ color15 {adjust_lightness(palette['foreground'], 1.25)}
                 if cleaned and cleaned[-1].strip() == hermes_marker:
                     cleaned.pop()
                 continue
-            if stripped in {"# linux-ricing chrome contract", "hide_window_decorations yes"}:
+            if stripped in {"# linux-ricing chrome contract", "hide_window_decorations yes",
+                            hermes_marker_end}:
                 continue
             if stripped.startswith("window_padding_width "):
                 continue
@@ -102,16 +104,23 @@ color15 {adjust_lightness(palette['foreground'], 1.25)}
                 continue
             cleaned.append(ln)
         chrome_block = "\n".join(chrome_lines)
-        new_text = "\n".join(cleaned).rstrip() + f"\n\n{hermes_marker}\n{include_line}\n{chrome_block}\n"
+        new_text = (
+            "\n".join(cleaned).rstrip()
+            + f"\n\n{hermes_marker}\n{include_line}\n{chrome_block}\n{hermes_marker_end}\n"
+        )
         main_config.write_text(new_text, encoding="utf-8")
     else:
         chrome_block = "\n".join(chrome_lines)
-        main_config.write_text(f"{hermes_marker}\n{include_line}\n{chrome_block}\n", encoding="utf-8")
+        main_config.write_text(
+            f"{hermes_marker}\n{include_line}\n{chrome_block}\n{hermes_marker_end}\n",
+            encoding="utf-8",
+        )
     include_injected = True
 
     changes.append({"app": "kitty", "action": "inject_include", "path": str(main_config),
                     "backup": main_backup, "injected": include_injected,
                     "include_line": include_line, "marker": hermes_marker,
+                    "marker_end": hermes_marker_end,
                     "removed_palette_lines": removed_palette_lines})
     return changes
 
@@ -286,17 +295,24 @@ def materialize_alacritty(design: dict, backup_ts: str, dry_run: bool = False) -
 
     import_line = 'import = ["~/.config/alacritty/colors.toml"]'
     hermes_marker = "# linux-ricing"
+    hermes_marker_end = "# end-linux-ricing"
     injected = False
     if toml_config.exists():
         toml_text = toml_config.read_text(encoding="utf-8")
         if "colors.toml" not in toml_text:
-            toml_config.write_text(f"{hermes_marker}\n{import_line}\n\n" + toml_text, encoding="utf-8")
+            toml_config.write_text(
+                f"{hermes_marker}\n{import_line}\n{hermes_marker_end}\n\n" + toml_text,
+                encoding="utf-8",
+            )
             injected = True
     else:
-        toml_config.write_text(f"{hermes_marker}\n{import_line}\n", encoding="utf-8")
+        toml_config.write_text(
+            f"{hermes_marker}\n{import_line}\n{hermes_marker_end}\n", encoding="utf-8"
+        )
         injected = True
 
     changes.append({"app": "alacritty", "action": "inject_import", "path": str(toml_config),
-                    "backup": toml_backup, "injected": injected, "marker": hermes_marker})
+                    "backup": toml_backup, "injected": injected,
+                    "marker": hermes_marker, "marker_end": hermes_marker_end})
     return changes
 

@@ -34,10 +34,10 @@ RECIPE_PROMPT_FIELDS = {
         '- cursor_theme: e.g. "default"',
         '- icon_theme: e.g. "Papirus-Dark"',
         '- gtk_theme: e.g. "Adwaita-dark"',
-        '- originality_strategy: object with vision_alignment and at least 3 non_default_moves that are specific to the user brief',
+        '- originality_strategy: object with REQUIRED keys "vision_alignment" (string explaining how the design serves the user brief) and "non_default_moves" (list of at least 3 strings, each a SPECIFIC visual decision tied to the brief)',
         '- chrome_strategy: object with REQUIRED keys "method" (string, e.g. "kvantum + eww_frame") and "implementation_targets" (list of strings like ["widgets:eww", "terminal:kitty"]); OPTIONAL keys "rounded_corners" (boolean true/false, or object {"enabled": true, "radius_px": <int>}), "custom_titlebars", "terminal_frames", "panel_chrome", "ornamental_borders" (descriptive strings)',
         '- panel_layout: optional object if the concept changes the panel/dock/toolbar; include mode, placement, shape, and visible controls',
-        '- widget_layout: optional list of custom widgets/overlays only when they serve the user vision; each item needs name, position, data/source, and visual metaphor',
+        '- widget_layout: optional list of custom widgets/overlays only when they serve the user vision; each item should describe a name, a position, the live data it shows, and its visual concept',
     ],
     "gnome": [
         '- gtk_theme: e.g. "Adwaita-dark"',
@@ -51,6 +51,12 @@ RECIPE_PROMPT_FIELDS = {
     ],
 }
 SUPPORTED_DESKTOP_RECIPES = frozenset(RECIPE_REQUIRED_KEYS)
+# Catch configuration drift at import time: every recipe must have both a keys
+# list and a prompt-fields list so refine.build_system_prompt never KeyErrors.
+assert set(RECIPE_REQUIRED_KEYS) == set(RECIPE_PROMPT_FIELDS), (
+    f"RECIPE_PROMPT_FIELDS is missing recipes: "
+    f"{set(RECIPE_REQUIRED_KEYS) - set(RECIPE_PROMPT_FIELDS)}"
+)
 UNSUPPORTED_DESKTOP_MESSAGE = (
     "Unsupported desktop environment for linux-ricing workflow. "
     "Currently supported recipes: KDE Plasma, GNOME, and Hyprland. "
@@ -116,6 +122,100 @@ Output ONLY the bullets, no preamble.
 """
 
 
+# ── Step 3 — Design creativity judge ─────────────────────────────────────────
+# Semantic counterpart to validators._kde_creativity_complete (which only
+# checks structural shape).  Run AFTER structural validation passes.
+DESIGN_CREATIVITY_JUDGE_PROMPT = """\
+You are auditing a Linux desktop design_system JSON against the user's brief.
+Structural validity (required keys, palette hex, types) has already been
+verified. Judge ONLY these semantic criteria:
+
+1. originality: at least 3 of the non_default_moves are SPECIFIC visual
+   decisions tied to the brief (not generic phrases like "modern look",
+   "clean panel", "polished defaults"). A move that names what it replaces
+   ("replace the default Plasma toolbar with a vertical stave") is fine AS
+   LONG AS the replacement is specified concretely.
+2. chrome_strategy.method explains HOW the chrome is built; implementation
+   _targets names which subsystems carry it. Reject empty/placeholder values.
+3. widget_layout (if present): each widget must convey a real DATA SOURCE
+   (what live information feeds it) and a real VISUAL CONCEPT (what it looks
+   like). Field names may vary across responses (e.g. "data" / "data_source"
+   / "feed"; "visual" / "visual_metaphor" / "appearance") — judge by content
+   meaning, NOT by key spelling.
+4. panel_layout (if present): not a verbatim Plasma/Breeze stock toolbar.
+   "Stock" means the design proposes no specific change; merely *naming*
+   the default it replaces is fine.
+5. The design coheres with the brief — not a palette swap with default
+   chrome.
+
+Brief (creative direction):
+{direction}
+
+Design:
+{design}
+
+Output ONLY a JSON object on a single line, no prose, no fences:
+{{"pass": <true|false>, "fail_reasons": [<short sentence per failure>]}}
+If you cannot decide confidently, output {{"pass": true, "fail_reasons": []}}
+to fail open — a human will judge the rendered preview next.
+"""
+
+
+def judge_design_creativity(design: dict, direction: dict) -> tuple[bool, list[str]]:
+    """LLM gate that semantically audits a structurally-valid design.
+
+    Returns ``(True, [])`` on pass or fail-open (parse errors, network blips).
+    Returns ``(False, reasons)`` only when the judge confidently rejects.
+    """
+    import json as _json  # noqa: PLC0415
+
+    from .log_setup import get_logger  # noqa: PLC0415
+
+    log = get_logger("config.judge")
+    try:
+        llm = get_llm(temperature=0)
+    except Exception as e:
+        log.warning("creativity judge unavailable (%s); failing open", e)
+        return True, []
+
+    prompt = DESIGN_CREATIVITY_JUDGE_PROMPT.format(
+        direction=_json.dumps(direction, indent=2),
+        design=_json.dumps(design, indent=2),
+    )
+    try:
+        response = llm.invoke(prompt)
+    except Exception as e:
+        log.warning("creativity judge call failed (%s); failing open", e)
+        return True, []
+
+    raw = (getattr(response, "content", None) or "").strip()
+    # Strip markdown fences in case the model wrapped despite instructions.
+    if raw.startswith("```"):
+        raw = raw.strip("`")
+        if raw.lower().startswith("json"):
+            raw = raw[4:].lstrip()
+    start = raw.find("{")
+    end = raw.rfind("}")
+    if start < 0 or end < 0 or end <= start:
+        log.warning("creativity judge returned non-JSON (%r); failing open", raw[:120])
+        return True, []
+    try:
+        verdict = _json.loads(raw[start:end + 1])
+    except Exception as e:
+        log.warning("creativity judge JSON parse error (%s); failing open", e)
+        return True, []
+
+    if not isinstance(verdict, dict):
+        return True, []
+    if verdict.get("pass") is True:
+        return True, []
+    reasons = verdict.get("fail_reasons") or []
+    if not isinstance(reasons, list) or not reasons:
+        # Fail with no actionable reasons → treat as ambiguous, fail open.
+        return True, []
+    return False, [str(r) for r in reasons]
+
+
 def _parse_dotenv(path: Path) -> dict:
     result = {}
     try:
@@ -125,7 +225,7 @@ def _parse_dotenv(path: Path) -> dict:
                 k, _, v = line.partition("=")
                 result[k.strip()] = v.strip()
     except Exception as e:
-        from .logging import get_logger
+        from .log_setup import get_logger
         get_logger("config").warning("could not parse %s: %s", path, e)
     return result
 
@@ -150,7 +250,7 @@ def _load_hermes_config() -> dict:
         import yaml
         cfg = yaml.safe_load(config_path.read_text(encoding="utf-8"))
     except Exception as e:
-        from .logging import get_logger
+        from .log_setup import get_logger
         get_logger("config").warning("could not load %s: %s", config_path, e)
         return {}
 
@@ -222,13 +322,13 @@ def get_llm(temperature: float = 0.7, max_tokens: int | None = None):
     if is_anthropic_native:
         from langchain_anthropic import ChatAnthropic
         kwargs: dict = {"model": model, "temperature": temperature}
-        if max_tokens: kwargs["max_tokens"] = max_tokens
-        if api_key:    kwargs["api_key"]    = api_key
+        if max_tokens is not None: kwargs["max_tokens"] = max_tokens
+        if api_key:                kwargs["api_key"]    = api_key
         return ChatAnthropic(**kwargs)
 
     from langchain_openai import ChatOpenAI
     kwargs: dict = {"model": model, "temperature": temperature}
-    if base_url:   kwargs["base_url"]   = base_url
-    if api_key:    kwargs["api_key"]    = api_key
-    if max_tokens: kwargs["max_tokens"] = max_tokens
+    if base_url:               kwargs["base_url"]   = base_url
+    if api_key:                kwargs["api_key"]    = api_key
+    if max_tokens is not None: kwargs["max_tokens"] = max_tokens
     return ChatOpenAI(**kwargs)
