@@ -1,12 +1,27 @@
-# KDE Plasma — Custom Widgets (EWW & Plasmoids)
+# KDE Plasma — Custom Widgets (Quickshell default on Wayland; EWW & Plasmoids alternatives)
 
-> For EWW basics, the AI→widget pipeline, image slicing, and hover patterns, see [`shared/widgets.md`](../shared/widgets.md).
+> For framework selection, the AI→widget pipeline, image slicing, and hover patterns, see [`shared/widgets.md`](../shared/widgets.md).
 
-This document covers KDE-specific widget configuration — both EWW on KDE and native Plasmoid alternatives.
+**On KDE Wayland, Quickshell is the default custom-widget framework.** KWin supports
+`wlr-layer-shell` (Plasma 6+), so QML-based shells render natively, and QML matches Plasma's
+own UI toolkit — colorscheme tokens, fonts, and KCM dialogs share the same primitives. The
+skill's `craft` node generates Quickshell QML directly. See
+`workflow/nodes/craft/frameworks.py` for the framework registry.
+
+**On KDE X11, EWW is the default** (no layer-shell on X11; Quickshell can only do regular
+windowing there). **Plasmoids** (native QML/JS) remain the option when you want a widget
+that's deeply integrated with Plasma's containment / panel APIs rather than a free-floating
+shell surface.
+
+This document covers all three: §1 EWW on KDE Wayland (fallback), §2 EWW on KDE X11
+(default for X11), §3 Plasmoids (native alternative).
 
 ---
 
 ## 1. EWW on KDE Wayland
+
+> EWW is the **fallback** on KDE Wayland — used when the design explicitly requests
+> `widgets:eww` or when Quickshell isn't available. Default selection picks Quickshell.
 
 EWW works on KDE Wayland via GTK Layer Shell. Key considerations:
 
@@ -19,6 +34,11 @@ EWW windows anchored to the same edge as a Plasma panel will compete for space:
 - Anchor EWW to a different edge than Plasma panels
 - Hide the Plasma panel (see §4 below)
 - Use `exclusive: false` and ensure EWW stacking is `"overlay"` to render above
+
+> **The same panel-interference caveat applies to Quickshell** on KDE Wayland: a Quickshell
+> bar anchored to the edge of a Plasma panel doubles the exclusive zone. Set the QML window's
+> `exclusionMode` to `ExclusionMode.Ignore`, anchor to a different edge, or remove the Plasma
+> panel — same problem, same fixes.
 
 ### exclusive_zone interaction
 ```lisp

@@ -189,6 +189,31 @@ marker before injecting to avoid stacking multiple import lines on repeated runs
 
 ---
 
+## Custom Widgets (Quickshell / EWW)
+
+**Widget runs but renders nothing / wrong size / no input — `WAYLAND_DEBUG=1` first.**
+Layer-shell clients fail silently when the protocol negotiation goes wrong (missing anchor,
+zero size requested, surface configured before role). Run the widget as
+`WAYLAND_DEBUG=1 quickshell -c ./shell.qml` (or `WAYLAND_DEBUG=1 eww open <name>`) and
+read the dumped protocol log. The bug is almost always visible in the last 20 lines
+before the first error or the moment rendering should have started.
+
+**Doubled gap at a screen edge = two clients claiming exclusive zone.**
+Both waybar and a Quickshell/EWW bar anchored to the same edge with non-zero exclusive
+zone will each reserve space, producing a visible doubled strip. Either drop one of
+them, or set `exclusionMode: ExclusionMode.Ignore` (Quickshell) / `:exclusive false`
+(EWW) on the secondary window so it overlays without reserving space.
+
+**Widget frozen on stale data = frame callback isn't firing.**
+Both frameworks render only when their data source signals a change (Quickshell reactive
+bindings, EWW `defpoll` / `deflisten`). A widget that looks dead is usually one whose
+source isn't emitting. For Quickshell: confirm the `Process` / `Timer` / IPC service is
+actually producing output (`hyprctl -j ...` works in the terminal but not in the QML?
+check the spawned process's environment). For EWW: `eww state` lists current variable
+values; missing or stale entries point at the broken `defpoll`/`deflisten`.
+
+---
+
 ## Dunst / Notifications
 
 **`dunst` include directives require dunst >= 1.7.0.**

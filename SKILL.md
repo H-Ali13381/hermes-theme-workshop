@@ -76,7 +76,11 @@ The terminal tool's PTY mode cannot feed interactive stdin to the workflow — `
 
 Quick summary: write a small Python script that loads the graph from the SQLite checkpointer and calls `graph.stream(Command(resume=answer), config)` to resume from interrupts. Run it with the skill's venv activated and the usual `RICER_API_KEY`/`RICER_BASE_URL`/`RICER_MODEL` env vars.
 
+**Bridge script location:** Write to `/tmp/rice_bridge.py` at session start (disposable). Template is in `references/workflow-bridge-script.md`.
+
 **Important:** The bridge reference example uses placeholder model names — always check your actual model in `~/.hermes/config.yaml` under `providers.<provider>.model`. Pass the correct model via `RICER_MODEL`.
+
+**RICER_MODEL for this user:** `anthropic/claude-sonnet-4-6` (OpenRouter). Always use this unless the user specifies otherwise.
 
 **Sudo workaround:** When the bridge hits a `sudo_password` interrupt, feed `"skip"` to skip the package, then install it manually with `sudo pacman -S <pkg>` from the agent terminal (which CAN run sudo). Then resume the workflow via the bridge.
 
@@ -104,32 +108,22 @@ Do **not** broadcast terminal signals such as `pkill -SIGUSR1 kitty`; terminal
 configs apply on next launch unless a user explicitly asks for a targeted reload.
 Do **not** run raw `kwin_wayland --replace`.
 
-### Pitfall: kwin_wayland --replace Kills Plasmashell (Wayland)
-
-On KDE Wayland, running `kwin_wayland --replace` kills `plasmashell` as a side effect. The user loses their panel, taskbar, and desktop widgets immediately.
-
-**After any KWin restart, ALWAYS restart plasmashell within seconds:**
-```bash
-kwin_wayland --replace &
-sleep 2
-plasmashell &
-```
-
-Or better — avoid `kwin_wayland --replace` entirely. Cursor and color scheme changes take effect on next login. Tell the user to re-log rather than hot-swapping KWin.
-
-**If the user reports "desktop parts are gone":** plasmashell is dead. Restart it immediately with `plasmashell &` (background=true in terminal tool).
-
-### Pitfall: Cursor Theme Fallback
-
-Bibata-Modern-Classic is the recommended cursor theme but requires AUR installation (`yay -S bibata-cursor-theme-bin`). If the user doesn't want to install from AUR, Catppuccin cursor themes are often pre-installed on Arch-based systems with Catppuccin desktop setups. Check:
-```bash
-ls /usr/share/icons/ | grep -i catppuccin
-```
-The green variant (`catppuccin-macchiato-green-cursors`) pairs well with mossy/nature palettes.
+When the user asks to undo/revert/rollback the rice, check `scripts/ricer_undo.py`
+FIRST. If the session's manifest is intact, `python3 scripts/ricer.py undo-session`
+handles everything. Fall back to the baseline JSON procedure only when the manifest
+is missing or corrupt. See §Undoing / Rolling Back a Rice Session below.
 
 ### Pitfall: sudo in Agent Terminal
 
-The agent terminal CAN run sudo commands (unlike the bridge script which cannot handle sudo_password interrupts). If a package needs installation, try `sudo pacman -U <path>` or `sudo pacman -S <package>` directly — it may work depending on the session's credential state. The handoff document's claim that "user must run workflow directly for sudo step" applies only to the bridge script pattern, not to direct terminal commands.
+The agent terminal CAN run sudo commands (unlike the bridge script which cannot handle
+`sudo_password` interrupts). Try `sudo pacman -U <path>` or `sudo pacman -S <package>`
+directly — it may work depending on session credential state. The handoff document's
+claim that "user must run workflow directly for sudo step" applies only to the bridge
+script pattern.
+
+> **KDE implementation pitfalls** (kwin_wayland --replace, Konsole transparency, cursor
+> fallback, kitty include, profile name, fastfetch suffix) → consolidated in §KDE
+> Implementation Pitfalls below.
 
 ---
 
@@ -166,6 +160,27 @@ Node implementations → `workflow/nodes/`
 State schema → `workflow/state.py`
 Validation gates → `workflow/validators.py`
 Full session state spec → `dev/DESIGN_PHILOSOPHY.md §Session State & Persistence`
+
+### Deleting All Sessions and Starting Fresh
+
+When the user wants a clean slate (delete all past sessions):
+
+```bash
+# 1. Remove all session directories and .current symlink
+rm -rf ~/.config/rice-sessions/rice-*
+rm -f ~/.config/rice-sessions/.current
+
+# 2. Wipe the SQLite checkpoint store
+rm -f ~/.local/share/linux-ricing/sessions.sqlite
+
+# 3. Verify clean
+python3 ~/.hermes/skills/creative/linux-ricing/scripts/session_manager.py resume-check
+# Should return: []
+```
+
+Then launch a fresh session with PTY as usual (RICER_API_KEY, RICER_BASE_URL, RICER_MODEL env vars).
+
+---
 
 ### Troubleshooting: LLM Auth Failures (401)
 
@@ -266,6 +281,130 @@ Fix: The convention is `hermes-<theme-name>.colors`. The spec, apply, and verify
 
 ---
 
+### Undoing / Rolling Back a Rice Session
+
+The workflow ships `scripts/ricer_undo.py` which knows how to restore every backed-up file, reapply previous color schemes, clean up injections, and close EWW windows. Prefer it over manual restoration.
+
+**Via the workflow's own undo verb (cleanest):**
+```bash
+source ~/.hermes/skills/creative/linux-ricing/.venv/bin/activate
+cd ~/.hermes/skills/creative/linux-ricing
+python3 scripts/ricer.py undo           # undo active manifest only
+python3 scripts/ricer.py undo-session   # undo every manifest newest→oldest
+python3 scripts/ricer.py simulate-undo  # dry-run preview, no writes
+```
+
+**Via baseline JSON (fallback — when the manifest is absent or corrupted):**
+The `baseline_node` writes a snapshot to `~/.config/rice-sessions/<thread-id>/baseline_<timestamp>.json` before `install_node` runs. The `"backups"` key maps config names → absolute backup paths under `~/.cache/linux-ricing/baselines/<timestamp>_files/`.
+
+Restore map (backup filename → live destination):
+
+| Backup key | Destination |
+|---|---|
+| kdeglobals, kcminputrc, konsolerc, ksplashrc, plasmarc | ~/.config/<name> |
+| kvantum.kvconfig | ~/.config/Kvantum/kvantum.kvconfig |
+| gtkrc-2.0 | ~/.gtkrc-2.0 |
+| gtk-3.0-settings | ~/.config/gtk-3.0/settings.ini |
+| gtk-4.0-settings | ~/.config/gtk-4.0/settings.ini |
+| kitty.conf | ~/.config/kitty/kitty.conf |
+| fastfetch.config.json | ~/.config/fastfetch/config.json |
+| dunstrc, rofi.config.rasi, waybar.style.css, starship.toml | ~/.config/<app>/... |
+| bashrc, zshrc | ~/.<name> |
+| konsole_profiles/ | ~/.local/share/konsole/ (full dir copy) |
+| color-schemes/ | ~/.local/share/color-schemes/ (full dir copy) |
+| kscreenlockerrc | NOT backed up — check/reset manually after restore |
+
+After restoring files, apply KDE state:
+```bash
+plasma-apply-colorscheme <baseline.kde.colorscheme.active_scheme>
+plasma-apply-wallpaperimage "<baseline.kde.wallpaper.image_path stripped of file://>"
+kwriteconfig6 --file kcminputrc --group Mouse --key cursorTheme "<baseline.kde.cursor.active_cursor>"
+```
+
+**Post-restore cleanup checklist:**
+1. `kitty.conf` restored but `theme.conf` is NOT backed up separately. If `theme.conf` still has rice colors and no backup exists, **delete it** — kitty falls back to the inline palette in `kitty.conf`.
+2. `fastfetch/config.json` may be a symlink → `config.jsonc` written by the rice. Remove the symlink, copy the real backup file in.
+3. `rofi/hermes-theme.rasi` is NOT in the baseline backup (it predates the session). Restore it manually to the previous theme's colors, or point `config.rasi` at a different existing theme file.
+4. If baseline `color-schemes/` did not include a file the baseline's `konsole_profiles/` references, restore it separately from an older session or recreate it.
+5. Confirm no `*mossgrown*` (or current theme name) artifacts remain: `find ~/.config ~/.local/share -name "*<theme>*"`.
+6. **`kscreenlockerrc` is NOT backed up** — the rice modifies it (lock screen wallpaper + theme). Check and reset manually if needed (`Theme=org.kde.breezedark.desktop`).
+7. **Restart plasmashell after restore** — even when all config files are correct, plasmashell caches the color scheme in memory. UI elements (folder icons, window chrome) will still show rice colors until restarted: `kquitapp6 plasmashell; sleep 1; killall plasmashell 2>/dev/null; plasmashell &`
+
+Full step-by-step baseline restore with copy-paste code → `references/baseline-restore-procedure.md`
+
+### Undoing a Rice (Restoring Baseline)
+
+`undo_session()` in `scripts/ricer_undo.py` handles all config file restoration and
+automatically restarts plasmashell at the end on KDE. The restart flushes the
+in-memory color scheme and icon tinting that KDE holds even after config files on disk
+are fully restored — this was the root cause of folder icons staying green after an undo.
+
+Tell the user to close and reopen any running Dolphin/app windows after the undo
+completes — apps inherit icon tinting from the plasmashell session at launch time.
+
+---
+
+### Bypassing a Stuck Refine Node (design JSON loop)
+
+**Symptom:** The bridge returns `next: ['refine']` with `[Refine][WARN] Sentinel found but design JSON could not be parsed — asking for retry.` This may happen on the FIRST attempt (right after explore confirms direction) or after repeated retries. Either way the fix is the same — do NOT try to feed bridge answers. Go directly to state injection (below). Feeding "confirm" or the full JSON as a bridge answer does not help because the parse failure is inside the node, not at an interrupt gate the bridge can resolve.
+
+**Root cause:** The refine node uses the LLM's raw output to extract design JSON. If the LLM's response doesn't pass `_validate_design()`, the node interrupts for user feedback — but the user's reply just gets appended to messages and the LLM tries again. Feeding answers via the bridge cannot fix a validator failure; only a correctly-structured design can. This can happen on the very first refine attempt (right after explore locks direction) — there is no need to wait for multiple retries before bypassing.
+
+**KDE validator requirements (exact fields checked by `workflow/validators.py`):**
+- `BASE_REQUIRED_KEYS`: `name`, `description`, `palette`, `mood_tags`
+- `RECIPE_REQUIRED_KEYS` for kde: `kvantum_theme`, `plasma_theme`, `cursor_theme`, `icon_theme`, `gtk_theme`, `originality_strategy`, `chrome_strategy`
+- `palette` must contain all 10 slots: `background`, `foreground`, `primary`, `secondary`, `accent`, `surface`, `muted`, `danger`, `success`, `warning` — all valid 7-char hex
+- `originality_strategy` must have: `vision_alignment` (non-empty) + `non_default_moves` (list of ≥3 items with no banned words: "default", "stock", "breeze", "standard", "unchanged", "normal", "generic")
+- `chrome_strategy` must have: `method` (non-empty string) AND `implementation_targets` (non-empty list)
+- `widget_layout` items (if present) must each have: `name`, `position`, `data`, `visual` — note these are `data` and `visual`, NOT `data_source` and `visual_metaphor` (the LLM commonly uses the wrong key names)
+
+**Fix:** Write a valid design.json manually, verify it passes the validator, then inject it directly into the graph checkpoint:
+
+```python
+# 1. Verify design passes validator
+import sys, json
+from pathlib import Path
+sys.path.insert(0, '/home/neos/.hermes/skills/creative/linux-ricing')
+from workflow.validators import design_complete
+design = json.loads(Path('/home/neos/.config/rice-sessions/<thread-id>/design.json').read_text())
+ok, reason = design_complete(design, {'desktop_recipe': 'kde'})
+print(f'ok={ok}, reason={reason!r}')
+
+# 2. Inject state and advance to plan node
+from langgraph.checkpoint.sqlite import SqliteSaver
+from workflow.config import DB_PATH
+from workflow.graph import build_graph
+
+thread_id = '<thread-id>'
+config = {'configurable': {'thread_id': thread_id}}
+with SqliteSaver.from_conn_string(DB_PATH) as checkpointer:
+    graph = build_graph(checkpointer)
+    graph.update_state(config, {'design': design, 'current_step': 3}, as_node='refine')
+    state = graph.get_state(config)
+    print('next:', list(state.next))  # should be ['plan']
+```
+
+Run this from the skill venv (`source ~/.hermes/skills/creative/linux-ricing/.venv/bin/activate`) with the RICER_* env vars set. After the state update, call the bridge with no answer to trigger the plan node.
+
+**Must-run from terminal tool (not execute_code):** LangGraph imports require the skill venv — use `python3 -c "..."` in the terminal tool, not the sandbox.
+
+---
+
+### Troubleshooting: Stale "Preview Contract Violation" Flag on Fresh Sessions
+
+**Symptom:** After plan node generates plan.html, `pending_messages[0].message` includes:
+```
+PREVIEW CONTRACT VIOLATION — do not approve this preview.
+Reason: previous preview was rejected for misleading unimplemented window chrome
+Type 'regenerate' so the workflow produces an honest preview.
+```
+
+**Root cause:** This flag is carried over from a *previous session's* rejection state, not from the current session's plan.html. The SQLite checkpointer or the plan node's state includes a rejection flag from a prior thread. On a fresh session this is always stale.
+
+**What to do:** Open the plan.html and evaluate it directly (`brave <path>`). If the mockup is honest and matches the design, feed `"approve"` — ignore the stale violation message. If the mockup genuinely shows unimplemented chrome (macOS traffic-light buttons, rounded windows that won't be delivered, etc.), feed `"regenerate"`.
+
+---
+
 ### Troubleshooting: Stale Session Checkpoints
 
 Crashed or hung workflow runs (e.g. from the PTY pitfall above) leave behind:
@@ -286,20 +425,20 @@ SQLite checkpoints are automatically pruned when a new session is run with a fre
 
 ### Pitfalls: KDE Implementation Quirks
 
-**kwin_wayland --replace kills plasmashell:** On KDE Wayland, running `kwin_wayland --replace` terminates plasmashell as a side effect. The user sees a blank desktop with no panel, widgets, or wallpaper. Always restart plasmashell immediately after:
-```bash
-kwin_wayland --replace &  # or background=true
-sleep 2 && plasmashell &  # restore desktop shell
-```
-Better: avoid `--replace` entirely if possible. For cursor theme changes, a log out/in is cleaner.
+**Fastfetch config.json vs config.jsonc:** The workflow may write `config.jsonc` but
+fastfetch looks for `config.json`. Fix: `ln -sf ~/.config/fastfetch/config.jsonc
+~/.config/fastfetch/config.json`.
 
-**Kitty config: include vs replace:** The workflow's kitty implementation appends `include theme.conf` at the bottom of `kitty.conf`, but if the file already has a full palette (e.g. from a previous rice), the include may not override all values reliably. After implementation, verify the actual colors in `kitty.conf` — if old palette values remain above the include, replace them inline. Check: `grep -E "^(foreground|background|color[0-9])" ~/.config/kitty/kitty.conf`.
+**grim fails on KDE Wayland:** `grim` may fail with *"compositor doesn't support the
+screen capture protocol"*. Use `spectacle --background --fullscreen -o <path>` as
+fallback for screenshots.
 
-**Fastfetch config.json vs config.jsonc:** The workflow may write `config.jsonc` but fastfetch looks for `config.json`. Fix: `ln -sf ~/.config/fastfetch/config.jsonc ~/.config/fastfetch/config.json`.
-
-**grim fails on KDE Wayland:** `grim` may fail with "compositor doesn't support the screen capture protocol". Use `spectacle --background --fullscreen -o <path>` as fallback for screenshots.
+> Other KDE pitfalls (kwin_wayland --replace, Kitty include behavior, Konsole profile
+> selection, Konsole transparency bug) are covered in §Known Color Application Issues
+> and §Post-Implementation: Manual Elements.
 
 **Reference docs** → `README.md` (directory layout, presets, CLI reference, supported targets, safety model, pitfalls, doc index)
+**KDE validator contract** → `references/kde-design-validator-contract.md` (exact required fields, banned words, widget key names, quick validation snippet, state-injection bypass)
 **LLM error patterns** → `references/workflow-llm-errors.md` (400 invalid model, 401 auth, diagnosis snippets)
 **Chat-agent bridge** → `references/workflow-bridge-script.md` (non-TTY resume helper for agent orchestration)
 **Wallpaper sourcing** → `references/wallpaper-sourcing.md` (Alpha Coders + vision analysis workflow for game-themed wallpapers)
@@ -357,23 +496,11 @@ Name=linux-ricing
 Parent=FALLBACK/
 ```
 
-#### Konsole Transparency Broken on Plasma 6 Wayland (Known Bug)
-**On KDE Plasma 6 with native Wayland, Konsole ignores the `Opacity` key entirely.**
-This is a known upstream regression in the blur-behind Wayland protocol.
-
-Diagnose: confirm Konsole is on native Wayland (not XWayland):
-```bash
-xlsclients | grep -i konsole || echo "Native Wayland — transparency broken"
-```
-
-Workarounds in order of preference:
-1. Use Kitty instead — Kitty's `background_opacity` works correctly on Wayland
-2. Wait for Plasma update (`sudo pacman -Syu`)
-3. Force XWayland via launcher (loses some Wayland benefits)
-
-Do NOT waste time debugging the config — it's a compositor-level bug, not a config error.
-
-**Reference:** `references/konsole-wayland-transparency.md`
+#### Konsole Transparency Broken on Plasma 6 Wayland
+See §Known Platform Bug above for the full diagnosis. Quick check that Konsole is native
+Wayland (not XWayland): `xlsclients | grep -i konsole || echo "Native Wayland — broken"`.
+Workaround: use Kitty (`background_opacity` works correctly on Wayland).
+Reference: `references/konsole-wayland-transparency.md`.
 
 #### AUR Package Install via Agent Terminal
 `yay -S` builds the package but fails the final `sudo pacman -U` step (no TTY for password).

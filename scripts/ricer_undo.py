@@ -30,6 +30,47 @@ from core.undo_describe import _describe_change           # noqa: E402
 
 
 # ---------------------------------------------------------------------------
+# KDE PLASMASHELL RESTART
+# ---------------------------------------------------------------------------
+
+def _restart_plasmashell(restored: list, failed: list, skipped: list) -> None:
+    """Restart plasmashell to flush in-memory color/icon state after an undo.
+
+    KDE Plasma holds the applied color scheme and icon tinting in memory.
+    Config files on disk may be fully restored but the live session will still
+    render old colors (folder icons, window chrome, etc.) until plasmashell
+    restarts.  This is always safe on KDE Wayland — plasmashell restarts clean.
+    """
+    if not cmd_exists("plasmashell"):
+        skipped.append({"app": "plasmashell",
+                        "note": "plasmashell not found — skipping restart"})
+        return
+
+    # Graceful quit first, hard kill as fallback
+    run_cmd(["kquitapp6", "plasmashell"], timeout=8)
+    time.sleep(1)
+    run_cmd(["killall", "plasmashell"], timeout=5)
+    time.sleep(1)
+
+    # Relaunch detached so it outlives this process
+    try:
+        subprocess.Popen(
+            ["plasmashell"],
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            start_new_session=True,
+        )
+        restored.append({"app": "plasmashell",
+                         "action": "restarted",
+                         "note": "flushed in-memory color/icon state"})
+    except OSError as e:
+        failed.append({"app": "plasmashell",
+                       "action": "restart",
+                       "error": str(e)})
+
+
+# ---------------------------------------------------------------------------
 # FILE-LEVEL RESTORE
 # ---------------------------------------------------------------------------
 
@@ -227,10 +268,74 @@ _undo_plasma_theme = _make_simple_kde_theme_undo(
     app="plasma_theme", field="previous_theme", file="plasmarc",
     group="Theme", key="name", apply_cmd="plasma-apply-desktoptheme",
     note_label="theme")
-_undo_cursor = _make_simple_kde_theme_undo(
-    app="cursor", field="previous_cursor", file="kcminputrc",
-    group="Mouse", key="cursorTheme", apply_cmd="plasma-apply-cursortheme",
-    note_label="cursor")
+
+
+def _undo_cursor(change: dict, restored: list, failed: list, skipped: list) -> None:
+    """Restore the cursor theme to its pre-apply state.
+
+    ``materialize_cursor`` writes to three surfaces:
+      - ``kcminputrc[Mouse].cursorTheme``
+      - ``kdeglobals[General].cursorTheme``
+      - ``~/.icons/default/index.theme``  (libXcursor / GTK / XDG portal)
+
+    The generic file-restore loop handles the backed-up files, but the
+    ``kdeglobals`` cursor key and the ``~/.icons/default/index.theme`` are
+    written separately and must be explicitly reverted here.  Without this,
+    GTK apps and any cursor consumer that reads ``~/.icons/default`` keeps
+    the rice cursor after an undo.
+    """
+    if change.get("action") != "write":
+        return
+
+    prev = change.get("previous_cursor")
+    kwrite = _get_kwrite()
+
+    if prev:
+        # Restore both config surfaces
+        if kwrite:
+            run_cmd([kwrite, "--file", "kcminputrc", "--group", "Mouse",
+                     "--key", "cursorTheme", prev])
+            run_cmd([kwrite, "--file", "kdeglobals", "--group", "General",
+                     "--key", "cursorTheme", prev])
+        # Restore ~/.icons/default/index.theme
+        icons_default = HOME / ".icons" / "default" / "index.theme"
+        icons_backup  = change.get("icons_default_backup")
+        if icons_backup and Path(icons_backup).exists():
+            try:
+                icons_default.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(icons_backup, icons_default)
+            except (OSError, shutil.Error) as e:
+                failed.append({"app": "cursor", "action": "restore_icons_default",
+                               "error": str(e)})
+        else:
+            # No backup means the file was created fresh — rewrite with prev theme
+            try:
+                icons_default.parent.mkdir(parents=True, exist_ok=True)
+                icons_default.write_text(
+                    f"[Icon Theme]\nName=Default\nComment=Default Cursor Theme\n"
+                    f"Inherits={prev}\n",
+                    encoding="utf-8",
+                )
+            except OSError as e:
+                failed.append({"app": "cursor", "action": "restore_icons_default",
+                               "error": str(e)})
+        # Apply live via plasma
+        if cmd_exists("plasma-apply-cursortheme"):
+            rc, _, _ = run_cmd(["plasma-apply-cursortheme", prev], timeout=10)
+            if rc == 0:
+                restored.append({"app": "cursor", "action": "restored", "theme": prev})
+            else:
+                failed.append({"app": "cursor", "action": "restore",
+                               "theme": prev, "error": f"exit code {rc}"})
+        else:
+            restored.append({"app": "cursor", "action": "restored_config_only",
+                             "theme": prev,
+                             "note": "plasma-apply-cursortheme not found; takes effect on next login"})
+        # Signal kwin to reload cursor
+        if cmd_exists("qdbus6"):
+            run_cmd(["qdbus6", "org.kde.KWin", "/KWin", "reconfigure"], timeout=5)
+    else:
+        skipped.append({"app": "cursor", "note": "no previous cursor recorded"})
 
 
 def _undo_icon_theme(change: dict, restored: list, failed: list, skipped: list) -> None:
@@ -675,6 +780,7 @@ def undo_session(all_history: bool = False,
     total_failed   = 0
     executed       = 0
     skipped        = 0
+    kde_touched    = False
 
     for mp in manifests:
         result = undo(mp, delete_artifacts=delete_artifacts)
@@ -687,6 +793,25 @@ def undo_session(all_history: bool = False,
         executed += 1
         total_restored += len(result.get("restored", []))
         total_failed   += len(result.get("failed", []))
+        # Detect whether any KDE-family element was touched in this manifest
+        kde_apps = {"kde", "kvantum", "plasma_theme", "cursor", "icon_theme",
+                    "kde_lockscreen", "lnf"}
+        for entry in result.get("restored", []) + result.get("failed", []):
+            if entry.get("app") in kde_apps:
+                kde_touched = True
+                break
+
+    # Restart plasmashell on KDE to flush in-memory color/icon state.
+    # Even when KDE elements were not in the manifest (e.g. baseline-based undo
+    # done by the agent rather than through manifests), check if plasmashell is
+    # running at all — the session desktop type is the reliable indicator.
+    restart_restored: list = []
+    restart_failed:   list = []
+    restart_skipped:  list = []
+    if kde_touched or cmd_exists("plasmashell"):
+        _restart_plasmashell(restart_restored, restart_failed, restart_skipped)
+    total_restored += len(restart_restored)
+    total_failed   += len(restart_failed)
 
     return {
         "status":               "success" if total_failed == 0 else "partial",
@@ -697,6 +822,7 @@ def undo_session(all_history: bool = False,
         "total_restored":       total_restored,
         "total_failed":         total_failed,
         "per_manifest":         per_manifest,
+        "plasmashell_restart":  restart_restored + restart_failed + restart_skipped,
     }
 
 

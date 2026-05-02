@@ -164,10 +164,10 @@ def explore_node(state: RiceSessionState) -> dict:
 def _brief_prompt() -> str:
     return (
         "Fast brief — reply in bullets or one sentence:\n"
-        "1. Favorite games/worlds/media?\n"
+        "1. A place — real or fictional — you'd want to live inside?\n"
         "2. Mood words?\n"
         "3. Subtle reference or obvious homage?\n"
-        "4. Hard no's?"
+        "4. Anything to avoid? (or skip)"
     )
 
 

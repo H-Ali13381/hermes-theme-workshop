@@ -1,0 +1,99 @@
+; Reference template — EWW bar (X11 + Wayland).
+; Read by workflow/nodes/craft/frameworks.py and injected as an exemplar in the
+; craft prompt. NOT used by any materializer (the materializer uses the
+; *.template files at templates/eww/). Treat as study material — every
+; generated bar should be original and palette-driven.
+;
+; Patterns demonstrated:
+;   - defpoll for polled data (clock, kernel)
+;   - deflisten for live event streams (Hyprland workspace IPC via socat)
+;   - defwidget for reusable composition; defwindow for screen placement
+;   - :stacking and :exclusive choices for panel coexistence
+;   - Hover state via :onhover / :onhoverlost for reveal patterns
+;   - EWW_CPU / EWW_RAM magic vars for telemetry
+;
+; Replace every literal label and color with palette/theme-driven values.
+
+; ── Data sources ──────────────────────────────────────────────────────────────
+
+(defpoll clock-time   :interval "1s"   "date '+%H:%M'")
+(defpoll clock-date   :interval "60s"  "date '+%a %d %b'")
+(defpoll kernel-short :interval "30m"  "uname -r | cut -d- -f1")
+
+; Hyprland workspaces — live updates via socat over the IPC socket.
+; On Sway: replace with `swaymsg -t subscribe -m '["workspace"]'`.
+(deflisten workspaces :initial "[]"
+  "scripts/workspaces.sh")
+
+; Volume — pactl wrapper script returns an integer 0..100.
+(defpoll volume :interval "2s" "scripts/volume.sh")
+
+; ── Reusable widgets ──────────────────────────────────────────────────────────
+
+(defwidget workspace-pill [ws]
+  (button :class "ws-pill ${ws.active ? "active" : "idle"}"
+          :onclick "hyprctl dispatch workspace ${ws.id}"
+    (label :text "${ws.id}")))
+
+(defwidget meter [label value]
+  (box :class "meter" :orientation "h" :space-evenly false
+    (label :class "meter-label" :text label)
+    (progress :class "meter-bar" :value value :orientation "h")))
+
+(defwidget left-cluster []
+  (box :class "cluster left" :orientation "h" :space-evenly false
+    (label :class "brand" :text "✦")
+    (box :class "workspaces" :orientation "h" :space-evenly false
+      (for ws in workspaces
+        (workspace-pill :ws ws)))))
+
+(defwidget center-cluster []
+  (box :class "cluster center" :orientation "h" :space-evenly false :hexpand true
+    (label :class "clock-time" :text clock-time)
+    (label :class "clock-date" :text clock-date)))
+
+(defwidget right-cluster []
+  (box :class "cluster right" :orientation "h" :space-evenly false
+    (meter :label "CPU" :value {EWW_CPU.avg})
+    (meter :label "RAM" :value {EWW_RAM.used_mem_perc})
+    (label :class "kernel" :text kernel-short)
+    (label :class "volume" :text "VOL ${volume}%")))
+
+(defwidget bar []
+  (centerbox :class "bar" :orientation "h"
+    (left-cluster)
+    (center-cluster)
+    (right-cluster)))
+
+; ── Windows ───────────────────────────────────────────────────────────────────
+
+; Wayland (Hyprland / Sway / KDE Wayland with layer-shell):
+;   :stacking "fg"  — render above normal windows
+;   :exclusive true — reserve screen space (panel behaviour)
+;
+; Set :exclusive false when coexisting with a native panel (waybar / Plasma
+; panel) on the same edge — otherwise both will reserve space and you get a
+; doubled gap.
+(defwindow main-bar
+  :monitor 0
+  :geometry (geometry :x "0px" :y "0px" :width "100%" :height "36px"
+                       :anchor "top center")
+  :stacking  "fg"
+  :exclusive true
+  :focusable false
+  :namespace "eww-main-bar"
+  (bar))
+
+; Hover-trigger: a 1-pixel zone at the very top of the screen that reveals an
+; auxiliary panel when the cursor enters. Pair with `:onhover` on the trigger
+; window and `eww open/close` from a small shell helper.
+(defwindow trigger-zone
+  :monitor 0
+  :geometry (geometry :x "0px" :y "0px" :width "100%" :height "1px"
+                       :anchor "top center")
+  :stacking  "overlay"
+  :exclusive false
+  :focusable false
+  :namespace "eww-trigger"
+  (eventbox :onhover "eww open aux-panel" :onhoverlost "eww close aux-panel"
+    (box)))

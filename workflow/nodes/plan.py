@@ -426,8 +426,14 @@ def _rounded_chrome_is_implementable(design: dict) -> bool:
     if not isinstance(chrome, dict):
         return False
     rounded = chrome.get("rounded_corners")
-    wants_rounding = rounded is True or (isinstance(rounded, dict) and rounded.get("enabled"))
-    if not wants_rounding:
+    # Explicit opt-out only — a missing field is permissive when chrome methods
+    # are declared, since methods like kvantum/kitty/eww can implement rounding.
+    explicitly_off = (
+        rounded is False
+        or (isinstance(rounded, str) and rounded.strip().lower() in ("false", "none", "no", "off", "disabled"))
+        or (isinstance(rounded, dict) and rounded.get("enabled") is False)
+    )
+    if explicitly_off:
         return False
     method = str(chrome.get("method", "")).lower()
     targets = " ".join(str(t).lower() for t in chrome.get("implementation_targets", []))

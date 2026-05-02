@@ -35,7 +35,7 @@ RECIPE_PROMPT_FIELDS = {
         '- icon_theme: e.g. "Papirus-Dark"',
         '- gtk_theme: e.g. "Adwaita-dark"',
         '- originality_strategy: object with vision_alignment and at least 3 non_default_moves that are specific to the user brief',
-        '- chrome_strategy: object declaring any previewed rounded corners, custom borders, titlebars, terminal frames, panel chrome, and how they will be implemented',
+        '- chrome_strategy: object with REQUIRED keys "method" (string, e.g. "kvantum + eww_frame") and "implementation_targets" (list of strings like ["widgets:eww", "terminal:kitty"]); OPTIONAL keys "rounded_corners" (boolean true/false, or object {"enabled": true, "radius_px": <int>}), "custom_titlebars", "terminal_frames", "panel_chrome", "ornamental_borders" (descriptive strings)',
         '- panel_layout: optional object if the concept changes the panel/dock/toolbar; include mode, placement, shape, and visible controls',
         '- widget_layout: optional list of custom widgets/overlays only when they serve the user vision; each item needs name, position, data/source, and visual metaphor',
     ],

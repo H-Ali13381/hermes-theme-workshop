@@ -52,6 +52,8 @@ def _build_prompt(element: str, research: dict) -> str:
         if val:
             strat_lines += f"\n{key}: {json.dumps(val, indent=2)}"
 
+    refs_block = _format_reference_templates(syntax.get("reference_templates", []))
+
     return f"""Generate configuration files for element: {element}
 
 FRAMEWORK: {syntax.get('framework_name', element)}
@@ -63,7 +65,7 @@ FRAMEWORK SYNTAX REFERENCE:
 
 IDIOMATIC EXAMPLE (study the patterns, do NOT copy):
 {syntax.get('example', '')}
-
+{refs_block}
 DESIGN SYSTEM:
   Theme name: {di.get('theme_name', 'unnamed')}
   Description: {di.get('description', '')}
@@ -80,6 +82,30 @@ OUTPUT: JSON array of file objects. Example shape:
 ]
 
 Write creative, complete, palette-accurate, theme-consistent configs now:"""
+
+
+def _format_reference_templates(templates: list[dict]) -> str:
+    """Render reference template files as a labeled prompt block.
+
+    Each template is shown as a fenced code block tagged with its language so
+    the LLM treats it as study material — not output to copy. Returns the
+    empty string when no templates are supplied (older frameworks, conky, etc.).
+    """
+    if not templates:
+        return ""
+    parts = [
+        "",
+        "REFERENCE TEMPLATES (idiomatic, complete, palette-neutral — study the structure",
+        "and patterns; do NOT copy verbatim, replace every literal with palette-driven values):",
+    ]
+    for tmpl in templates:
+        name     = tmpl.get("name", "reference")
+        language = tmpl.get("language", "")
+        content  = tmpl.get("content", "")
+        if not content:
+            continue
+        parts.append(f"\n--- {name} ---\n```{language}\n{content}\n```")
+    return "\n".join(parts) + "\n"
 
 
 def _parse_file_objects(raw: str) -> list[dict]:

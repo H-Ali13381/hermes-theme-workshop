@@ -1,21 +1,65 @@
-# Custom Widgets — EWW (ElKowars Wacky Widgets)
+# Custom Widgets — Quickshell (default) & EWW (fallback)
 
-## 1. Overview
+## 0. Framework Selection
 
-The AI-designed widget pipeline turns a text description into a fully functional desktop widget:
+The skill picks one of two widget frameworks automatically based on the running compositor.
+
+| Compositor / session | Default | Why |
+|----------------------|---------|-----|
+| Hyprland (Wayland) | **Quickshell** | Native `wlr-layer-shell`; QML hot-reload; rich built-in services |
+| KDE Plasma (Wayland) | **Quickshell** | KWin supports `wlr-layer-shell`; QML matches Plasma's own toolkit |
+| KDE Plasma (X11) | **EWW** | No layer-shell on X11; EWW falls back to GDK X11 windowing |
+| GNOME / other | **EWW** | Mutter has no layer-shell; EWW is the broadest-compatibility option |
+
+The selection logic lives in `workflow/nodes/refine.py:_default_widget_element()` and is mirrored
+in `workflow/nodes/install/resolver.py:_widget_framework_for()`. A design that explicitly names
+`widgets:eww` or `widgets:quickshell` in `chrome_strategy.implementation_targets` overrides the
+default.
+
+> **Panel-interference caveat (both frameworks).** Quickshell and EWW both render via
+> `wlr-layer-shell` on Wayland. When their windows are anchored to the same screen edge as a
+> compositor-native panel (Plasma's panel, Hyprland's `waybar`), they compete for the exclusive
+> zone — you'll see a doubled gap, or one of the bars rendering on top of the other. Either
+> anchor the custom widget to a different edge, drop `exclusive_zone` (set `exclusive: false` /
+> `exclusionMode: ExclusionMode.Ignore`), or hide the native panel. See
+> [`KDE/widgets.md`](../KDE/widgets.md#1-eww-on-kde-wayland) for the KDE-specific patterns.
+
+This document covers EWW in depth (the fallback). Quickshell-specific QML patterns live in the
+craft-pipeline knowledge base at `workflow/nodes/craft/frameworks.py`.
+
+### Layer-shell client lifecycle (under the hood)
+
+Every Wayland widget (Quickshell, EWW, waybar) is a layer-shell *client*; the compositor is
+the *server*. Per-window steps:
+
+1. Connect via `$WAYLAND_DISPLAY` socket.
+2. Request **surface** + **buffer** handles.
+3. (Optional) Request a **seat** for keyboard/pointer input.
+4. **layer-shell** protocol (`wlr-layer-shell`, or GTK Layer Shell wrapping it on EWW): anchor,
+   exclusive zone, layer (`background`/`bottom`/`top`/`overlay`).
+5. Request **frame callback** → render into buffer when it fires → attach buffer to surface.
+6. Compositor composites.
+
+Consequences:
+
+- **Exclusive zone causes panel interference.** Two clients (waybar + Quickshell bar) on the
+  same edge with non-zero exclusive zone double the gap. Set `exclusionMode: ExclusionMode.Ignore`
+  (Quickshell) or `:exclusive false` (EWW) for overlay widgets.
+- **Frame callbacks fire only on redraw.** A "dead" widget is almost always one whose data
+  source (Quickshell binding, EWW `defpoll`/`deflisten`) isn't emitting.
+
+---
+
+## 1. Pipeline & Why EWW
 
 ```
 describe UI element → generate mockup image → iterate visually →
-slice into components → build EWW widget (Yuck + SCSS) →
+slice into components → build widget (Quickshell QML or EWW Yuck+SCSS) →
 configure layer-shell positioning → wire to live system data
 ```
 
-**Why EWW?** It's the r/unixporn standard for custom widgets:
-- **Yuck** markup for layout (Lisp-like, declarative)
-- **SCSS** for styling (supports `background-image`, gradients, transparency)
-- **GTK Layer Shell** for Wayland compositors (Hyprland, Sway, KDE Wayland)
-- **GDK X11** fallback for X11 sessions
-- Massive ricing community with examples and inspiration
+**EWW** (fallback): Yuck (Lisp-like markup) + SCSS, GTK Layer Shell on Wayland, GDK on X11.
+r/unixporn standard with extensive community examples.
 
 ---
 
@@ -370,59 +414,30 @@ CSS node path for styling:
 
 ## 5. AI Image → Widget Pipeline
 
-### Step 1: Describe the UI element
-User provides a description:
-> "MapleStory inventory bar, wooden texture, gold trim, 8 item slots, HP and MP bars at the bottom"
+1. **Describe** the UI element (e.g. "wooden inventory bar, gold trim, 8 slots, HP/MP bars").
+2. **Generate** mockup via `image_gen` — proportional size, clean edges, distinct regions.
+3. **Iterate** visually until satisfied.
+4. **Slice** components from the mockup (ImageMagick or Pillow).
+5. **Build** the widget — map each slice to a Quickshell `BorderImage` / EWW SCSS `background-image`.
+6. **Configure** layer-shell positioning (geometry, anchor, stacking, exclusive zone, monitor).
 
-### Step 2: Generate mockup via image_gen
-AI generates a visual mockup image. The mockup should be:
-- The exact intended size or proportional
-- Clean edges suitable for slicing
-- Distinct visual regions for each component
-
-### Step 3: Iterate visually
-User reviews and refines: "make buttons rounder", "add glow effect to active slot", "HP bar should be red gradient". Re-generate until satisfied.
-
-### Step 4: Slice image into components
-
-Using **ImageMagick** to crop regions:
+### Slicing — ImageMagick
 ```bash
-# Background texture (full width)
-convert mockup.png -crop 800x60+0+0 bar-background.png
-
-# Individual button states
-convert mockup.png -crop 48x48+10+6 slot-normal.png
-convert mockup.png -crop 48x48+70+6 slot-hover.png
-
-# Decorative elements
-convert mockup.png -crop 20x60+0+0 border-left.png
-convert mockup.png -crop 20x60+780+0 border-right.png
-
-# HP/MP bar backgrounds
-convert mockup.png -crop 200x12+300+44 hp-bar-bg.png
-convert mockup.png -crop 200x12+510+44 mp-bar-bg.png
+convert mockup.png -crop 800x60+0+0   bar-background.png   # full-width background
+convert mockup.png -crop 48x48+10+6   slot-normal.png      # button state
+convert mockup.png -crop 20x60+0+0    border-left.png      # decorative edge
+convert mockup.png -crop 200x12+300+44 hp-bar-bg.png       # progress bar bg
 ```
 
-Using **Pillow** (Python) for programmatic slicing:
+### Slicing — Pillow
 ```python
 from PIL import Image
 img = Image.open("mockup.png")
-# crop((left, upper, right, lower))
-bg = img.crop((0, 0, 800, 60))
-bg.save("bar-background.png")
+img.crop((0, 0, 800, 60)).save("bar-background.png")    # (left, upper, right, lower)
 ```
 
-Components to extract:
-- **Background texture** — 9-slice or full-width stretch
-- **Button states** — normal, hover, active (3 images per button type)
-- **Decorative elements** — borders, corners, dividers, icons
-- **Progress bar backgrounds** — empty and fill textures
-
-### Step 5: Build EWW widget using sliced images as CSS backgrounds
-Map each sliced image to an EWW widget element with SCSS `background-image`.
-
-### Step 6: Configure positioning and behavior
-Set `defwindow` geometry, stacking order, exclusive zone, and monitor placement.
+**Components to extract:** background texture (9-slice or stretch), button states (normal /
+hover / active), decorative borders/corners, progress-bar empty + fill textures.
 
 ---
 
@@ -853,12 +868,15 @@ eww kill && eww daemon && eww open <window>  # full restart (for Yuck changes)
 
 | Framework | Language | Wayland | X11 | Image Textures | Community |
 |-----------|----------|---------|-----|----------------|-----------|
+| **Quickshell** | QML | Yes (layer-shell) | Windowing only (no layer-shell) | Yes (`BorderImage`) | Large (active 2025+; supersedes AGS in most rices) |
 | **EWW** | Yuck + SCSS | Yes (layer-shell) | Yes (GDK) | Native CSS | Large (r/unixporn standard) |
-| **AGS** | TypeScript | Yes | No | Yes | Medium |
 | **Fabric** | Python | Yes | No | Yes | Small |
 | **Plasmoid** | QML/JS | KDE only | KDE only | Yes | KDE community |
 
-**EWW is the recommended default** for the AI pipeline — widest compatibility, most community examples, native image texture support.
+**Quickshell is the default** on Hyprland and KDE Wayland (best LLM ergonomics: QML matches Qt
+training data, no Yuck DSL, hot-reload on save). **EWW is the fallback** for X11 and any session
+without `wlr-layer-shell` support — it remains the broadest-compatibility option and is fully
+supported by this pipeline.
 
 ---
 

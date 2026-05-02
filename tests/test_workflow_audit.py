@@ -28,6 +28,7 @@ _DETECTED_APPS = {
 class AuditNodeStateTests(unittest.TestCase):
     def _run_audit(self, state: dict) -> dict:
         with patch("workflow.nodes.audit.detect_wm", return_value="kde"), \
+             patch("workflow.nodes.audit.detect_session_type", return_value="wayland"), \
              patch("workflow.nodes.audit.detect_chassis", return_value="desktop"), \
              patch("workflow.nodes.audit.detect_screens", return_value=1), \
              patch("workflow.nodes.audit.detect_gpu", return_value={"name": "Test GPU", "vram_mb": 0}), \
@@ -76,6 +77,7 @@ class AuditNodeStateTests(unittest.TestCase):
 class UnsupportedDesktopEarlyStopTests(unittest.TestCase):
     def _audit_state_for_wm(self, wm: str) -> dict:
         with patch("workflow.nodes.audit.detect_wm", return_value=wm), \
+             patch("workflow.nodes.audit.detect_session_type", return_value="wayland"), \
              patch("workflow.nodes.audit.detect_chassis", return_value="desktop"), \
              patch("workflow.nodes.audit.detect_screens", return_value=1), \
              patch("workflow.nodes.audit.detect_gpu", return_value={"name": "GPU", "vram_mb": 0}), \
@@ -111,6 +113,7 @@ class GnomeElementQueueTests(unittest.TestCase):
         if apps:
             merged.update(apps)
         with patch("workflow.nodes.audit.detect_wm", return_value="gnome"), \
+             patch("workflow.nodes.audit.detect_session_type", return_value="wayland"), \
              patch("workflow.nodes.audit.detect_chassis", return_value="desktop"), \
              patch("workflow.nodes.audit.detect_screens", return_value=1), \
              patch("workflow.nodes.audit.detect_gpu", return_value={"name": "Test GPU", "vram_mb": 0}), \

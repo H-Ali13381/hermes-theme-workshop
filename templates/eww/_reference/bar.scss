@@ -1,0 +1,129 @@
+// Reference template — SCSS companion for templates/eww/_reference/bar.yuck.
+// Read by workflow/nodes/craft/frameworks.py and injected as an exemplar in
+// the craft prompt. NOT used by any materializer.
+//
+// Patterns demonstrated:
+//   - SCSS variables sourced from the design palette (one per role)
+//   - rgba() with palette colors instead of opacity-on-element
+//   - Hover transitions via GTK pseudo-classes (:hover, :active)
+//   - Linear gradients for progress bars (primary → accent)
+//   - Pill geometry via border-radius: 999px
+//   - Shadow stack to lift the bar off the wallpaper
+//
+// Every variable is a placeholder for a value drawn from the design palette;
+// replace ALL literals when generating real configs.
+
+// ── Palette tokens ────────────────────────────────────────────────────────────
+$bg:        #1e1e2e;   // palette.background
+$fg:        #cdd6f4;   // palette.foreground
+$primary:   #89b4fa;   // palette.primary
+$secondary: #f5c2e7;   // palette.secondary
+$accent:    #fab387;   // palette.accent
+$surface:   #313244;   // palette.surface
+$muted:     #6c7086;   // palette.muted
+$success:   #a6e3a1;   // palette.success
+
+$ui-font:    "Inter", sans-serif;
+$mono-font:  "JetBrainsMono Nerd Font", monospace;
+
+// ── Base window ───────────────────────────────────────────────────────────────
+window {
+  background-color: transparent;
+}
+
+.bar {
+  background-color: rgba($surface, 0.92);
+  border-bottom: 1px solid rgba($primary, 0.32);
+  box-shadow: 0 4px 18px rgba($bg, 0.55);
+  color: $fg;
+  font-family: $mono-font;
+  font-size: 12px;
+  padding: 0 14px;
+}
+
+.cluster {
+  padding: 0 6px;
+}
+
+.brand {
+  color: $primary;
+  font-size: 16px;
+  margin-right: 12px;
+}
+
+// ── Workspaces ────────────────────────────────────────────────────────────────
+.workspaces {
+  margin-right: 8px;
+}
+
+.ws-pill {
+  background: rgba($bg, 0.45);
+  border-radius: 999px;
+  margin: 4px 3px;
+  padding: 2px 9px;
+  color: $muted;
+  transition: background-color 120ms ease, color 120ms ease;
+
+  &:hover {
+    background: rgba($primary, 0.32);
+    color: $fg;
+  }
+
+  &.active {
+    background: $primary;
+    color: $bg;
+    font-weight: bold;
+  }
+}
+
+// ── Clock ─────────────────────────────────────────────────────────────────────
+.clock-time {
+  font-size: 14px;
+  font-weight: bold;
+  color: $fg;
+  margin: 0 8px;
+  letter-spacing: 0.04em;
+}
+
+.clock-date {
+  color: $muted;
+  font-size: 11px;
+}
+
+// ── Right cluster ─────────────────────────────────────────────────────────────
+.meter {
+  margin: 0 6px;
+}
+
+.meter-label {
+  color: $accent;
+  font-size: 10px;
+  letter-spacing: 0.18em;
+  margin-right: 6px;
+}
+
+// EWW progress bars use a nested trough > progress structure.
+// Targeting `.meter-bar > progress` directly has no effect — must drill in.
+.meter-bar {
+  trough {
+    background-color: rgba($bg, 0.7);
+    border-radius: 999px;
+    min-height: 6px;
+    min-width: 60px;
+  }
+  progress {
+    background: linear-gradient(90deg, $primary, $accent);
+    border-radius: 999px;
+  }
+}
+
+.kernel,
+.volume {
+  color: $muted;
+  margin-left: 10px;
+  font-size: 11px;
+}
+
+.volume {
+  color: $accent;
+}

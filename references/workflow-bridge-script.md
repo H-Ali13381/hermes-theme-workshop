@@ -90,13 +90,13 @@ if __name__ == "__main__":
 source ~/.hermes/skills/creative/linux-ricing/.venv/bin/activate
 RICER_API_KEY="$(grep '^OPENROUTER_API_KEY=' ~/.hermes/.env | cut -d= -f2-)" \
 RICER_BASE_URL="https://openrouter.ai/api/v1" \
-RICER_MODEL="deepseek/deepseek-v4-pro" \
+RICER_MODEL="anthropic/claude-sonnet-4-6" \
   python3 /tmp/rice_bridge.py <thread-id>
 
 # 2. Feed an answer (the explore node loops: brief → propose → finalize)
 RICER_API_KEY="$(grep '^OPENROUTER_API_KEY=' ~/.hermes/.env | cut -d= -f2-)" \
 RICER_BASE_URL="https://openrouter.ai/api/v1" \
-RICER_MODEL="deepseek/deepseek-v4-pro" \
+RICER_MODEL="anthropic/claude-sonnet-4-6" \
   python3 /tmp/rice_bridge.py <thread-id> "user's answer here"
 
 # 3. Repeat — each call advances one interrupt gate
@@ -126,6 +126,14 @@ state first, then answer what's actually pending.
 - The bridge outputs JSON. Parse `pending_messages[0].message` for the next prompt.
 - The explore node has 3 stages: brief, propose, finalize. Each requires a separate
   bridge call with the user's answer.
+  - Stage 1 (brief): send the user's raw creative brief (place/mood/reference/avoid).
+  - Stage 2 (propose): the workflow proposes 3 named directions; user picks one, combines,
+    or refines in prose — the workflow accepts free-form, not just "1/2/3".
+  - Stage 3 (finalize): workflow emits `[Explore] Direction confirmed:` in stdout and
+    transitions to refine WITHOUT another bridge interrupt. No third call needed.
+- After explore finishes, the refine node may emit `[Refine][WARN] Sentinel found but
+  design JSON could not be parsed` immediately (even on the first attempt). Do NOT feed
+  more bridge answers — go straight to the state injection bypass (see main SKILL.md).
 - LLM calls inside the bridge can take 60-120s+ via OpenRouter. Use timeout=300.
 - The bridge script must be run with the skill's venv activated.
 - Write the bridge to `/tmp/rice_bridge.py` at session start — it's disposable.

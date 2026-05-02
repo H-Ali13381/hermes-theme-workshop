@@ -1,18 +1,49 @@
 """craft/frameworks.py — Framework knowledge base for the craft agent.
 
 Each entry gives the craft codegen agent: install hints, config paths, key
-syntax patterns, and a short idiomatic example snippet.  The agent uses this
-as *grounding* — it is NOT a template.  The actual generated code should be
-fully original and adapted to the design system.
+syntax patterns, a short idiomatic example, and (optionally) a list of
+reference templates loaded from ``templates/<framework>/`` at the repo root.
+
+The agent uses these as *grounding* — they are NOT materializer templates.
+The actual generated code should be fully original and adapted to the design
+system. Reference templates show idiomatic patterns; the craft prompt tells
+the LLM to study them but never copy.
 """
 from __future__ import annotations
 
+import sys
 from pathlib import Path
+
+_REPO_ROOT = Path(__file__).resolve().parents[3]
+_TEMPLATES_ROOT = _REPO_ROOT / "templates"
+
+
+def _load_reference_templates(paths: list[str]) -> list[dict]:
+    """Load reference template files relative to the repo's templates/ dir.
+
+    Returns a list of {"name": str, "language": str, "content": str} for each
+    file that exists and reads cleanly. Missing or unreadable files are
+    skipped silently — the framework reference still functions without them.
+    """
+    out: list[dict] = []
+    for rel in paths:
+        fp = _TEMPLATES_ROOT / rel
+        try:
+            content = fp.read_text(encoding="utf-8")
+        except OSError as exc:
+            print(f"[craft/frameworks] could not read template {fp}: {exc}", file=sys.stderr)
+            continue
+        out.append({
+            "name":     rel,
+            "language": fp.suffix.lstrip(".") or "txt",
+            "content":  content,
+        })
+    return out
 
 # Elements whose provider belongs to the craft pipeline (agentic codegen).
 # Providers NOT in this set go through the standard materializer path.
 CRAFT_PROVIDERS: frozenset[str] = frozenset({
-    "eww", "ags", "quickshell", "conky", "ignis",
+    "eww", "quickshell", "conky", "ignis",
 })
 
 # Also craft-route any bar: element with these providers.
@@ -76,42 +107,6 @@ _EWW = {
   :stacking "fg"
   :exclusive true
   (bar))
-""",
-}
-
-_AGS = {
-    "name": "AGS / Astal (GJS)",
-    "config_dir": "~/.config/ags",
-    "key_files": ["app.ts", "app.js", "style.css"],
-    "syntax_hint": (
-        "AGS uses GJS (GNOME JavaScript) with TypeScript support via Astal.\n"
-        "Widgets are created via Astal/AGS APIs: Widget.Box, Widget.Label, Widget.Button.\n"
-        "Services provide reactive data: Battery, Network, Audio, Hyprland, etc.\n"
-        "Style with CSS via css property or external .css file.\n"
-        "App.start({ main }) is the entry point.\n"
-    ),
-    "example": """\
-import { App, Astal, Gtk, Gdk } from "astal/gtk3"
-import { Variable, bind } from "astal"
-import Battery from "gi://AstalBattery"
-
-const time = Variable("").poll(1000, "date +'%H:%M'")
-const battery = Battery.get_default()
-
-function Bar(monitor: Gdk.Monitor) {
-  return <window
-    className="bar"
-    gdkmonitor={monitor}
-    anchor={Astal.WindowAnchor.TOP | Astal.WindowAnchor.LEFT | Astal.WindowAnchor.RIGHT}
-    exclusivity={Astal.Exclusivity.EXCLUSIVE}
-  >
-    <box>
-      <label label={bind(time)} />
-      <label label={bind(battery, "percentage").as(p => `${Math.round(p * 100)}%`)} />
-    </box>
-  </window>
-}
-App.start({ main: () => App.get_monitors().forEach(Bar) })
 """,
 }
 
@@ -220,9 +215,25 @@ window#waybar { background: rgba(30,30,46,0.9); color: #cdd6f4; }
 """,
 }
 
+# Reference-template paths, relative to <repo>/templates/. Loaded lazily by
+# get_reference() so the disk read happens only when a craft element actually
+# fires (and so import of this module stays cheap).
+_REFERENCE_TEMPLATE_PATHS: dict[str, list[str]] = {
+    "eww": [
+        "eww/_reference/bar.yuck",
+        "eww/_reference/bar.scss",
+    ],
+    "quickshell": [
+        "quickshell/bar.qml",
+        "quickshell/floating-widget.qml",
+    ],
+    "conky":   [],
+    "waybar":  [],
+}
+
+
 FRAMEWORK_REFS: dict[str, dict] = {
     "eww":        _EWW,
-    "ags":        _AGS,
     "quickshell": _QUICKSHELL,
     "conky":      _CONKY,
     "waybar":     _WAYBAR,
@@ -230,8 +241,20 @@ FRAMEWORK_REFS: dict[str, dict] = {
 
 
 def get_reference(framework: str) -> dict:
-    """Return the knowledge-base entry for *framework*, or an empty stub."""
-    return FRAMEWORK_REFS.get(framework, {"name": framework, "config_dir": "", "key_files": [], "syntax_hint": "", "example": ""})
+    """Return the knowledge-base entry for *framework*, or an empty stub.
+
+    Adds a ``reference_templates`` key with file-backed exemplars (loaded from
+    ``<repo>/templates/<framework>/``) so the craft prompt can show the LLM
+    multiple complete reference files alongside the inline ``example`` snippet.
+    """
+    ref = FRAMEWORK_REFS.get(framework)
+    if ref is None:
+        return {
+            "name": framework, "config_dir": "", "key_files": [],
+            "syntax_hint": "", "example": "", "reference_templates": [],
+        }
+    paths = _REFERENCE_TEMPLATE_PATHS.get(framework, [])
+    return {**ref, "reference_templates": _load_reference_templates(paths)}
 
 
 def config_dir(framework: str) -> Path | None:

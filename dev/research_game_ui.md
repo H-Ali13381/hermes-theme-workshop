@@ -66,7 +66,7 @@ A desktop is a game that never ends and where the player is the author. The stan
 
 **The Hades desktop.** Warm, ornamented, hand-illustrated. Serif fonts for system text. Gold-leaf window borders. Notifications as illuminated manuscript cards. A desktop that says *computing can be mythic, not sterile.*
 
-**The WoW-addon desktop.** The Linux ricing canon already. A base (compositor + WM) with an exposed configuration surface, and a community building interchangeable modules (Waybar, eww, AGS, Polybar). The stance here is *the desktop is a platform for self-authorship,* and the rice is the player character.
+**The WoW-addon desktop.** The Linux ricing canon already. A base (compositor + WM) with an exposed configuration surface, and a community building interchangeable modules (Waybar, eww, Quickshell, Polybar). The stance here is *the desktop is a platform for self-authorship,* and the rice is the player character.
 
 **The Disco Elysium desktop.** Text-forward, literary. Notifications with prose personality. Status bars that read like narration. A desktop where the typography is the art and the written word is the primary visual texture. Aerc, neomutt, and tiling terminal setups already live here, but a full environment could push further.
 

@@ -27,8 +27,12 @@ def resolve_packages(design: dict, profile: dict) -> list[str]:
     _match(design.get("cursor_theme",   ""), _CURSOR_PACKAGES,  pkgs)
     _match(design.get("icon_theme",     ""), _ICON_PACKAGES,    pkgs)
 
-    if profile.get("desktop_recipe") == "kde" and _design_needs_eww(design) and not shutil.which("eww"):
-        pkgs.add("eww")
+    if profile.get("desktop_recipe") == "kde" and _design_needs_widgets(design):
+        framework = _widget_framework_for(design, profile)
+        if framework == "quickshell" and not (shutil.which("quickshell") or shutil.which("qs")):
+            pkgs.add("quickshell")
+        elif framework == "eww" and not shutil.which("eww"):
+            pkgs.add("eww")
 
     return sorted(pkgs)
 
@@ -169,7 +173,8 @@ def _match(value: str, table: dict[str, str], pkgs: set[str]) -> None:
             return
 
 
-def _design_needs_eww(design: dict) -> bool:
+def _design_needs_widgets(design: dict) -> bool:
+    """True when the design implies a custom widget framework (eww/quickshell)."""
     if design.get("widget_layout"):
         return True
     chrome = design.get("chrome_strategy", {})
@@ -177,4 +182,28 @@ def _design_needs_eww(design: dict) -> bool:
         return False
     method = str(chrome.get("method", "")).lower()
     targets = " ".join(str(t).lower() for t in chrome.get("implementation_targets", []))
-    return any(term in method or term in targets for term in ("eww", "overlay", "frame", "border"))
+    return any(
+        term in method or term in targets
+        for term in ("eww", "quickshell", "overlay", "frame", "border")
+    )
+
+
+def _widget_framework_for(design: dict, profile: dict) -> str:
+    """Mirror of refine._default_widget_element, returning the framework name only.
+
+    Honors explicit eww/quickshell mentions in the design's implementation_targets;
+    otherwise picks Quickshell on Hyprland and KDE Wayland, EWW elsewhere.
+    """
+    chrome = design.get("chrome_strategy", {}) if isinstance(design, dict) else {}
+    targets = " ".join(str(t).lower() for t in chrome.get("implementation_targets", [])) if isinstance(chrome, dict) else ""
+    if "widgets:quickshell" in targets:
+        return "quickshell"
+    if "widgets:eww" in targets:
+        return "eww"
+    wm = str(profile.get("wm") or profile.get("desktop_recipe") or "").lower()
+    session = str(profile.get("session_type") or "").lower()
+    if "hypr" in wm:
+        return "quickshell"
+    if ("kde" in wm or "plasma" in wm) and session == "wayland":
+        return "quickshell"
+    return "eww"

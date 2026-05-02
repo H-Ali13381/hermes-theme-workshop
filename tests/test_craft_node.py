@@ -16,9 +16,10 @@ sys.path.insert(0, str(ROOT / "scripts"))
 
 from workflow.nodes.craft.frameworks import (
     CRAFT_PROVIDERS, is_craft_element, framework_for, get_reference, config_dir,
+    _load_reference_templates,
 )
 from workflow.nodes.craft.research import _scan_system, _read_syntax, _summarize_design
-from workflow.nodes.craft.codegen import _parse_file_objects
+from workflow.nodes.craft.codegen import _parse_file_objects, _format_reference_templates, _build_prompt
 from workflow.validators import is_craft_element as validators_is_craft
 
 
@@ -27,9 +28,6 @@ from workflow.validators import is_craft_element as validators_is_craft
 class TestIsCraftElement(unittest.TestCase):
     def test_widgets_eww_is_craft(self):
         self.assertTrue(is_craft_element("widgets:eww"))
-
-    def test_widgets_ags_is_craft(self):
-        self.assertTrue(is_craft_element("widgets:ags"))
 
     def test_widgets_quickshell_is_craft(self):
         self.assertTrue(is_craft_element("widgets:quickshell"))
@@ -76,6 +74,46 @@ class TestGetReference(unittest.TestCase):
         ref = get_reference("unknown_fw")
         self.assertEqual(ref["syntax_hint"], "")
         self.assertEqual(ref["key_files"], [])
+        self.assertEqual(ref["reference_templates"], [])
+
+    def test_eww_includes_reference_templates(self):
+        ref = get_reference("eww")
+        names = [t["name"] for t in ref.get("reference_templates", [])]
+        self.assertIn("eww/_reference/bar.yuck", names)
+        self.assertIn("eww/_reference/bar.scss", names)
+        for tmpl in ref["reference_templates"]:
+            self.assertTrue(tmpl["content"].strip(), f"empty content for {tmpl['name']}")
+            self.assertTrue(tmpl["language"], f"missing language for {tmpl['name']}")
+
+    def test_quickshell_includes_reference_templates(self):
+        ref = get_reference("quickshell")
+        names = [t["name"] for t in ref.get("reference_templates", [])]
+        self.assertIn("quickshell/bar.qml", names)
+        self.assertIn("quickshell/floating-widget.qml", names)
+        for tmpl in ref["reference_templates"]:
+            self.assertEqual(tmpl["language"], "qml")
+            self.assertIn("PanelWindow", tmpl["content"])
+
+    def test_conky_no_reference_templates(self):
+        ref = get_reference("conky")
+        self.assertEqual(ref.get("reference_templates", []), [])
+
+
+class TestLoadReferenceTemplates(unittest.TestCase):
+    def test_missing_file_skipped(self):
+        result = _load_reference_templates(["does/not/exist.txt"])
+        self.assertEqual(result, [])
+
+    def test_loads_real_quickshell_bar(self):
+        result = _load_reference_templates(["quickshell/bar.qml"])
+        self.assertEqual(len(result), 1)
+        self.assertEqual(result[0]["language"], "qml")
+        self.assertIn("PanelWindow", result[0]["content"])
+
+    def test_mixed_existing_and_missing(self):
+        result = _load_reference_templates(["quickshell/bar.qml", "does/not/exist.qml"])
+        self.assertEqual(len(result), 1)
+        self.assertEqual(result[0]["name"], "quickshell/bar.qml")
 
 
 class TestConfigDir(unittest.TestCase):
@@ -114,6 +152,17 @@ class TestReadSyntax(unittest.TestCase):
     def test_unknown_framework(self):
         result = _read_syntax("mystery")
         self.assertEqual(result["syntax_hint"], "")
+        self.assertEqual(result["reference_templates"], [])
+
+    def test_eww_surfaces_reference_templates(self):
+        result = _read_syntax("eww")
+        names = [t["name"] for t in result["reference_templates"]]
+        self.assertIn("eww/_reference/bar.yuck", names)
+
+    def test_quickshell_surfaces_reference_templates(self):
+        result = _read_syntax("quickshell")
+        names = [t["name"] for t in result["reference_templates"]]
+        self.assertIn("quickshell/bar.qml", names)
 
 
 class TestSummarizeDesign(unittest.TestCase):
@@ -139,6 +188,68 @@ class TestSummarizeDesign(unittest.TestCase):
 
 
 # ── codegen.py ────────────────────────────────────────────────────────────────
+
+class TestFormatReferenceTemplates(unittest.TestCase):
+    def test_empty_returns_empty_string(self):
+        self.assertEqual(_format_reference_templates([]), "")
+
+    def test_renders_named_blocks(self):
+        templates = [
+            {"name": "a.qml", "language": "qml", "content": "PanelWindow {}"},
+            {"name": "b.scss", "language": "scss", "content": ".bar { color: red; }"},
+        ]
+        out = _format_reference_templates(templates)
+        self.assertIn("REFERENCE TEMPLATES", out)
+        self.assertIn("--- a.qml ---", out)
+        self.assertIn("```qml", out)
+        self.assertIn("PanelWindow {}", out)
+        self.assertIn("--- b.scss ---", out)
+        self.assertIn("```scss", out)
+
+    def test_skips_empty_content(self):
+        out = _format_reference_templates([
+            {"name": "x.qml", "language": "qml", "content": ""},
+        ])
+        self.assertNotIn("--- x.qml ---", out)
+
+
+class TestBuildPromptInjectsTemplates(unittest.TestCase):
+    _DESIGN_INTENT = {
+        "theme_name": "t", "description": "d", "mood_tags": ["dark"],
+        "palette": {"base": "#000"},
+    }
+
+    def test_quickshell_prompt_contains_reference_templates(self):
+        research = {
+            "syntax": _read_syntax("quickshell"),
+            "system": {"existing_files": {}},
+            "design_intent": self._DESIGN_INTENT,
+        }
+        prompt = _build_prompt("widgets:quickshell", research)
+        self.assertIn("REFERENCE TEMPLATES", prompt)
+        self.assertIn("quickshell/bar.qml", prompt)
+        self.assertIn("PanelWindow", prompt)
+
+    def test_eww_prompt_contains_reference_templates(self):
+        research = {
+            "syntax": _read_syntax("eww"),
+            "system": {"existing_files": {}},
+            "design_intent": self._DESIGN_INTENT,
+        }
+        prompt = _build_prompt("widgets:eww", research)
+        self.assertIn("REFERENCE TEMPLATES", prompt)
+        self.assertIn("eww/_reference/bar.yuck", prompt)
+        self.assertIn("defwidget", prompt)
+
+    def test_unknown_framework_prompt_omits_block(self):
+        research = {
+            "syntax": _read_syntax("mystery"),
+            "system": {"existing_files": {}},
+            "design_intent": self._DESIGN_INTENT,
+        }
+        prompt = _build_prompt("widgets:mystery", research)
+        self.assertNotIn("REFERENCE TEMPLATES", prompt)
+
 
 class TestParseFileObjects(unittest.TestCase):
     def test_valid_json_array(self):

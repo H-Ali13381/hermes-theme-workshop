@@ -18,7 +18,7 @@ class ExploreFastFlowTests(unittest.TestCase):
         prompt = _brief_prompt()
         lowered = prompt.lower()
 
-        self.assertIn("favorite games", lowered)
+        self.assertIn("place", lowered)
         self.assertIn("mood", lowered)
         self.assertIn("subtle", lowered)
         self.assertLessEqual(len(prompt.splitlines()), 5)

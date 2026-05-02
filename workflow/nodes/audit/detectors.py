@@ -8,6 +8,7 @@ single source of truth shared with ricer.py and desktop_state_audit.py.
 from __future__ import annotations
 
 import json
+import os
 import re
 import shutil
 import subprocess
@@ -37,6 +38,19 @@ def detect_wm() -> str:
     the workflow and the scripts layer share one canonical implementation.
     """
     return discover_desktop()["wm"]
+
+
+def detect_session_type() -> str:
+    """Return 'wayland' | 'x11' | 'unknown' from session env vars.
+
+    Reads WAYLAND_DISPLAY / DISPLAY directly so the call is cheap and
+    deterministic in tests (no ps scan, no subprocess).
+    """
+    if os.environ.get("WAYLAND_DISPLAY", ""):
+        return "wayland"
+    if os.environ.get("DISPLAY", ""):
+        return "x11"
+    return "unknown"
 
 
 def desktop_recipe_for_wm(wm: str) -> str:

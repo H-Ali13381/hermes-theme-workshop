@@ -70,13 +70,15 @@ Produce a JSON object with exactly these top-level keys:
 - Favor original, theme-specific composition over boilerplate docks, average bars, and normal KDE/Breeze defaults.
 - Do not use "default", "stock", "Breeze", "unchanged", or "normal" as layout decisions unless the user explicitly demanded defaults.
 
-## Workflow
-1. Show the refined design in a code block
-2. Briefly explain 2-3 key color choices (reference the design stance)
-3. Ask the user to confirm or request changes
-4. When confirmed, output {DESIGN_SENTINEL} followed by the final JSON on the next line
+## Output
+Output ONLY the design_system JSON. Do not narrate the design, do not preview the
+palette in prose, do not show tables, do not ask the user to confirm. The next
+workflow step renders a visual HTML mockup that the user will actually judge —
+your job here is to produce structured data, not commentary.
 
-## Output format when confirmed:
+End your response with the sentinel on its own line, followed immediately by a
+fenced ```json block containing the complete design_system object:
+
 {DESIGN_SENTINEL}
 ```json
 {{...complete design_system object...}}
@@ -119,7 +121,9 @@ def refine_node(state: RiceSessionState) -> dict:
     if response.content and DESIGN_SENTINEL in response.content:
         design = _extract_design_json(response.content, recipe)
         if design:
-            queue = _queue_design_elements(state.get("element_queue", []), design)
+            queue = _queue_design_elements(
+                state.get("element_queue", []), design, state.get("device_profile", {}),
+            )
             session_dir = state.get("session_dir", "")
             if session_dir:
                 _write_design_json(session_dir, design)
@@ -193,14 +197,49 @@ def _write_design_json(session_dir: str, design: dict) -> None:
         raise
 
 
-def _queue_design_elements(queue: list[str], design: dict) -> list[str]:
-    """Add optional design-driven implementers without making widgets mandatory."""
+def _queue_design_elements(queue: list[str], design: dict, profile: dict | None = None) -> list[str]:
+    """Add optional design-driven implementers without making widgets mandatory.
+
+    Picks the widget framework based on the running compositor:
+      - Hyprland or KDE Wayland → widgets:quickshell (default)
+      - Everything else (KDE X11, GNOME, X11) → widgets:eww (fallback)
+    An explicit element name in implementation_targets overrides the default.
+    """
     updated = list(queue or [])
     chrome = design.get("chrome_strategy", {}) if isinstance(design, dict) else {}
     method = str(chrome.get("method", "")).lower() if isinstance(chrome, dict) else ""
     targets = " ".join(str(x).lower() for x in chrome.get("implementation_targets", [])) if isinstance(chrome, dict) else ""
-    uses_eww = any(term in method or term in targets for term in ("eww", "overlay", "frame", "border"))
-    if (design.get("widget_layout") or uses_eww) and "widgets:eww" not in updated:
+
+    explicit = None
+    if "widgets:quickshell" in targets:
+        explicit = "widgets:quickshell"
+    elif "widgets:eww" in targets:
+        explicit = "widgets:eww"
+
+    needs_widget = bool(design.get("widget_layout")) or any(
+        term in method or term in targets
+        for term in ("eww", "quickshell", "overlay", "frame", "border")
+    )
+    if not needs_widget:
+        return updated
+
+    provider = explicit or _default_widget_element(profile or {})
+    if provider not in updated:
         insert_at = 1 if updated else 0
-        updated.insert(insert_at, "widgets:eww")
+        updated.insert(insert_at, provider)
     return updated
+
+
+def _default_widget_element(profile: dict) -> str:
+    """Return the default widgets:* element name for this profile.
+
+    Quickshell is preferred wherever wlr-layer-shell is available
+    (Hyprland, KDE Wayland). EWW is the fallback for X11 / unknown.
+    """
+    wm = str(profile.get("wm") or profile.get("desktop_recipe") or "").lower()
+    session = str(profile.get("session_type") or "").lower()
+    if "hypr" in wm:
+        return "widgets:quickshell"
+    if ("kde" in wm or "plasma" in wm) and session == "wayland":
+        return "widgets:quickshell"
+    return "widgets:eww"

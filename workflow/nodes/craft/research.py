@@ -39,14 +39,15 @@ def _scan_system(framework: str) -> dict:
 
 
 def _read_syntax(framework: str) -> dict:
-    """Pull syntax hints and example from the knowledge base."""
+    """Pull syntax hints, inline example, and reference templates from the KB."""
     ref = get_reference(framework)
     return {
-        "framework_name": ref.get("name", framework),
-        "syntax_hint":    ref.get("syntax_hint", ""),
-        "example":        ref.get("example", ""),
-        "key_files":      ref.get("key_files", []),
-        "config_dir":     ref.get("config_dir", ""),
+        "framework_name":      ref.get("name", framework),
+        "syntax_hint":         ref.get("syntax_hint", ""),
+        "example":             ref.get("example", ""),
+        "key_files":           ref.get("key_files", []),
+        "config_dir":          ref.get("config_dir", ""),
+        "reference_templates": ref.get("reference_templates", []),
     }
 
 

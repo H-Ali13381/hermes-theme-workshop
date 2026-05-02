@@ -300,3 +300,59 @@ sudo make install
 - `windowrulev2` → now just `windowrule`
 - `dwindle:no_gaps_when_only` → removed entirely
 - `force_default_wallpaper`, `disable_splash_rendering` → removed
+
+---
+
+## Plugins — Going Beyond Config (Advanced)
+
+A Hyprland plugin is a C++ shared library (`.so`) loaded into the compositor process at runtime. Plugins extend Hyprland *itself* — they can add dispatchers, config keywords, event hooks, window decorations, custom layouts, IPC fields, render-pipeline modifications, and overrides of built-in behavior.
+
+**Default position for this skill: do not generate plugins.** Almost every rice can be expressed via `hyprland.conf` + a layer-shell client (Quickshell/EWW/waybar). Plugins are a last resort when those two tiers cannot reach the desired effect.
+
+### When a plugin is the only path
+
+| Need | Why config + widgets can't reach it |
+|---|---|
+| Custom window decorations (e.g. 9-slice image borders, tiled trim, badges) | Hyprland reserves and renders the border region itself; layer-shell clients can't draw inside it. |
+| New tiling layouts (PaperWM-style horizontal scroll, manual tiling, spiral) | `general:layout` only accepts built-ins. |
+| Augmenting IPC event payloads (e.g. attach window class to `closewindow`) | The IPC schema is fixed by Hyprland source. |
+| Per-frame render hooks (custom shaders, post-processing, special compositing) | No config knob exposes the render pipeline. |
+| New dispatchers / config keywords | The keyword and dispatcher tables are compiled-in. |
+
+If the design need is in any of those rows, a plugin is the only path. If it isn't, write config and widgets instead.
+
+### Loading
+
+- **`hyprpm`** — official plugin manager. `hyprpm add <git-url>` → builds against the installed Hyprland version, `hyprpm enable <name>` activates it. Requires the Hyprland headers (`hyprland` source) installed.
+- **Manual** — `plugin = /path/to/plugin.so` in `hyprland.conf`, or `hyprctl plugin load /path/to/plugin.so` at runtime.
+
+### Constraints
+
+- **ABI fragility.** Hyprland breaks plugin ABI frequently. Every Hyprland upgrade typically requires `hyprpm update` to rebuild every plugin. A plugin without an active maintainer becomes unloadable within months.
+- **Crashes the compositor.** A null deref in plugin code kills the entire graphical session. There is no safe-mode reload.
+- **C++ only.** No stable bindings for other languages. The internal types are Hyprland's own (`CWindow`, `CMonitor`, etc.) and the canonical reference is the Hyprland source itself; documentation is thin.
+- **Build dependency on user's Hyprland version.** Pre-built `.so` files don't ship — every plugin is compiled on-host against the running Hyprland headers.
+
+### Reference plugins
+
+Useful as study material when generating a custom one:
+
+| Plugin | Pattern demonstrated |
+|---|---|
+| `hyprbars` | Per-window decorations (title bars on tiled windows) |
+| `hyprscroller` | Custom layout |
+| `hyprtrails` | Per-frame rendering hook |
+| `borders-plus-plus` | Multiple decoration layers |
+| `hyprexpo` | Overlay / overview rendering (largely upstreamed) |
+
+### If the skill is asked to generate a plugin
+
+Treat it as a separate, opt-in deliverable, not part of the standard craft loop:
+
+1. **Confirm the bucket-3 test above.** If config + a layer-shell client can express it, refuse and route to widgets instead.
+2. **Generate a minimal plugin first.** A 1-callback plugin (event hook, no rendering) is the right starting point before attempting rendering or decoration plugins.
+3. **Write a `Makefile` / `meson.build` against `pkg-config --cflags hyprland`.** Pin the targeted Hyprland version in a comment.
+4. **Implement the destructor.** Forgetting a destructor declared in the header causes immediate SIGSEGV on load — the single most common first-plugin bug.
+5. **Defer destroy/free to after the current frame.** Freeing a resource (texture, buffer, surface struct) inside a callback while the renderer is still reading from it segfaults the compositor. Queue destroys and run them at frame boundaries.
+6. **Document the rebuild step.** Every plugin must come with a "run after Hyprland upgrade" instruction. `hyprpm update` if installed via hyprpm; otherwise rebuild manually.
+7. **Mark the rice as plugin-dependent.** Surface this in the rice's README so the user knows their session can be killed by an ABI break.

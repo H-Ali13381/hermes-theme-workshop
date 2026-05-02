@@ -1,8 +1,22 @@
-# Hyprland — Custom Widgets (EWW)
+# Hyprland — Custom Widgets (Quickshell default, EWW fallback)
 
-> For EWW basics, the AI→widget pipeline, image slicing, and hover patterns, see [`shared/widgets.md`](../shared/widgets.md).
+> For framework selection, the AI→widget pipeline, image slicing, and hover patterns, see [`shared/widgets.md`](../shared/widgets.md).
 
-This document covers Hyprland-specific EWW widget configuration.
+**Quickshell is the default widget framework on Hyprland.** The leading 2025+ Hyprland rices
+(end-4/dots-hyprland, caelestia-dots, illogical-impulse) all ship a Quickshell QML shell —
+QML matches Hyprland's compositor-toolkit affinity, hot-reloads on save, and has first-class
+typed services (Pipewire, MPRIS, UPower, Hyprland workspace IPC). The skill's `craft` node
+generates Quickshell QML directly from design descriptions; see
+`workflow/nodes/craft/frameworks.py` for the framework registry.
+
+> **Panel-interference caveat.** A Quickshell bar anchored to the same edge as `waybar` will
+> double the exclusive zone or render over it. Either drop `waybar` (let Quickshell own the
+> bar), anchor the two to different edges, or set the Quickshell window's `exclusionMode` to
+> `ExclusionMode.Ignore`.
+
+The rest of this document covers **EWW on Hyprland** — used as the fallback when a design
+explicitly requests EWW (`widgets:eww` in `chrome_strategy.implementation_targets`) or when
+Quickshell isn't installed.
 
 ---
 

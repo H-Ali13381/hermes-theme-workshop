@@ -76,6 +76,7 @@ class DesktopRecipeTests(unittest.TestCase):
 
     def test_audit_reports_unsupported_message_for_other_desktops(self):
         with patch("workflow.nodes.audit.detect_wm", return_value="xfce"), \
+             patch("workflow.nodes.audit.detect_session_type", return_value="x11"), \
              patch("workflow.nodes.audit.detect_chassis", return_value="desktop"), \
              patch("workflow.nodes.audit.detect_screens", return_value=1), \
              patch("workflow.nodes.audit.detect_gpu", return_value={"name": "Test GPU", "vram_mb": 0}), \

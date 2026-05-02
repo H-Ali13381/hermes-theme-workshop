@@ -12,26 +12,15 @@
 
 ## Contents
 
-1. What an OS Really Is
-2. Core Design Principle
-3. The Four Research Pillars
-4. The Design Stance Model — Seven Named Stances
-5. Game UI Theory: The Desktop as a Designed World
-6. Usability Theory: Rules to Know Before Breaking Them
-7. The 8-Step Session Workflow
-8. The Wallpaper System
-9. What Makes This Different
-10. What We Don't Do
-
----
-
-## What an OS Really Is
-
-An operating system is the membrane between a human mind and raw computation. The desktop is the only part most people ever touch — it is the face of the machine.
-
-Most software assumes you will adapt to it. **Ricing inverts that.** It is the act of refusing to accept the default face. Of saying: this interface should reflect *me*.
-
-That is what this skill exists to do. Not to apply color schemes. Not to write config files. To help a person make their machine feel like *theirs* — possibly in ways they haven't consciously imagined yet.
+1. Core Design Principle
+2. The Four Research Pillars
+3. The Design Stance Model — Seven Named Stances
+4. Game UI Theory: The Desktop as a Designed World
+5. Usability Theory: Rules to Know Before Breaking Them
+6. The 8-Step Session Workflow
+7. The Wallpaper System
+8. What Makes This Different
+9. What We Don't Do
 
 ---
 
@@ -39,30 +28,32 @@ That is what this skill exists to do. Not to apply color schemes. Not to write c
 
 **Agent = Designer. User = Art/UX Director.**
 
-A designer does not ask "what hex value do you want for the border?" They gather a brief, make aesthetic decisions, explain their reasoning, and deliver work. They take direction — "I want it to feel colder", "the font is too heavy" — without needing to be told *how* to fix it.
+The agent gathers a brief, makes aesthetic decisions, explains reasoning, and delivers
+work. It accepts high-level redirection ("colder", "the font is too heavy") without
+asking the user *how* to fix it. The user should never have to know what a
+`kvantum.kvconfig` file is.
 
-This skill must behave like a skilled designer:
+The skill exists to help a person make their machine feel like *theirs* — not to apply
+color schemes or write config files.
+
+**Designer behaviors (non-negotiable):**
 - Gather a brief before touching anything
 - Make bold choices and explain the rationale
 - Accept high-level redirection and re-interpret it
 - Deliver a **handoff document** the user can actually read
 
-The user should never have to know what a `kvantum.kvconfig` file is.
-
 ---
 
 ## The Four Research Pillars
 
-This skill's design vocabulary is grounded in four bodies of research. They are not constraints — they are tools the agent deploys or consciously breaks.
+| Pillar | Contributes |
+|--------|-------------|
+| **Corporate OS design** | Mainstream defaults (Apple, Google, Microsoft, GNOME) — the expectations to know before departing from them |
+| **Counterculture design** | Punk, cypherpunk, hippie, Japanese lo-fi, anarchist, GNU — named stances with real lineage |
+| **Game UI theory** | Diegetic vs non-diegetic chrome; genre archetypes; *what kind of world is your computer?* |
+| **Usability theory** | Fitts, Hick, Miller, Jakob, Norman, Nielsen — laws to know before breaking, vocabulary for naming decisions |
 
-| Pillar | What it contributes |
-|--------|-------------------|
-| **Corporate OS design** | What mainstream design (Apple, Google, Microsoft, GNOME) believes about users. The default expectations the agent must know before departing from them. |
-| **Counterculture design** | The traditions the ricing community descends from — punk, cypherpunk, hippie, Japanese lo-fi, anarchist, GNU. Named stances with real political and aesthetic lineage. |
-| **Game UI theory** | The desktop as a designed world. Diegetic vs non-diegetic chrome. Genre archetypes as desktop modes. The question: *what kind of world is your computer?* |
-| **Usability theory** | Fitts, Hick, Miller, Jakob, Norman, Nielsen. The laws to know before breaking. The vocabulary for naming decisions. The distinction between investment and arbitrary friction. |
-
-Together they give the agent a complete design language:
+Mapped to design questions:
 - *What kind of world is this desktop?* ← Game UI theory
 - *Where on the curated↔liberated axis?* ← Corporate / Counterculture research
 - *What flavor — warm, cold, confrontational, meditative?* ← Seven Stances
@@ -72,46 +63,36 @@ Together they give the agent a complete design language:
 
 ## The Design Stance Model
 
-### Background: Two Traditions, One Axis
+### Two axes
 
-Every OS encodes a belief about its user. Mainstream design — Apple, Google, Microsoft, GNOME — converges on a shared ideology: **the user wants comfort, safety, and legibility over power, precision, and transparency.** The interface is a showroom. The user is a consumer.
+**Curated ↔ Liberated** — what the OS believes about its user:
+- *Curated:* smooth, decided, comfortable, safe. The OS knows what's best.
+  Mainstream defaults (Apple, Google, Microsoft, GNOME).
+- *Liberated:* raw, configurable, honest, powerful. The machine is yours.
+  Linux ricing tradition (punk, cypherpunk, hippie, Japanese lo-fi, GNU, Situationist).
 
-The Linux ricing tradition, and the counter-cultures that feed into it — punk, cypherpunk, hippie, Japanese lo-fi, Free Software, Situationist, anarchist — operate from the opposite premise: **the user is a maker, a peer, a person with politics.** The desktop is a workshop. Nothing is a black box by design.
-
-The pendulum between them is the **Design Stance Axis**:
-
+**Flavor quadrant** (independent of curated/liberated):
 ```
-CURATED ◄────────────────────────────────────────► LIBERATED
-  │                                                      │
-  │  Smooth. Decided. Coherent. Comfortable. Safe.       │
-  │  The OS knows what's best for you.                   │
-  │                                                      │
-  │         Raw. Configurable. Honest. Powerful.         │
-  │         The machine is yours. Do what you want.      │
-```
-
-A second axis describes **flavor** — how the desktop *feels*, independent of how liberated it is:
-
-```
-                        CONFRONTATIONAL
-                        (Punk, Hacktivist)
-                               │
-   WARM ──────────────────────┼────────────────────── COLD
-(Hippie, Japanese lo-fi)      │            (Cypherpunk, GNU, Punk)
-                               │
-                         MEDITATIVE
-                      (Wabi-sabi, Doujin)
+                  CONFRONTATIONAL  (Punk, Hacktivist)
+                        │
+   WARM ────────────────┼──────────────── COLD
+   (Hippie, lo-fi)      │      (Cypherpunk, GNU)
+                        │
+                  MEDITATIVE      (Wabi-sabi, Doujin)
 ```
 
-Note: punk spans the confrontational axis leaning cold — its visual language (acid green/black, jagged bitmaps, ransom-note typography) is cold and adversarial, even if its *community ethos* (DIY, accessibility of means) carries warmth. A punk terminal reads cold; a folk punk dotfile repo reads warm.
+A user's stance is a **point in 2D space** — curated/liberated × flavor quadrant. A punk
+terminal and a Japanese lo-fi terminal are both maximally liberated but differ in flavor.
 
-A user's desktop stance is a **position in two-dimensional space**: where they fall on the Curated↔Liberated axis, and where they fall in the flavor quadrant. These are independent. A punk terminal and a Japanese lo-fi terminal are both maximally liberated but very different in flavor.
+> Note on punk: visual language reads cold/confrontational (acid green/black, jagged
+> bitmaps), even when community ethos (DIY, accessibility) carries warmth.
 
 ---
 
 ### The Seven Named Stances
 
-Rather than presenting the user with an abstract axis, the agent works with **named stances** — each rooted in a real tradition, with a clear design language and a set of values it encodes. The stances are **internal vocabulary**: the agent uses them to orient itself, but speaks to the user in terms of feeling and vibe, not taxonomy.
+Stances are **internal vocabulary** — the agent uses them to orient; speaks to the user
+in terms of feeling and vibe, not taxonomy.
 
 ---
 
@@ -222,13 +203,13 @@ When a user says "I want it to feel like a spaceship but cozy" — that's **Blad
 
 *Full research: `dev/research_game_ui.md`*
 
-Games are the richest laboratory for UI design because — unlike productivity software — games invent interface languages on purpose. Every game UI answers a single deep question: *what is my relationship with the player, and how much of the machine do I let them see?*
-
-A personal desktop can answer the same question. The ricing agent should treat the desktop not as a wrapper around applications, but as a **designed world with a stance**.
+Games invent interface languages on purpose. Every game UI answers: *what is my
+relationship with the player, and how much of the machine do I let them see?* The
+ricing agent treats the desktop the same way — as a **designed world with a stance**.
 
 ### The Diegesis Axis
 
-The foundational axis in game UI theory maps directly to desktop chrome decisions:
+Maps directly to desktop chrome decisions:
 
 | Mode | What it says | Desktop equivalent |
 |------|-------------|-------------------|
@@ -671,11 +652,10 @@ No FAL, no interest                     → static only, use image gen or web se
 
 ## What Makes This Different
 
-Most ricing guides are **configuration references**. They explain how to turn knobs. They don't answer *why* you'd turn a particular knob, or what turning it in a different direction would feel like.
-
-This skill's job is to be the person who knows why. The agent brings aesthetic judgment, creative range, and system knowledge. The user brings direction, taste, and the final call.
-
-The machine should feel like it was made for its owner. That's the only success criterion that matters.
+Most ricing guides are **configuration references** — they explain how to turn knobs, not
+*why*. This skill brings aesthetic judgment, creative range, and system knowledge; the
+user brings direction, taste, and the final call. Success criterion: the machine feels
+like it was made for its owner.
 
 ---
 

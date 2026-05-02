@@ -6,7 +6,7 @@ import os
 from ...config import UNSUPPORTED_DESKTOP_MESSAGE
 from ...state import RiceSessionState
 from .detectors import (
-    detect_wm, detect_chassis, detect_screens, detect_gpu,
+    detect_wm, detect_session_type, detect_chassis, detect_screens, detect_gpu,
     detect_apps, detect_touchpad, get_current_wallpaper, build_element_queue,
     desktop_recipe_for_wm,
 )
@@ -16,18 +16,20 @@ def audit_node(state: RiceSessionState) -> dict:
     """Gather device profile silently. No user interaction."""
     print("[Step 1] Auditing your machine...", flush=True)
 
-    wm       = detect_wm()
-    recipe   = desktop_recipe_for_wm(wm)
-    chassis  = detect_chassis()
-    screens  = detect_screens()
-    gpu      = detect_gpu()
-    apps     = detect_apps()
-    touchpad = detect_touchpad()
-    wallpaper = get_current_wallpaper()
+    wm           = detect_wm()
+    session_type = detect_session_type()
+    recipe       = desktop_recipe_for_wm(wm)
+    chassis      = detect_chassis()
+    screens      = detect_screens()
+    gpu          = detect_gpu()
+    apps         = detect_apps()
+    touchpad     = detect_touchpad()
+    wallpaper    = get_current_wallpaper()
     fal_available = bool(os.environ.get("FAL_KEY", "").strip())
 
     profile = {
         "wm": wm,
+        "session_type": session_type,
         "desktop_recipe": recipe,
         "chassis": chassis,
         "screens": screens,

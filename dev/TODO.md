@@ -400,6 +400,62 @@
   `mood_tags`, and stance. Explicit user styling should always override this
   default theme context.
 
+- [ ] **[FEATURE] Hyprland plugin generation (advanced craft tier)**
+  Today, the craft pipeline can generate config (`hyprland.conf`) and layer-shell
+  widgets (Quickshell QML / EWW yuck), but stops at Hyprland's built-in feature
+  surface. Designs that need custom window decorations (e.g. 9-slice image
+  borders), per-frame render hooks, custom tiling layouts, IPC payload
+  augmentation, or new dispatchers/config keywords are currently impossible \u2014
+  Hyprland exposes none of those through configuration or layer-shell clients.
+  The only path is a C++ plugin loaded into the compositor itself, documented as
+  a manual escape hatch in `Hyprland/setup.md` \u00a7"Plugins \u2014 Going Beyond Config".
+  **Approach:** Add a new craft element type `plugin:hyprland` so the workflow
+  can emit a complete buildable plugin tree as part of a rice. Sub-tasks:
+  - Register `plugin:hyprland` in `workflow/nodes/craft/frameworks.py`
+    (`CRAFT_PROVIDERS`, `FRAMEWORK_REFS["hyprland_plugin"]`) with syntax hints
+    referencing `HyprlandAPI::registerCallbackDynamic`,
+    `HyprlandAPI::createFunctionHook`, `PLUGIN_API_VERSION`, the
+    `pluginInit`/`pluginExit` entry points, and the destructor-on-header gotcha.
+  - Build `templates/hyprland_plugin/_reference/` with at least three exemplars:
+    a single-event-hook plugin (the canonical \"first plugin\" pattern \u2014 augment
+    `closewindow` with window class), a window-decoration plugin (9-slice
+    border-style), and a dispatcher plugin (new keybind action). Wire them into
+    `_REFERENCE_TEMPLATE_PATHS` so the craft prompt injects them as study
+    material via the existing reference-template mechanism.
+  - Ship a `Makefile` template (or `meson.build`) that builds against
+    `pkg-config --cflags hyprland` and pins the targeted Hyprland version in a
+    comment. Output `.so` to `~/.local/share/hyprland/plugins/<name>/`.
+  - Add a `bucket-3 gate` in `workflow/nodes/refine.py`: only queue
+    `plugin:hyprland` when `chrome_strategy.implementation_targets` explicitly
+    requests it OR when the design intent contains a marker (e.g.
+    `signature_move.requires_plugin = true`). Never auto-derive \u2014 a plugin
+    that the user did not ask for is a session-stability liability.
+  - Materializer / installer path: detect installed Hyprland headers (warn if
+    missing, with a link to `pacman -S hyprland-headers` or equivalent), build
+    the plugin via `make`, install via `hyprpm add` for git-tracked plugins or
+    by writing `plugin = ...` to `hyprland.conf` for local builds. Snapshot any
+    existing `plugin = ` lines for undo.
+  - Undo path: remove the built `.so`, strip the `plugin = ...` line, run
+    `hyprctl plugin unload` if loaded. Flag rices that depend on a plugin in
+    the manifest so undo can warn the user that a Hyprland upgrade may have
+    already broken the load (no-op unload is acceptable).
+  - Rebuild lifecycle: emit a `hermes-replug.sh` script alongside the plugin
+    that re-runs the build against the current Hyprland version. Mention it in
+    the per-rice README the workflow already produces, with the explicit
+    warning that ABI changes can kill the session on next login.
+  - Tests: schema/registry tests for the new element type, prompt-injection
+    tests for the reference templates (mirroring `TestBuildPromptInjectsTemplates`
+    for quickshell/eww), refine-gate tests that confirm `plugin:hyprland` is
+    only queued when explicitly requested, materializer/undo tests with
+    `hyprctl` and `make` mocked.
+  **Risks / non-goals:** This is the highest-risk craft path in the skill \u2014 a
+  null deref kills the user's session. Keep it strictly opt-in. Do not generate
+  plugins for effects that config or a layer-shell client could express; the
+  bucket-3 decision table in `Hyprland/setup.md` is the gate. No GUI for plugin
+  selection \u2014 plugins are described in the design intent or not at all. No
+  attempt to support non-Hyprland compositors via the same surface; KWin scripts
+  and Sway forks are separate features.
+
 ## Open Issues
 
 ### Architectural Concerns
