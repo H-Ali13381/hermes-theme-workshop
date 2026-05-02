@@ -3,7 +3,6 @@ from __future__ import annotations
 
 import json
 import re
-import sys
 import tempfile
 from pathlib import Path
 
@@ -23,10 +22,17 @@ from ..config import (
     RECIPE_REQUIRED_KEYS,
     SUPPORTED_DESKTOP_RECIPES,
 )
+from ..logging import get_logger, truncate_for_log
 from ..state import RiceSessionState
 from ..validators import design_complete
 
 DESIGN_SENTINEL = "<<DESIGN_READY>>"
+
+# Internal self-healing retries inside one refine_node invocation. Bounds the
+# upper latency cost (each retry is another LLM round-trip) while removing the
+# common case where the agent panics and bypasses the workflow because the
+# first response failed to emit valid JSON.
+MAX_REFINE_RETRIES = 1
 
 
 def build_system_prompt(recipe: str) -> str:
@@ -92,6 +98,7 @@ SYSTEM_PROMPT = build_system_prompt("kde")
 
 def refine_node(state: RiceSessionState) -> dict:
     """Converge on design.json. Loops via graph routing until confirmed."""
+    log = get_logger("refine", state)
     llm = get_llm(0.3)
     messages = list(state.get("messages", []))
     direction = state.get("design", {})
@@ -103,6 +110,7 @@ def refine_node(state: RiceSessionState) -> dict:
     loop_counts = dict(state.get("loop_counts") or {})
     prior_refine_count = loop_counts.get("refine", 0)
     loop_counts["refine"] = prior_refine_count + 1
+    log.info("refine invocation #%d (recipe=%s)", prior_refine_count + 1, recipe)
 
     new_messages: list = []
     if prior_refine_count == 0 or not messages:
@@ -115,28 +123,50 @@ def refine_node(state: RiceSessionState) -> dict:
             )),
         ]
         new_messages = list(messages)  # seed messages are new on first turn
+        log.debug("seeded conversation with system + direction prompt")
 
-    response = llm.invoke(messages)
+    # Self-healing retry loop: try to extract a valid design up to
+    # MAX_REFINE_RETRIES extra times before falling through to a user interrupt.
+    # Failed retry exchanges stay local — only the final response (success or
+    # the one shown via interrupt) is committed to the message history.
+    working_messages = list(messages)
+    response = llm.invoke(working_messages)
+    log.debug("attempt 1 raw response:\n%s", truncate_for_log(response.content or ""))
+    design, reason = _extract_design_json(response.content or "", recipe)
 
-    if response.content and DESIGN_SENTINEL in response.content:
-        design = _extract_design_json(response.content, recipe)
+    for attempt in range(MAX_REFINE_RETRIES):
         if design:
-            queue = _queue_design_elements(
-                state.get("element_queue", []), design, state.get("device_profile", {}),
-            )
-            session_dir = state.get("session_dir", "")
-            if session_dir:
-                _write_design_json(session_dir, design)
-            print(f"[Refine] design.json written: {design.get('name')}\n")
-            return {
-                "messages": new_messages + [AIMessage(content=response.content.split(DESIGN_SENTINEL)[0].strip())],
-                "design": design,
-                "element_queue": queue,
-                "current_step": 3,
-                "loop_counts": loop_counts,
-            }
-        print("[Refine][WARN] Sentinel found but design JSON could not be parsed — asking for retry.")
+            break
+        log.warning("attempt %d failed (%s) — retrying", attempt + 1, reason)
+        retry_msg = HumanMessage(content=_build_retry_prompt(reason))
+        working_messages = working_messages + [response, retry_msg]
+        response = llm.invoke(working_messages)
+        log.debug(
+            "attempt %d raw response:\n%s",
+            attempt + 2, truncate_for_log(response.content or ""),
+        )
+        design, reason = _extract_design_json(response.content or "", recipe)
 
+    if design:
+        queue = _queue_design_elements(
+            state.get("element_queue", []), design, state.get("device_profile", {}),
+        )
+        session_dir = state.get("session_dir", "")
+        if session_dir:
+            _write_design_json(session_dir, design)
+        log.info("design.json written: %s", design.get("name"))
+        return {
+            "messages": new_messages + [AIMessage(content=response.content.split(DESIGN_SENTINEL)[0].strip())],
+            "design": design,
+            "element_queue": queue,
+            "current_step": 3,
+            "loop_counts": loop_counts,
+        }
+
+    log.warning(
+        "all %d attempts failed (%s) — asking user",
+        MAX_REFINE_RETRIES + 1, reason,
+    )
     # Present to user for feedback
     user_reply = interrupt({
         "step": 3,
@@ -150,11 +180,17 @@ def refine_node(state: RiceSessionState) -> dict:
     }
 
 
-def _extract_design_json(content: str, recipe: str = "kde") -> dict | None:
-    """Pull the JSON block after the sentinel."""
+def _extract_design_json(content: str, recipe: str = "kde") -> tuple[dict | None, str]:
+    """Pull the JSON block after the sentinel.
+
+    Returns ``(design, "")`` on success or ``(None, reason)`` describing why the
+    extraction failed so the caller can craft a targeted self-healing retry.
+    """
+    if not content:
+        return None, "empty response"
     parts = content.split(DESIGN_SENTINEL, 1)
     if len(parts) < 2:
-        return None
+        return None, "missing sentinel"
     after = parts[1].strip()
     # Extract JSON from markdown fences using a block-extraction pattern so any
     # preamble text before the opening fence is handled correctly (matches plan.py).
@@ -163,13 +199,18 @@ def _extract_design_json(content: str, recipe: str = "kde") -> dict | None:
         after = fence_m.group(1).strip()
     decoder = json.JSONDecoder()
     idx = after.find("{")
-    if idx >= 0:
-        try:
-            obj, _ = decoder.raw_decode(after, idx)
-            return obj if _validate_design(obj, recipe) else None
-        except Exception as e:
-            print(f"[Refine][WARN] JSON parse error: {e}", file=sys.stderr, flush=True)
-    return None
+    if idx < 0:
+        return None, "no JSON object after sentinel"
+    try:
+        obj, _ = decoder.raw_decode(after, idx)
+    except Exception as e:
+        return None, f"JSON parse error: {e}"
+    if recipe not in SUPPORTED_DESKTOP_RECIPES:
+        return None, f"unsupported desktop recipe '{recipe}'"
+    ok, reason = design_complete(obj, {"desktop_recipe": recipe})
+    if not ok:
+        return None, f"design validation failed: {reason}"
+    return obj, ""
 
 
 def _validate_design(d: dict, recipe: str = "kde") -> bool:
@@ -177,6 +218,20 @@ def _validate_design(d: dict, recipe: str = "kde") -> bool:
         return False
     ok, _ = design_complete(d, {"desktop_recipe": recipe})
     return ok
+
+
+def _build_retry_prompt(reason: str) -> str:
+    """Concise corrective instruction for a self-healing retry."""
+    return (
+        f"Your previous response failed: {reason}.\n\n"
+        "Re-emit your final answer with NO prose, NO commentary, NO confirmation step. "
+        "End with the sentinel on its own line, immediately followed by a fenced "
+        "```json block containing the complete design_system object:\n\n"
+        f"{DESIGN_SENTINEL}\n"
+        "```json\n"
+        "{...complete design_system object...}\n"
+        "```"
+    )
 
 
 def _write_design_json(session_dir: str, design: dict) -> None:

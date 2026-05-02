@@ -9,6 +9,7 @@ from pathlib import Path
 from langchain_core.messages import HumanMessage, SystemMessage
 
 from ..config import get_llm
+from ..logging import get_logger
 from ..session import mark_complete
 from ..state import RiceSessionState
 
@@ -42,7 +43,8 @@ Be concise and practical. This is a reference document the user will keep.
 
 def handoff_node(state: RiceSessionState) -> dict:
     """Generate handoff.md and handoff.html from the session data."""
-    print("[Step 8] Generating handoff documentation...", flush=True)
+    log = get_logger("handoff", state)
+    log.info("generating handoff documentation")
 
     design = state.get("design", {})
     impl_log = state.get("impl_log", [])
@@ -84,13 +86,13 @@ def handoff_node(state: RiceSessionState) -> dict:
                 if tmp_path:
                     Path(tmp_path).unlink(missing_ok=True)
                 raise
-        print(f"  handoff.md   → {md_path}")
-        print(f"  handoff.html → {html_path}")
+        log.info("handoff.md   → %s", md_path)
+        log.info("handoff.html → %s", html_path)
 
         # Mark session complete
         mark_complete(session_dir)
 
-    print("\nSession complete!\n")
+    log.info("session complete")
     return {"current_step": 8}
 
 

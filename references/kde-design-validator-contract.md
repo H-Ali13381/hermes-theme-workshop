@@ -83,29 +83,3 @@ design = json.loads(Path('/home/neos/.config/rice-sessions/<thread>/design.json'
 ok, reason = design_complete(design, {'desktop_recipe': 'kde'})
 print(f'ok={ok}, reason={reason!r}')
 ```
-
-## Injecting a valid design to bypass the stuck refine loop
-
-```bash
-source ~/.hermes/skills/creative/linux-ricing/.venv/bin/activate
-python3 - <<'EOF'
-import sys, json
-from pathlib import Path
-sys.path.insert(0, '/home/neos/.hermes/skills/creative/linux-ricing')
-from langgraph.checkpoint.sqlite import SqliteSaver
-from workflow.config import DB_PATH
-from workflow.graph import build_graph
-
-thread_id = '<your-thread-id>'
-design = json.loads(Path(f'/home/neos/.config/rice-sessions/{thread_id}/design.json').read_text())
-config = {'configurable': {'thread_id': thread_id}}
-
-with SqliteSaver.from_conn_string(DB_PATH) as cp:
-    graph = build_graph(cp)
-    graph.update_state(config, {'design': design, 'current_step': 3}, as_node='refine')
-    state = graph.get_state(config)
-    print('next:', list(state.next))  # should be ['plan']
-EOF
-```
-
-Then call the bridge with no answer to trigger the plan node.

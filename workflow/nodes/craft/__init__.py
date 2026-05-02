@@ -13,7 +13,6 @@ off to implement/cleanup depending on what's next in the queue.
 """
 from __future__ import annotations
 
-import sys
 from pathlib import Path
 
 try:
@@ -22,6 +21,7 @@ except ImportError:
     interrupt = None  # type: ignore[assignment]
 
 from ...config import SCORE_PASS_THRESHOLD, MAX_IMPLEMENT_RETRIES
+from ...logging import get_logger
 from ...session import append_item
 from ...state import RiceSessionState
 from .frameworks import get_reference, config_dir
@@ -53,14 +53,14 @@ def _write_files(files: list[dict], framework: str) -> tuple[list[str], list[str
         try:
             target.relative_to(cd.resolve())
         except ValueError:
-            print(f"[craft] SKIP unsafe path: {target}", file=sys.stderr)
+            get_logger("craft").warning("SKIP unsafe path: %s", target)
             continue
         try:
             target.parent.mkdir(parents=True, exist_ok=True)
             target.write_text(text, encoding="utf-8")
             written.append(str(target))
         except OSError as exc:
-            print(f"[craft] write error {target}: {exc}", file=sys.stderr)
+            get_logger("craft").warning("write error %s: %s", target, exc)
             failed.append(str(target))
 
     return written, failed
@@ -102,18 +102,19 @@ def craft_node(state: RiceSessionState) -> dict:
     session_dir  = state.get("session_dir", "")
     retry_counts = dict(state.get("impl_retry_counts") or {})
     framework    = element.split(":", 1)[1] if ":" in element else element
+    log = get_logger("craft", state)
 
-    print(f"[Step 6/craft] Crafting {element} via {framework} ...", flush=True)
+    log.info("crafting %s via %s", element, framework)
 
     # ── 1 Research ───────────────────────────────────────────────────────────
-    print("  → research phase (parallel subagents) ...", flush=True)
+    log.info("research phase (parallel subagents)")
     research = gather_research(element, design)
-    print(f"  → found {len(research.get('system', {}).get('existing_files', {}))} existing files")
+    log.info("found %d existing files", len(research.get("system", {}).get("existing_files", {})))
 
     # ── 2 Codegen ────────────────────────────────────────────────────────────
-    print("  → codegen phase (LLM) ...", flush=True)
+    log.info("codegen phase (LLM)")
     files = generate_files(element, design, research)
-    print(f"  → LLM produced {len(files)} file(s)")
+    log.info("LLM produced %d file(s)", len(files))
 
     if not files:
         record = {"element": element, "verdict": "SKIP", "reason": "codegen produced no files",
@@ -124,11 +125,11 @@ def craft_node(state: RiceSessionState) -> dict:
 
     # ── 3 Write ──────────────────────────────────────────────────────────────
     written, failed = _write_files(files, framework)
-    print(f"  → wrote {len(written)} file(s), {len(failed)} failed")
+    log.info("wrote %d file(s), %d failed", len(written), len(failed))
 
     # ── 4 Score ──────────────────────────────────────────────────────────────
     total = _score(written, design)
-    print(f"  → score: {total}/10")
+    log.info("score: %d/10", total)
 
     # ── 5 Gate ───────────────────────────────────────────────────────────────
     verdict = "crafted"
@@ -163,7 +164,7 @@ def craft_node(state: RiceSessionState) -> dict:
                         "impl_retry_counts": retry_counts,
                         "errors": [f"{element}: {verdict}"]}
             retry_counts[element] = attempts
-            print(f"  → retry {attempts}/{MAX_IMPLEMENT_RETRIES}\n")
+            log.info("retry %d/%d", attempts, MAX_IMPLEMENT_RETRIES)
             return {"element_queue": [element] + remaining, "impl_retry_counts": retry_counts}
         else:
             verdict = f"accepted-deviation (score {total}/10)"
@@ -171,6 +172,6 @@ def craft_node(state: RiceSessionState) -> dict:
     record = {"element": element, "verdict": verdict, "written": written,
               "failed": failed, "score": total}
     append_item(session_dir, f"{element}: {verdict} score={total}/10")
-    print(f"  → {verdict}\n")
+    log.info("verdict: %s", verdict)
     retry_counts.pop(element, None)
     return {"element_queue": remaining, "craft_log": [record], "impl_retry_counts": retry_counts}

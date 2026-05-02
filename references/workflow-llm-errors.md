@@ -68,10 +68,36 @@ RICER_MODEL="deepseek/deepseek-v4-pro" \
 
 ## Pattern 2: Authentication Failure (401)
 
-**Symptoms:** `openai.AuthenticationError: Error code: 401 — 'User not found.'`
+**Symptoms:** `openai.AuthenticationError: Error code: 401 - {'error': {'message': 'User not found.', 'code': 401}}` during Step 2+ (any LLM call).
 
-See SKILL.md §Troubleshooting: LLM Auth Failures (401) for full diagnosis.
-Short version: `config.yaml` inline key may be stale while `~/.hermes/.env` key is current. Workflow uses config.yaml first, never falls back to .env. Pass `RICER_API_KEY` env var to override.
+**Resolution priority used by `get_llm()` in `workflow/config.py`:**
+1. `RICER_API_KEY` / `RICER_BASE_URL` env vars (bypass all file-based config)
+2. `config.yaml` → `providers.<provider>.api_key` (inline key)
+3. `~/.hermes/.env` → `<PROVIDER>_API_KEY` (only if step 2 returned empty)
+
+**Known pitfall:** If `config.yaml` has a *stale* non-empty API key, the workflow uses it and never falls back to `.env`. The stale key may have worked at setup time but since been rotated. Hermes itself may resolve keys differently (credential pool, system env), so the main chat works while the workflow fails with 401.
+
+**Diagnose:** Compare the two key sources:
+```bash
+python3 -c "
+import sys; sys.path.insert(0, '<skill-dir>')
+from workflow.config import _load_hermes_config, _parse_dotenv
+from pathlib import Path
+h = _load_hermes_config()
+env = _parse_dotenv(Path.home() / '.hermes' / '.env')
+print(f'config.yaml key length: {len(h[\"api_key\"])}')
+print(f'.env key length: {len(env.get(\"OPENROUTER_API_KEY\", \"\"))}')
+print(f'Keys match: {h[\"api_key\"] == env.get(\"OPENROUTER_API_KEY\", \"\")}')
+"
+```
+If keys differ, the `.env` key is the working one.
+
+**Fix:** Pass the working key via env var when launching or resuming:
+```bash
+RICER_API_KEY="$(grep '^OPENROUTER_API_KEY=' ~/.hermes/.env | cut -d= -f2-)" \
+  python3 workflow/run.py [--resume <thread-id>]
+```
+Or set `RICER_API_KEY` + `RICER_BASE_URL` permanently in your shell profile.
 
 ---
 

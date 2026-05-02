@@ -3,9 +3,9 @@ from __future__ import annotations
 
 import json
 import re
-import sys
 from pathlib import Path
 
+from ...logging import get_logger
 from ...utils import strip_jsonc_comments as _strip_jsonc_comments
 from ...utils import css_braces_balanced as _css_braces_balanced
 
@@ -92,7 +92,7 @@ def _syntax_ok(files: list[str]) -> bool:
                 import tomllib  # Python 3.11+
                 tomllib.loads(text)
             except ImportError:
-                print(f"[WARN] tomllib unavailable; skipping TOML validation for {p.name}", file=sys.stderr)
+                get_logger("implement.score").warning("tomllib unavailable; skipping TOML validation for %s", p.name)
             except Exception:
                 return False
 

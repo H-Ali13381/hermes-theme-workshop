@@ -125,7 +125,8 @@ def _parse_dotenv(path: Path) -> dict:
                 k, _, v = line.partition("=")
                 result[k.strip()] = v.strip()
     except Exception as e:
-        print(f"[config] Warning: could not parse {path}: {e}", file=sys.stderr)
+        from .logging import get_logger
+        get_logger("config").warning("could not parse %s: %s", path, e)
     return result
 
 
@@ -149,8 +150,8 @@ def _load_hermes_config() -> dict:
         import yaml
         cfg = yaml.safe_load(config_path.read_text(encoding="utf-8"))
     except Exception as e:
-        import sys
-        print(f"[config] Warning: could not load {config_path}: {e}", file=sys.stderr)
+        from .logging import get_logger
+        get_logger("config").warning("could not load %s: %s", config_path, e)
         return {}
 
     model_cfg  = cfg.get("model", {})

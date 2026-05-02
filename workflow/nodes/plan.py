@@ -3,7 +3,6 @@ from __future__ import annotations
 
 import json
 import re
-import sys
 import tempfile
 from pathlib import Path
 
@@ -18,6 +17,7 @@ from ..config import (
     PLAN_FEEDBACK_SUMMARIZER_PROMPT,
     PLAN_FEEDBACK_VERBATIM_TURNS,
 )
+from ..logging import get_logger
 from ..session import append_step
 from ..state import RiceSessionState
 
@@ -70,6 +70,7 @@ _MACOS_CHROME_TERMS = (
 
 def plan_node(state: RiceSessionState) -> dict:
     """Generate HTML mockup, gather feedback, and dispatch to plan/refine/explore."""
+    log = get_logger("plan", state)
     design = state.get("design", {})
     session_dir = state.get("session_dir", "")
     messages = list(state.get("messages", []))
@@ -77,6 +78,7 @@ def plan_node(state: RiceSessionState) -> dict:
     # Track invocations so routing.after_plan can abort if the loop diverges.
     loop_counts = dict(state.get("loop_counts") or {})
     loop_counts["plan"] = loop_counts.get("plan", 0) + 1
+    log.info("plan invocation #%d", loop_counts["plan"])
 
     feedback_block = _format_feedback_block(_get_feedback_messages(messages))
 
@@ -175,7 +177,8 @@ def plan_node(state: RiceSessionState) -> dict:
 
 def _render_preview(html_path: Path, design: dict, feedback_block: str) -> None:
     """Generate the preview HTML and write it atomically to *html_path*."""
-    print("[Step 4] Generating visual preview...", flush=True)
+    log = get_logger("plan")
+    log.info("generating visual preview")
     llm = get_llm(0.2, max_tokens=8192)
 
     user_content = f"Design system:\n```json\n{json.dumps(design, indent=2)}\n```"
@@ -190,7 +193,7 @@ def _render_preview(html_path: Path, design: dict, feedback_block: str) -> None:
     html_content = _extract_html(response.content or "")
     contract_violations = _preview_contract_violations(html_content, design)
     if contract_violations:
-        print(f"[Plan][WARN] Preview contract violation: {'; '.join(contract_violations)}", file=sys.stderr)
+        log.warning("preview contract violation: %s", "; ".join(contract_violations))
         html_content = _contract_violation_html(design, contract_violations)
     html_path.parent.mkdir(parents=True, exist_ok=True)
     tmp_path = None
@@ -205,7 +208,7 @@ def _render_preview(html_path: Path, design: dict, feedback_block: str) -> None:
         if tmp_path:
             Path(tmp_path).unlink(missing_ok=True)
         raise
-    print(f"  Preview written: {html_path}\n")
+    log.info("preview written: %s", html_path)
 
 
 def _get_feedback_messages(messages: list) -> list[str]:
@@ -250,12 +253,13 @@ def _summarize_feedback(older: list[str]) -> str:
         ])
         return (response.content or "").strip()
     except Exception as e:
-        print(f"[Plan][WARN] Feedback summarization failed ({e}); keeping verbatim.", file=sys.stderr)
+        get_logger("plan").warning("feedback summarization failed (%s); keeping verbatim", e)
         return "\n".join(f"- {item}" for item in older)
 
 
 def _classify_feedback(feedback_text: str) -> tuple[str, str]:
     """Return (label, reason). Falls back to 'render' on any error."""
+    log = get_logger("plan")
     if not feedback_text.strip():
         return "render", "empty feedback"
     try:
@@ -277,10 +281,10 @@ def _classify_feedback(feedback_text: str) -> tuple[str, str]:
             reason = str(obj.get("reason", "")).strip()
             if label in PLAN_FEEDBACK_LABELS:
                 return label, reason
-        print(f"[Plan][WARN] Classifier returned unparseable response: {raw!r}", file=sys.stderr)
+        log.warning("classifier returned unparseable response: %r", raw)
         return "ambiguous", "unparseable classifier response"
     except Exception as e:
-        print(f"[Plan][WARN] Classifier call failed ({e}); falling back to render.", file=sys.stderr)
+        log.warning("classifier call failed (%s); falling back to render", e)
         return "render", f"classifier error: {e}"
 
 
@@ -301,7 +305,7 @@ def _dispatch_feedback(
     prior_design: dict,
 ) -> dict:
     """Translate a classifier label into the state delta that drives routing."""
-    print(f"[Plan] Feedback classified as '{label}': {reason}", flush=True)
+    get_logger("plan").info("feedback classified as '%s': %s", label, reason)
 
     if label == "approve":
         append_step(session_dir, 4, str(html_path))
@@ -391,7 +395,7 @@ def _extract_html(content: str) -> str:
         start = content.find(marker)
         if start != -1:
             return content[start:]
-    print("[Plan][WARN] No HTML marker found in LLM response — plan.html will be empty", file=sys.stderr)
+    get_logger("plan").warning("no HTML marker found in LLM response \u2014 plan.html will be empty")
     return ""
 
 

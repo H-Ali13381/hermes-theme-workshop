@@ -2,12 +2,12 @@
 from __future__ import annotations
 
 import json
-import sys
 
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 from langgraph.types import interrupt
 
 from ..config import get_llm
+from ..logging import get_logger, truncate_for_log
 from ..state import RiceSessionState
 
 DIRECTION_SENTINEL = "<<DIRECTION_CONFIRMED>>"
@@ -57,6 +57,7 @@ REVISE_STAGE = "revise"
 
 def explore_node(state: RiceSessionState) -> dict:
     """Collect a compact brief, propose directions once, then finalize."""
+    log = get_logger("explore", state)
     profile = state.get("device_profile", {})
     intake = dict(state.get("explore_intake") or {})
     stage = intake.get("stage", BRIEF_STAGE)
@@ -65,6 +66,7 @@ def explore_node(state: RiceSessionState) -> dict:
     # converging (e.g. sentinel emitted but JSON parsing consistently fails).
     loop_counts = dict(state.get("loop_counts") or {})
     loop_counts["explore"] = loop_counts.get("explore", 0) + 1
+    log.info("explore invocation #%d (stage=%s)", loop_counts["explore"], stage)
 
     if stage == BRIEF_STAGE:
         prompt = _brief_prompt()
@@ -141,7 +143,7 @@ def explore_node(state: RiceSessionState) -> dict:
         clean_content = response.content.split(DIRECTION_SENTINEL)[0].strip()
         if not direction:
             direction = _fallback_direction(intake)
-        print(f"\n[Explore] Direction confirmed: {direction}\n")
+        log.info("direction confirmed: %s", direction)
         return {
             "messages": [AIMessage(content=clean_content)],
             "design": direction,
@@ -150,8 +152,9 @@ def explore_node(state: RiceSessionState) -> dict:
             "loop_counts": loop_counts,
         }
 
+    log.debug("finalize raw response:\n%s", truncate_for_log(response.content or ""))
     direction = _fallback_direction(intake)
-    print(f"\n[Explore] Direction confirmed: {direction}\n")
+    log.warning("direction sentinel missing; using fallback: %s", direction)
     return {
         "messages": [AIMessage(content=_confirmation(direction))],
         "design": direction,
@@ -265,6 +268,7 @@ def _format_device_context(profile: dict) -> str:
 
 def _parse_direction(content: str) -> dict:
     """Extract direction JSON after the sentinel."""
+    log = get_logger("explore")
     parts = content.split(DIRECTION_SENTINEL, 1)
     if len(parts) < 2:
         return {}
@@ -276,6 +280,6 @@ def _parse_direction(content: str) -> dict:
             obj, _ = decoder.raw_decode(after, idx)
             return obj
         except Exception as e:
-            print(f"[Explore][WARN] JSON parse error: {e}", file=sys.stderr, flush=True)
-    print("[Explore][WARN] Could not parse direction JSON from LLM response — returning empty direction", file=sys.stderr, flush=True)
+            log.warning("direction JSON parse error: %s", e)
+    log.warning("could not parse direction JSON from LLM response — returning empty")
     return {}

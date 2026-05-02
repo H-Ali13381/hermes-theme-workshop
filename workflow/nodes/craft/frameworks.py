@@ -11,8 +11,9 @@ the LLM to study them but never copy.
 """
 from __future__ import annotations
 
-import sys
 from pathlib import Path
+
+from ...logging import get_logger
 
 _REPO_ROOT = Path(__file__).resolve().parents[3]
 _TEMPLATES_ROOT = _REPO_ROOT / "templates"
@@ -31,7 +32,7 @@ def _load_reference_templates(paths: list[str]) -> list[dict]:
         try:
             content = fp.read_text(encoding="utf-8")
         except OSError as exc:
-            print(f"[craft/frameworks] could not read template {fp}: {exc}", file=sys.stderr)
+            get_logger("craft.frameworks").warning("could not read template %s: %s", fp, exc)
             continue
         out.append({
             "name":     rel,

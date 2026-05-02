@@ -4,6 +4,7 @@ from __future__ import annotations
 import os
 
 from ...config import UNSUPPORTED_DESKTOP_MESSAGE
+from ...logging import get_logger
 from ...state import RiceSessionState
 from .detectors import (
     detect_wm, detect_session_type, detect_chassis, detect_screens, detect_gpu,
@@ -14,7 +15,8 @@ from .detectors import (
 
 def audit_node(state: RiceSessionState) -> dict:
     """Gather device profile silently. No user interaction."""
-    print("[Step 1] Auditing your machine...", flush=True)
+    log = get_logger("audit", state)
+    log.info("auditing machine")
 
     wm           = detect_wm()
     session_type = detect_session_type()
@@ -46,12 +48,15 @@ def audit_node(state: RiceSessionState) -> dict:
     if recipe == "other":
         profile["unsupported_message"] = UNSUPPORTED_DESKTOP_MESSAGE
 
-    print(f"  WM: {wm} | Recipe: {recipe} | Chassis: {chassis} | Screens: {screens} | GPU: {gpu['name'][:40]}")
-    print(f"  Installed: {', '.join(k for k, v in apps.items() if v)}")
+    log.info(
+        "WM=%s recipe=%s chassis=%s screens=%s gpu=%s",
+        wm, recipe, chassis, screens, gpu["name"][:40],
+    )
+    log.info("installed: %s", ", ".join(k for k, v in apps.items() if v))
     if recipe == "other":
-        print(f"  {UNSUPPORTED_DESKTOP_MESSAGE}\n")
+        log.warning(UNSUPPORTED_DESKTOP_MESSAGE)
     else:
-        print(f"  Element queue ({len(queue)}): {', '.join(queue)}\n")
+        log.info("element queue (%d): %s", len(queue), ", ".join(queue))
 
     result = {
         "device_profile": profile,

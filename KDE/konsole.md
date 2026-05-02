@@ -2,21 +2,26 @@
 
 ## Canonical Rules
 
-Konsole theming has two separate files:
+Konsole theming has three artifacts:
 
-- Colorscheme: `~/.local/share/konsole/hermes-<theme>.colorscheme`
-- Profile: `~/.local/share/konsole/<active-default-profile>.profile`
+- Colorscheme: `~/.local/share/konsole/hermes-<theme-slug>.colorscheme`
+- Profile:     `~/.local/share/konsole/hermes-<theme-slug>.profile` (fresh per run)
 - Default profile pointer: `~/.config/konsolerc` → `[Desktop Entry] DefaultProfile`
 
-**Always read `konsolerc` first.** Do not assume `linux-ricing.profile` or
-`hermes-ricer.profile` is active.
+The workflow creates a dedicated `hermes-<theme-slug>.profile` and switches
+`konsolerc` `DefaultProfile` to it on every apply. The user's pre-existing
+profile is never modified — it stays as a natural backup that undo restores by
+flipping `DefaultProfile` back via the konsolerc backup.
+
+After a run, verify the swap took effect:
 
 ```bash
 kreadconfig6 --file konsolerc --group "Desktop Entry" --key DefaultProfile
+# expected: hermes-<theme-slug>.profile
 ```
 
-Edit the profile named by that key. If no default profile exists, create
-`linux-ricing.profile` and set `DefaultProfile` explicitly.
+Already-running Konsole windows keep the previous profile in memory; open a new
+tab/session to pick up the swap.
 
 ## Colorscheme Format
 
@@ -43,13 +48,13 @@ The profile chooses the colorscheme and terminal runtime options:
 
 ```ini
 [Appearance]
-ColorScheme=hermes-mossgrown-throne
+ColorScheme=hermes-<theme-slug>
 Opacity=0.75
 BlurBackground=false
 BackgroundContrast=false
 
 [General]
-Name=linux-ricing
+Name=hermes-<theme-slug>
 Parent=FALLBACK/
 ```
 
@@ -74,8 +79,11 @@ blue (`Color4`); use `secondary` so blue and yellow remain distinguishable.
 
 - Running Konsole sessions usually need a new profile/session to pick up theme
   changes.
-- A written profile is not enough; `konsolerc` must point at it.
-- The active profile may be a user-created name such as `Default.profile` or
-  `linux-ricing.profile`; always read it.
+- A written profile is not enough; `konsolerc` must point at it. The workflow
+  always sets `DefaultProfile` on apply — verify with `kreadconfig6` if the
+  visible Konsole still shows old colors.
+- Never modify the user's pre-existing default profile. The workflow creates a
+  separate `hermes-<theme-slug>.profile`; undo restores `DefaultProfile` to the
+  original via the konsolerc backup.
 - Do not debug transparency indefinitely on native Plasma Wayland; detect the
   platform bug and fall back to Kitty.

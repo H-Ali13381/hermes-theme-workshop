@@ -9,10 +9,10 @@ Results are merged into a single research dict passed to codegen.
 """
 from __future__ import annotations
 
-import sys
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
+from ...logging import get_logger
 from .frameworks import get_reference, config_dir
 
 
@@ -101,7 +101,7 @@ def gather_research(element: str, design: dict) -> dict:
             try:
                 results[label] = future.result()
             except Exception as exc:  # noqa: BLE001
-                print(f"[craft/research] {label} subagent failed: {exc}", file=sys.stderr)
+                get_logger("craft.research").warning("%s subagent failed: %s", label, exc)
                 results[label] = {"error": str(exc)}
 
     return results

@@ -9,6 +9,7 @@ except ImportError:  # LangGraph not installed (e.g. during unit tests)
     interrupt = None  # type: ignore[assignment]
 
 from ...config import SCORE_PASS_THRESHOLD, MAX_IMPLEMENT_RETRIES
+from ...logging import get_logger
 from ...session import append_item
 from ...state import RiceSessionState
 from .spec   import write_spec
@@ -27,17 +28,21 @@ def implement_node(state: RiceSessionState) -> dict:
     design        = state.get("design", {})
     session_dir   = state.get("session_dir", "")
     retry_counts  = dict(state.get("impl_retry_counts") or {})
+    log = get_logger("implement", state)
 
-    print(f"[Step 6] Implementing: {element}", flush=True)
+    log.info("implementing element: %s", element)
 
     # 1 — Spec
     spec = write_spec(element, design)
-    print(f"  Spec: {json.dumps(spec)}")
+    log.debug("spec: %s", json.dumps(spec))
     append_item(session_dir, f"{element} spec: {json.dumps(spec)}")
 
     # 2 — Apply
     apply_result = apply_element(element, design, session_dir)
-    print(f"  Apply: {'ok' if apply_result['success'] else 'FAILED — ' + apply_result.get('error', '?')}")
+    if apply_result["success"]:
+        log.info("apply ok")
+    else:
+        log.warning("apply failed: %s", apply_result.get("error", "?"))
 
     if not apply_result["success"]:
         record = {"element": element, "spec": spec, "verdict": "SKIP",
@@ -51,12 +56,12 @@ def implement_node(state: RiceSessionState) -> dict:
 
     # 3 — Verify
     verify_result = verify_element(element, spec, design)
-    print(f"  Verify: {verify_result}")
+    log.debug("verify: %s", verify_result)
 
     # 4 — Score
     scorecard = score_element(element, spec, design, verify_result)
     total = scorecard["total"]
-    print(f"  Score: {total}/10 ({format_scorecard(scorecard)})")
+    log.info("score: %d/10 (%s)", total, format_scorecard(scorecard))
 
     # 5 — Gate
     verdict = "verified"
@@ -81,7 +86,7 @@ def implement_node(state: RiceSessionState) -> dict:
             attempts = retry_counts.get(element, 0) + 1
             if attempts >= MAX_IMPLEMENT_RETRIES:
                 verdict = f"SKIP (score {total}/10, max retries {MAX_IMPLEMENT_RETRIES} reached)"
-                print(f"  → hard skip after {attempts} retries\n")
+                log.warning("hard skip after %d retries", attempts)
                 record = {"element": element, "spec": spec, "scorecard": scorecard, "verdict": verdict}
                 append_item(session_dir, f"{element}: {verdict}")
                 retry_counts.pop(element, None)
@@ -92,13 +97,13 @@ def implement_node(state: RiceSessionState) -> dict:
                     "errors": [f"{element}: {verdict}"],
                 }
             retry_counts[element] = attempts
-            print(f"  → retry {attempts}/{MAX_IMPLEMENT_RETRIES}\n")
+            log.info("retry %d/%d", attempts, MAX_IMPLEMENT_RETRIES)
             return {"element_queue": [element] + remaining, "impl_retry_counts": retry_counts}
         else:
             verdict = f"accepted-deviation (score {total}/10)"
 
     record = {"element": element, "spec": spec, "scorecard": scorecard, "verdict": verdict}
     append_item(session_dir, f"{element}: {verdict} score={total}/10")
-    print(f"  → {verdict}\n")
+    log.info("verdict: %s", verdict)
     retry_counts.pop(element, None)
     return {"element_queue": remaining, "impl_log": [record], "impl_retry_counts": retry_counts}

@@ -9,6 +9,8 @@ import re
 import sys
 from pathlib import Path
 
+from .logging import get_logger
+
 # Single source of truth — also used by scripts/session_manager.py.
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts"))
 from core.session_io import STEP_NAMES  # noqa: E402
@@ -25,13 +27,13 @@ def append_step(session_dir: str, step: str | int, note: str = "") -> None:
     otherwise a new section is appended.
     """
     if not session_dir:
-        print(f"[session] append_step({step}): session_dir is empty — skipping", file=sys.stderr)
+        get_logger("session").warning("append_step(%s): session_dir is empty — skipping", step)
         return
     step_id = str(step)
     step_name = STEP_NAMES.get(step_id, f"Step {step_id}")
     md = _md(session_dir)
     if not md.exists():
-        print(f"[session] append_step({step}): {md} not found — skipping", file=sys.stderr)
+        get_logger("session").warning("append_step(%s): %s not found — skipping", step, md)
         return
 
     content = md.read_text(encoding="utf-8")
@@ -67,11 +69,11 @@ def append_item(session_dir: str, text: str) -> None:
     when the next section was preceded by a blank line (``\\n\\n## ``).
     """
     if not session_dir:
-        print("[session] append_item: session_dir is empty — skipping", file=sys.stderr)
+        get_logger("session").warning("append_item: session_dir is empty — skipping")
         return
     md = _md(session_dir)
     if not md.exists():
-        print(f"[session] append_item: {md} not found — skipping", file=sys.stderr)
+        get_logger("session").warning("append_item: %s not found — skipping", md)
         return
 
     content = md.read_text(encoding="utf-8")
@@ -105,11 +107,11 @@ def append_item(session_dir: str, text: str) -> None:
 def mark_complete(session_dir: str) -> None:
     """Set Status to COMPLETE in session.md."""
     if not session_dir:
-        print("[session] mark_complete: session_dir is empty — skipping", file=sys.stderr)
+        get_logger("session").warning("mark_complete: session_dir is empty — skipping")
         return
     md = _md(session_dir)
     if not md.exists():
-        print(f"[session] mark_complete: {md} not found — skipping", file=sys.stderr)
+        get_logger("session").warning("mark_complete: %s not found — skipping", md)
         return
     content = md.read_text(encoding="utf-8")
     content = re.sub(r"^Status: .*$", "Status: COMPLETE", content, flags=re.MULTILINE)

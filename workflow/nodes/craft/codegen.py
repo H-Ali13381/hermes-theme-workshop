@@ -11,9 +11,9 @@ from __future__ import annotations
 
 import json
 import re
-import sys
 
 from ...config import get_llm
+from ...logging import get_logger
 
 
 _SYSTEM = """\
@@ -128,7 +128,7 @@ def _parse_file_objects(raw: str) -> list[dict]:
         except json.JSONDecodeError:
             pass
 
-    print("[craft/codegen] Could not parse LLM response as file objects", file=sys.stderr)
+    get_logger("craft.codegen").warning("could not parse LLM response as file objects")
     return []
 
 
@@ -146,5 +146,5 @@ def generate_files(element: str, design: dict, research: dict) -> list[dict]:
         raw = response.content if hasattr(response, "content") else str(response)
         return _parse_file_objects(raw)
     except Exception as exc:  # noqa: BLE001
-        print(f"[craft/codegen] LLM call failed: {exc}", file=sys.stderr)
+        get_logger("craft.codegen").warning("LLM call failed: %s", exc)
         return []

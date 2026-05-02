@@ -8,18 +8,20 @@ try:
 except ImportError:  # LangGraph not installed (e.g. during unit tests)
     interrupt = None  # type: ignore[assignment]
 
+from ...logging import get_logger
 from ...state import RiceSessionState
 from .resolver import resolve_packages, install_packages, can_sudo_noninteractive
 
 
 def install_node(state: RiceSessionState) -> dict:
     """Derive required packages, show list, install after confirmation."""
+    log = get_logger("install", state)
     design   = state.get("design", {})
     profile  = state.get("device_profile", {})
     packages = resolve_packages(design, profile)
 
     if not packages:
-        print("[Step 5] No extra packages needed.\n")
+        log.info("no extra packages needed")
         return {"packages": [], "current_step": 5}
 
     pkg_list_text = "\n".join(f"  - {p}" for p in packages)
@@ -38,11 +40,11 @@ def install_node(state: RiceSessionState) -> dict:
         raise RuntimeError("Session cancelled by user at package installation step.")
 
     if decision_str == "skip":
-        print("[Step 5] Package installation skipped.\n")
+        log.info("package installation skipped")
         return {"packages": packages, "current_step": 5}
 
     if decision_str != "install":
-        print(f"[Step 5] Unrecognised response '{decision_str}' — skipping installation.\n")
+        log.warning("unrecognised response '%s' — skipping installation", decision_str)
         return {"packages": packages, "current_step": 5}
 
     # Acquire sudo password — 3-tier escalation
@@ -59,14 +61,14 @@ def install_node(state: RiceSessionState) -> dict:
             ),
         })
 
-    print(f"[Step 5] Installing {len(packages)} package(s)...", flush=True)
+    log.info("installing %d package(s)", len(packages))
     errors: list[str] = []
     install_packages(packages, errors, sudo_password=str(sudo_password) if sudo_password else "")
 
     if errors:
-        print(f"  [WARN] Some packages failed: {errors}")
+        log.warning("some packages failed: %s", errors)
 
-    print("[Step 5] Installation complete.\n")
+    log.info("installation complete")
     result: dict = {"packages": packages, "current_step": 5}
     if errors:
         result["errors"] = errors

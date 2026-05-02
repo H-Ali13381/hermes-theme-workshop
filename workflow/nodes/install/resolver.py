@@ -5,6 +5,8 @@ import shutil
 import subprocess
 from pathlib import Path
 
+from ...logging import get_logger
+
 _KVANTUM_PACKAGES = {
     "catppuccin": "kvantum-theme-catppuccin",
     "nordic":     "nordic-kvantum",
@@ -92,8 +94,10 @@ def _try_install_pkg(pkg: str, sudo_password: str, distro: str) -> bool:
     if distro == "suse":
         return _try_zypper(pkg, sudo_password)
     # Unknown distro — log and bail
-    print(f"[install] Unknown distro; cannot install '{pkg}'. "
-          "Only Arch, Debian/Ubuntu, Fedora, and openSUSE are supported.")
+    get_logger("install.resolver").warning(
+        "unknown distro; cannot install '%s'. "
+        "Only Arch, Debian/Ubuntu, Fedora, and openSUSE are supported.", pkg,
+    )
     return False
 
 

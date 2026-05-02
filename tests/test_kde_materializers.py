@@ -593,7 +593,10 @@ class TestMaterializeKonsole(unittest.TestCase):
         self.assertIn("profile_path", write[0])
         self.assertEqual(write[0]["previous_profile"], "Default.profile")
 
-    def test_writes_current_default_profile_not_hardcoded_linux_ricing(self):
+    def test_writes_dedicated_themed_profile_and_swaps_default(self):
+        """Konsole materializer must create a fresh hermes-<slug>.profile,
+        leave the user's existing default profile untouched, and always
+        rewrite konsolerc DefaultProfile to point at the new themed profile."""
         with tempfile.TemporaryDirectory() as tmp:
             home = Path(tmp)
             calls = []
@@ -605,13 +608,23 @@ class TestMaterializeKonsole(unittest.TestCase):
                 patch(f"{self._TERM}.snapshot_konsole_state",
                       return_value={"default_profile": "Default.profile"}),
             ):
-                ricer.materialize_konsole(_MINIMAL_DESIGN, backup_ts="ts")
+                changes = ricer.materialize_konsole(_MINIMAL_DESIGN, backup_ts="ts")
 
             konsole_dir = home / ".local" / "share" / "konsole"
-            self.assertTrue((konsole_dir / "Default.profile").exists())
-            self.assertFalse((konsole_dir / "linux-ricing.profile").exists())
-            self.assertFalse([c for c in calls if "DefaultProfile" in c],
-                             "existing DefaultProfile should not be rewritten")
+            themed_profile = konsole_dir / "hermes-test-theme.profile"
+            self.assertTrue(themed_profile.exists(),
+                            "dedicated hermes-<slug>.profile must be created")
+            self.assertFalse((konsole_dir / "Default.profile").exists(),
+                             "user's existing default profile must not be touched")
+
+            default_profile_calls = [c for c in calls if "DefaultProfile" in c]
+            self.assertTrue(default_profile_calls,
+                            "DefaultProfile must always be swapped to the new themed profile")
+            self.assertEqual(default_profile_calls[-1][-1], "hermes-test-theme.profile")
+
+            write = [c for c in changes if c.get("action") == "write"][0]
+            self.assertEqual(write["new_profile"], "hermes-test-theme.profile")
+            self.assertTrue(write["default_profile_updated"])
 
 
 class TestMaterializeKitty(unittest.TestCase):

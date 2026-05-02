@@ -8,22 +8,21 @@ decision logic, making both files easier to read in isolation.
 """
 from __future__ import annotations
 
-import sys
-
 from langgraph.graph import END
 
 from .config import MAX_LOOP_ITERATIONS
+from .logging import get_logger
 from . import validators
 
 
 def _loop_limit_reached(state: dict, node: str, label: str) -> bool:
-    """Return True (and print a warning) if node has hit MAX_LOOP_ITERATIONS."""
+    """Return True (and log a warning) if node has hit MAX_LOOP_ITERATIONS."""
     count = state.get("loop_counts", {}).get(node, 0)
     if count >= MAX_LOOP_ITERATIONS:
-        print(
-            f"[{label}] ABORT — reached {count}/{MAX_LOOP_ITERATIONS} iterations "
-            "without making progress. Check LLM response format.",
-            file=sys.stderr,
+        get_logger("routing", state).warning(
+            "%s ABORT — reached %d/%d iterations without making progress. "
+            "Check LLM response format.",
+            label, count, MAX_LOOP_ITERATIONS,
         )
         return True
     return False

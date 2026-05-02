@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from ...logging import get_logger
 from ...state import RiceSessionState
 from .capabilities import probe_capabilities
 from .effective_state import audit_effective_state
@@ -13,7 +14,8 @@ from .reloader import validate_file, reload_waybar, reload_polybar, reload_dunst
 
 def cleanup_node(state: RiceSessionState) -> dict:
     """Validate written configs and reload affected services."""
-    print("[Step 7] Running cleanup...", flush=True)
+    log = get_logger("cleanup", state)
+    log.info("running cleanup")
     errors:   list[str] = []
     reloaded: list[str] = []
     cleanup_actions: list[dict] = []
@@ -34,7 +36,7 @@ def cleanup_node(state: RiceSessionState) -> dict:
         ok, err = validate_file(p)
         if not ok:
             errors.append(f"syntax error in {p.name}: {err}")
-            print(f"  [WARN] {err}")
+            log.warning("%s", err)
 
     # Reload only the services that were actually changed
     elements = {r.get("element", "").split(":")[0] for r in impl_log}
@@ -67,7 +69,7 @@ def cleanup_node(state: RiceSessionState) -> dict:
     if "window_decorations" in elements and "hypr" in wm:
         reload_hyprland(reloaded, errors)
     if "gtk_theme"          in elements:
-        print("  GTK: changes apply to newly opened apps (no live reload)")
+        log.info("GTK: changes apply to newly opened apps (no live reload)")
         reloaded.append("gtk")
 
     cleanup_actions.extend(finalize_kde(state, reloaded, errors))
@@ -75,8 +77,8 @@ def cleanup_node(state: RiceSessionState) -> dict:
     capability_report = probe_capabilities(state)
     visual_artifacts = capture_visual_artifacts(state)
 
-    print(f"  Reloaded: {', '.join(reloaded) if reloaded else 'none'}")
-    print(f"  Errors: {len(errors)}\n")
+    log.info("reloaded: %s", ", ".join(reloaded) if reloaded else "none")
+    log.info("errors: %d", len(errors))
 
     result: dict = {"current_step": 7, "cleanup_actions": cleanup_actions}
     if effective_state:

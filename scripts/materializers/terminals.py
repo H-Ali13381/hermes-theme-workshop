@@ -1,4 +1,5 @@
 """Terminal emulator materializers: kitty, Alacritty, Konsole."""
+import re
 from pathlib import Path
 
 from core.constants import HOME, TEMPLATES_DIR
@@ -140,12 +141,15 @@ def materialize_konsole(design: dict, backup_ts: str, dry_run: bool = False) -> 
     konsole_dir = HOME / ".local" / "share" / "konsole"
     state = snapshot_konsole_state()
     prev_profile = state["default_profile"]
-    profile_file = Path(prev_profile).name if prev_profile else "linux-ricing.profile"
-    if not profile_file.endswith(".profile"):
-        profile_file = f"{profile_file}.profile"
-    profile_name = Path(profile_file).stem or "linux-ricing"
+
+    # Always create a dedicated themed profile and switch konsolerc to it.
+    # The user's existing default profile is left untouched as a natural backup.
+    raw_name = design.get("name", "ricer")
+    theme_slug = re.sub(r"[^a-zA-Z0-9-]+", "-", raw_name).strip("-").lower() or "ricer"
+    profile_file = f"hermes-{theme_slug}.profile"
+    profile_name = f"hermes-{theme_slug}"
     profile_path = konsole_dir / profile_file
-    color_scheme_name = f"hermes-{design.get('name', 'ricer')}"
+    color_scheme_name = f"hermes-{theme_slug}"
     color_scheme_path = konsole_dir / f"{color_scheme_name}.colorscheme"
     konsolerc = HOME / ".config" / "konsolerc"
     changes = []
@@ -180,8 +184,10 @@ Parent=FALLBACK/
 """
 
     if dry_run:
-        changes.append({"app": "konsole", "action": "dry-run", "profile_path": str(profile_path),
-                        "previous_profile": prev_profile})
+        changes.append({"app": "konsole", "action": "dry-run",
+                        "profile_path": str(profile_path),
+                        "previous_profile": prev_profile,
+                        "new_profile": profile_file})
         return changes
 
     profile_backup = backup_file(profile_path, backup_ts, f"konsole/{profile_name}.profile")
@@ -194,15 +200,16 @@ Parent=FALLBACK/
 
     kwrite = _get_kwrite()
     default_profile_updated = False
-    if kwrite and not prev_profile:
-        run_cmd([kwrite, "--file", "konsolerc", "--group", "Desktop Entry",
-                 "--key", "DefaultProfile", profile_file])
-        default_profile_updated = True
+    if kwrite:
+        rc, _, _ = run_cmd([kwrite, "--file", "konsolerc", "--group", "Desktop Entry",
+                            "--key", "DefaultProfile", profile_file])
+        default_profile_updated = (rc == 0)
 
     changes.append({"app": "konsole", "action": "write",
                     "profile_path": str(profile_path), "color_scheme_path": str(color_scheme_path),
                     "backup_profile": profile_backup, "backup_colors": colors_backup,
                     "backup_konsolerc": konsolerc_backup, "previous_profile": prev_profile,
+                    "new_profile": profile_file,
                     "default_profile_updated": default_profile_updated})
     return changes
 

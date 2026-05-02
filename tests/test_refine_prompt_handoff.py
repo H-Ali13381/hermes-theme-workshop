@@ -56,6 +56,22 @@ class _FakeLLM:
         )
 
 
+class _ScriptedLLM:
+    """LLM stub that returns a queued sequence of responses."""
+
+    def __init__(self, responses):
+        self._responses = list(responses)
+        self.calls = 0
+        self.last_messages = []
+
+    def invoke(self, messages):
+        self.last_messages = messages
+        self.calls += 1
+        if not self._responses:
+            return AIMessage(content="")
+        return AIMessage(content=self._responses.pop(0))
+
+
 class RefinePromptHandoffTests(unittest.TestCase):
     def test_refine_seeds_own_prompt_after_explore_messages(self):
         fake = _FakeLLM()
@@ -73,6 +89,32 @@ class RefinePromptHandoffTests(unittest.TestCase):
         self.assertEqual(update["current_step"], 3)
         self.assertEqual(update["design"]["name"], "Shadow Signal")
         self.assertIn("widgets:eww", update["element_queue"])
+
+    def test_refine_self_heals_after_malformed_first_response(self):
+        """First LLM call lacks the sentinel; the retry pass succeeds without
+        falling through to interrupt."""
+        good = f"{DESIGN_SENTINEL}\n```json\n{json.dumps(_valid_design())}\n```"
+        scripted = _ScriptedLLM(["Here is the design — I'll confirm shortly.", good])
+
+        with patch("workflow.nodes.refine.get_llm", return_value=scripted):
+            update = refine_node({
+                "messages": [HumanMessage(content="explore chatter")],
+                "design": {"stance": "Ghost", "name_hypothesis": "shadow-signal"},
+                "device_profile": {"desktop_recipe": "kde"},
+                "loop_counts": {},
+                "element_queue": ["terminal:kitty", "gtk_theme"],
+            })
+
+        self.assertEqual(scripted.calls, 2)
+        self.assertEqual(update["current_step"], 3)
+        self.assertEqual(update["design"]["name"], "Shadow Signal")
+        # Failed retry exchange must not pollute the committed message history.
+        committed = update["messages"]
+        retry_prompt_leaked = any(
+            isinstance(m, HumanMessage) and "previous response failed" in m.content.lower()
+            for m in committed
+        )
+        self.assertFalse(retry_prompt_leaked, "internal retry prompt leaked into state")
 
 
 class WidgetFrameworkSelectionTests(unittest.TestCase):

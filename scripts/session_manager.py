@@ -46,12 +46,27 @@ Usage:
       Launch the LangGraph automated workflow (workflow/run.py).
       If <thread-id> is given, resumes that session; otherwise starts a new one.
 
+  python3 session_manager.py wipe-sessions [--yes]
+      Remove every rice session directory, the .current symlink, and the
+      LangGraph SQLite checkpoint DB (incl. -wal/-shm siblings).
+      Without --yes, prints a JSON dry-run summary and exits without writing.
+      With --yes, performs the deletions and prints the same JSON with each
+      target's "status" field set to "removed" / "already_gone" / "error: ...".
+
+  python3 session_manager.py wipe-session <thread-id> [--yes]
+      Remove a single session directory by thread-id, plus the .current
+      symlink iff it currently points at that session. SQLite checkpoint
+      entries for the wiped thread-id are pruned automatically on the next
+      workflow run, so they are not touched here. Same dry-run / --yes
+      semantics as wipe-sessions.
+
 Session tracking: ~/.config/rice-sessions/.current → symlink to active session dir.
 """
 from __future__ import annotations
 
 import json
 import re
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -76,6 +91,11 @@ from core.session_md_utils import (                       # noqa: E402
 # Path to workflow/run.py — used for querying and launching LangGraph sessions.
 SKILL_DIR = Path(__file__).parent.parent
 WORKFLOW_RUN_PY = SKILL_DIR / "workflow" / "run.py"
+
+# LangGraph SQLite checkpoint DB. Mirrors workflow.config.DB_PATH but defined
+# locally to avoid importing the workflow package (which pulls in heavy deps)
+# from the lightweight scripts layer.
+WORKFLOW_DB_PATH = Path.home() / ".local" / "share" / "linux-ricing" / "sessions.sqlite"
 
 
 def _query_workflow_sessions() -> list[dict]:
@@ -206,6 +226,115 @@ def cmd_complete():
     print(f"Session marked COMPLETE: {session_dir}")
 
 
+def cmd_wipe_sessions(*, confirm: bool) -> None:
+    """Remove every rice session dir, the .current symlink, and the workflow
+    SQLite checkpoint DB. Prints a JSON summary keyed by ``would_remove``
+    (dry-run) or ``removed`` (after ``--yes``).
+
+    Includes ``-wal`` / ``-shm`` SQLite siblings so a partial wipe never
+    leaves a half-checkpoint behind.
+    """
+    ensure_sessions_root()
+
+    targets: list[dict] = []
+
+    for d in sorted(SESSIONS_ROOT.iterdir()):
+        if d.is_dir() and not d.name.startswith("."):
+            targets.append({"kind": "session_dir", "path": str(d)})
+
+    if CURRENT_LINK.is_symlink() or CURRENT_LINK.exists():
+        targets.append({"kind": "current_link", "path": str(CURRENT_LINK)})
+
+    for suffix in ("", "-wal", "-shm"):
+        db = Path(str(WORKFLOW_DB_PATH) + suffix)
+        if db.exists():
+            targets.append({"kind": "checkpoint_db", "path": str(db)})
+
+    summary: dict = {
+        "confirmed": confirm,
+        "count": len(targets),
+        ("removed" if confirm else "would_remove"): targets,
+    }
+
+    if not confirm:
+        summary["hint"] = "Re-run with --yes to actually remove these paths."
+        print(json.dumps(summary, indent=2))
+        return
+
+    for entry in targets:
+        p = Path(entry["path"])
+        try:
+            if entry["kind"] == "session_dir":
+                shutil.rmtree(p)
+            else:
+                p.unlink()
+        except FileNotFoundError:
+            entry["status"] = "already_gone"
+        except OSError as e:
+            entry["status"] = f"error: {e}"
+        else:
+            entry["status"] = "removed"
+
+    print(json.dumps(summary, indent=2))
+
+
+def cmd_wipe_session(thread_id: str, *, confirm: bool) -> None:
+    """Remove one session directory by thread-id, plus the .current symlink
+    iff it points at that session. Prints the same JSON shape as
+    ``wipe-sessions`` for consistency.
+
+    SQLite checkpoint entries for the wiped thread-id are not touched —
+    LangGraph prunes them automatically on the next workflow invocation.
+    """
+    ensure_sessions_root()
+    target_dir = SESSIONS_ROOT / thread_id
+
+    targets: list[dict] = []
+    if target_dir.is_dir():
+        targets.append({"kind": "session_dir", "path": str(target_dir)})
+
+    if CURRENT_LINK.is_symlink():
+        try:
+            if target_dir.exists() and CURRENT_LINK.resolve() == target_dir.resolve():
+                targets.append({"kind": "current_link", "path": str(CURRENT_LINK)})
+        except OSError:
+            pass
+
+    summary: dict = {
+        "confirmed": confirm,
+        "thread_id": thread_id,
+        "count": len(targets),
+        ("removed" if confirm else "would_remove"): targets,
+    }
+
+    if not targets:
+        summary["status"] = "no_match"
+        summary["hint"] = f"No session directory at {target_dir}"
+        print(json.dumps(summary, indent=2))
+        return
+
+    if not confirm:
+        summary["hint"] = "Re-run with --yes to actually remove these paths."
+        print(json.dumps(summary, indent=2))
+        return
+
+    for entry in targets:
+        p = Path(entry["path"])
+        try:
+            if entry["kind"] == "session_dir":
+                shutil.rmtree(p)
+            else:
+                p.unlink()
+        except FileNotFoundError:
+            entry["status"] = "already_gone"
+        except OSError as e:
+            entry["status"] = f"error: {e}"
+        else:
+            entry["status"] = "removed"
+
+    print(json.dumps(summary, indent=2))
+
+
 def cmd_workflow_run(thread_id: str | None = None) -> None:
     """Launch or resume the LangGraph automated workflow.
 
@@ -266,6 +395,13 @@ def main():
         cmd_complete()
     elif cmd == "workflow-run":
         cmd_workflow_run(sys.argv[2] if len(sys.argv) > 2 else None)
+    elif cmd == "wipe-sessions":
+        cmd_wipe_sessions(confirm="--yes" in sys.argv[2:])
+    elif cmd == "wipe-session":
+        if len(sys.argv) < 3:
+            print("ERROR: wipe-session requires <thread-id>", file=sys.stderr)
+            sys.exit(1)
+        cmd_wipe_session(sys.argv[2], confirm="--yes" in sys.argv[3:])
     else:
         print(f"ERROR: Unknown command '{cmd}'", file=sys.stderr)
         print(__doc__)
