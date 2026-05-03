@@ -35,6 +35,15 @@ class RiceSessionState(TypedDict, total=False):
     # user experiences one direct chat instead of visible agent handoffs.
     explore_intake: dict
 
+    # Step 2.5 output — AI full-desktop concept preview (FAL image + multimodal analysis)
+    visualize_image_url: str    # FAL-generated full-desktop theme concept image URL
+    visualize_html_path: str    # path to desktop concept preview HTML
+    visual_context: dict        # multimodal analysis: extracted_palette, style_description, UI/chrome guidance, visual_element_plan, validation_checklist
+    visualize_route: str        # routing signal: "approve" | "regenerate" | "explore" | "skip"
+    # Step 2.5 pipeline diagnostics — non-authoritative metadata for debugging/cost control.
+    preview_pipeline_status: dict
+    preview_budget: dict
+
     # Step 4 output
     plan_html_path: str
 
