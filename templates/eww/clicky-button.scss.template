@@ -1,0 +1,17 @@
+.game-button {
+  border: 1px solid $gold;
+  border-radius: 8px;
+  background: $dark-panel;
+  color: $fg;
+  padding: 8px 14px;
+  transition: all 90ms ease;
+}
+.game-button:hover {
+  background: lighten($dark-panel, 8%);
+  color: $gold;
+  box-shadow: 0 0 8px rgba($gold, .45);
+}
+.game-button:active {
+  background: darken($dark-panel, 8%);
+  transform: translateY(2px) scale(.97);
+}

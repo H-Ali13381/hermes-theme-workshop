@@ -31,7 +31,7 @@ def cleanup_node(state: RiceSessionState) -> dict:
     ]
     for fpath in written_files:
         p = Path(fpath).expanduser()
-        if not p.exists():
+        if not p.exists() or p.is_dir():
             continue
         ok, err = validate_file(p)
         if not ok:

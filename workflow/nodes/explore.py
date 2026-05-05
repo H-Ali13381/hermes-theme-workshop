@@ -169,14 +169,17 @@ def _brief_prompt() -> str:
         "Fast brief — reply in bullets or one sentence:\n"
         "1. A place — real or fictional — you'd want to live inside?\n"
         "2. Mood words?\n"
-        "3. Subtle reference or obvious homage?\n"
-        "4. Anything to avoid? (or skip)"
+        "3. Concrete visual references/screenshots to ground UI style? (game menus, HUDs, inventory screens, art direction — not wallpapers)\n"
+        "4. Subtle reference or obvious homage?\n"
+        "5. Anything to avoid? (or skip)"
     )
 
 
 def _proposal_prompt(intake: dict, profile: dict) -> str:
     return (
         "Create exactly 3 concise visual directions from this brief.\n"
+        "Each option must name the concrete visual-reference grammar it uses: menu/chrome examples, border style, material language, icon/glyph motifs.\n"
+        "Do not treat references as wallpapers unless the brief explicitly asks for wallpaper selection.\n"
         "Each option: number, 2-4 word name, one vivid sentence, stance/blend.\n"
         "End with: Pick 1, 2, 3, combine, or tweak.\n\n"
         f"Brief:\n{intake.get('brief', '')}\n\n"
@@ -187,6 +190,7 @@ def _proposal_prompt(intake: dict, profile: dict) -> str:
 def _final_prompt(intake: dict, profile: dict) -> str:
     return (
         "Finalize the chosen creative direction. Do not ask another question.\n"
+        "Include reference_anchor as concrete UI/menu/chrome references and include reference_grammar with border, material, icon/glyph, layout, and avoid_notes fields when possible. References are inspiration, not wallpaper.\n"
         f"End with {DIRECTION_SENTINEL} and the required JSON.\n\n"
         f"Brief:\n{intake.get('brief', '')}\n\n"
         f"Proposed directions:\n{intake.get('proposal', '')}\n\n"

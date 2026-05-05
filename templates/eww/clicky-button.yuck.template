@@ -1,0 +1,7 @@
+; EWW clicky control template. Use a real button/eventbox, not a decorative label.
+(defwidget game-button [label command]
+  (eventbox :cursor "pointer"
+    (button :class "game-button" :onclick command label)))
+
+; Example usage:
+; (game-button :label "Quest Log" :command "eww open --toggle questlog")

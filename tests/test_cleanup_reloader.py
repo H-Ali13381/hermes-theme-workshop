@@ -2,9 +2,12 @@
 from __future__ import annotations
 
 import subprocess
+import tempfile
 import unittest
+from pathlib import Path
 from unittest.mock import MagicMock, patch
 
+from workflow.nodes.cleanup import cleanup_node
 from workflow.nodes.cleanup.reloader import (
     reload_dunst, reload_mako, reload_swaync, reload_waybar,
 )
@@ -63,6 +66,28 @@ class ReloadErrorPropagationTests(unittest.TestCase):
 
         self.assertEqual(errors, [])
         self.assertIn("waybar", reloaded)
+
+
+class CleanupNodeValidationTests(unittest.TestCase):
+    def test_cleanup_skips_directory_targets_when_validating_specs(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            theme_dir = root / "BonfireBlackiron"
+            theme_dir.mkdir()
+            config = root / "theme.json"
+            config.write_text('{"ok": true}', encoding="utf-8")
+            state = {
+                "impl_log": [{"element": "plasma_theme", "spec": {"targets": [str(theme_dir), str(config)]}}],
+                "device_profile": {"wm": "kde"},
+            }
+
+            with patch("workflow.nodes.cleanup.finalize_kde", return_value=[]), \
+                 patch("workflow.nodes.cleanup.audit_effective_state", return_value={}), \
+                 patch("workflow.nodes.cleanup.probe_capabilities", return_value={}), \
+                 patch("workflow.nodes.cleanup.capture_visual_artifacts", return_value={}):
+                result = cleanup_node(state)
+
+        self.assertNotIn("errors", result)
 
 
 if __name__ == "__main__":

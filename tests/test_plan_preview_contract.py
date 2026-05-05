@@ -10,7 +10,7 @@ def test_plan_prompt_forbids_unimplemented_macos_traffic_lights():
     prompt = plan_mod.SYSTEM_PROMPT.lower()
 
     assert "traffic-light" in prompt
-    assert "workflow does not currently implement those controls" in prompt
+    assert "workflow does not currently implement" in prompt
     assert "never preview app/window chrome" in prompt
 
 

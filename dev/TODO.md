@@ -2,6 +2,48 @@
 
 ## Recommended Next Tasks
 
+- [x] **[PRIORITY] Restore preview honesty validation**
+  Bring back a focused Step 4 preview-contract validator and regression tests so
+  LLM-generated HTML cannot be approved when it shows unsupported or unimplemented
+  window/app chrome. Keep the validator small enough to avoid blocking legitimate
+  Quickshell/EWW/Kvantum custom chrome.
+  **Done:** `workflow/nodes/plan.py` restored a focused preview honesty validator,
+  violation page, existing-preview detection, and approval blocking. Covered by
+  `tests/test_plan_preview_contract.py` plus plan feedback routing tests.
+
+- [x] **[PRIORITY] Prevent desktop concept images from becoming wallpapers**
+  Ensure `visualize_image_url` is never downloaded as the applied wallpaper. Step
+  2.5 images are full desktop concept previews, not wallpaper assets. If local
+  wallpaper generation fails, skip wallpaper apply with an explicit diagnostic or
+  require a real wallpaper URL/path.
+  **Done:** `workflow/nodes/cleanup/kde_finalize.py` refuses to treat
+  `visualize_image_url` as a wallpaper source and skips apply with a clear
+  diagnostic when no local/generated wallpaper artifact exists. Covered by
+  `tests/test_kde_finalize.py`.
+
+- [x] **[PRIORITY] Make texture/Pillow imports robust**
+  `workflow.nodes.craft.texture_assets` imports Pillow at module import time. Make
+  Pillow usage lazy or fail only on texture generation paths so non-texture craft
+  and tests remain importable in partial environments.
+  **Done:** `workflow/nodes/craft/texture_assets.py` lazy-loads Pillow only for
+  generation paths and raises a clear runtime error if Pillow is missing. Covered
+  by `tests/test_texture_assets.py`.
+
+- [x] **[PRIORITY] Split the current mega-change into reviewable slices**
+  Separate preview pipeline, Codex auth, KDE finalization/undo, Quickshell texture
+  assets, tests, and docs into coherent commits or review units. The current
+  working tree is too broad to review safely as one patch.
+  **Done:** Added `dev/REVIEW_SLICES.md` with eight review/commit slices, exact
+  pathsets, focused test commands, and review notes. Actual commits are left to a
+  separate explicit commit request.
+
+- [x] **[PRIORITY] Normalize test HOME/config isolation**
+  Add shared helpers or fixtures for KDE/materializer tests so tests never write
+  to the real user home or real desktop config paths. Migrate ad hoc temp-home
+  patches to the shared helper.
+  **Done:** Added `tests/kde_test_helpers.py::patched_home` and migrated KDE
+  materializer/undo tests to use isolated temporary HOME paths.
+
 - [x] **[PRIORITY] Add reusable `gsettings` snapshot/restore support for undo**
   Build a generic helper for materializers to record prior `gsettings` values
   before applying changes, plus a matching `ricer_undo.py` restore path. Use this
@@ -1571,3 +1613,149 @@
   **Fix:** Ensure dry-run emits one change-like record per planned file write,
   generated path, persistent setting, and external state mutation, without writing
   anything.
+
+
+---
+
+## Creative Diversity Backlog (2026-05-03)
+
+Research basis: "Prompting Diverse Ideas" (Wharton 2024), "Enhancing design concept diversity: multi-persona prompting" (Cambridge Core 2024), "Inducing Sustained Creativity and Diversity in LLMs" (Luo et al., 2026), "Is Temperature the Creativity Parameter?" (2024), "Chain-of-Specification Prompting" (2024).
+
+### Critical
+
+- [ ] **[CREATIVE] `workflow/nodes/refine.py`: refine temperature 0.3 crushes creative variance**
+  `get_llm(0.3)` is used for the most creative artifact in the pipeline — the full
+  design JSON including palette, chrome strategy, originality moves, and widget layout.
+  0.3 is appropriate for code generation or factual retrieval, not creative design.
+  At this temperature the model collapses to its strongest attractors; combined with the
+  RLHF-tuned model's already-low output variance, the result is near-deterministic output.
+  Explore runs at 0.7 and codegen at 0.85 — refine is the anomaly.
+  **Fix:** Raise to `get_llm(0.7)` as a baseline. Consider 0.8 for sessions that explicitly
+  request high creative freedom. Document the temperature choice in a comment.
+
+### High
+
+- [ ] **[CREATIVE] `workflow/nodes/explore.py`: all 3 proposals cluster in the same stance — no cross-stance forcing**
+  The proposal prompt requires "exactly 3 concise visual directions" with no constraint
+  that they span different stances. The model freely clusters because clustering produces
+  coherent-sounding output. Smoke logs confirm: all three sample proposals were
+  Garden+Ghost variants (Verdant Ruin, Cathedral of Ash, Dreamlit Crypt).
+  **Fix:** Add an explicit rule to `_proposal_prompt()`:
+  *"Each of the 3 proposals must represent a different stance from the 7-stance model
+  (Garden, Ghost, Blade, Signal, Riot, Drift, Flow). Do not return 3 variations of the
+  same stance or blend."* If the user's brief strongly anchors to one stance, note it and
+  still offer two alternatives from other quadrants.
+
+- [ ] **[CREATIVE] `workflow/nodes/explore.py`: `_brief_prompt()` question 1 is a fantasy/nature attractor**
+  *"A place — real or fictional — you'd want to live inside?"* overwhelmingly elicits
+  romanticized places: forests, gothic ruins, mossy caves, old libraries, Japanese temples.
+  This anchors the model to Garden+Ghost territory before proposals are generated.
+  The current brief has no negative input (what do you hate about most themes?) and no
+  axes that surface Signal, Riot, or Drift stances.
+  **Fix:** Redesign `_brief_prompt()` to cover the full stance map:
+  1. What's this machine for? (work / art / gaming / research)
+  2. When you're in flow — what does the environment feel like? Invisible? Loud? Sharp? Warm?
+  3. Pick a word from each pair: Clean/Raw · Cold/Warm · Familiar/Alien · Minimal/Dense
+  4. A film, game, album cover, or piece of architecture that feels tonally right — not necessarily visually.
+  5. One thing about most desktop themes that feels wrong or boring to you.
+  Question 5 surfaces dislikes, often the strongest signal for desired design territory.
+
+- [ ] **[CREATIVE] `workflow/nodes/explore.py`: no web reference injection during explore**
+  `DESIGN_PHILOSOPHY.md` specifies: *"Search the web for visual references (games, films,
+  art movements, nature)"*. The actual `explore_node` passes only `_format_device_context()`
+  (WM, chassis, GPU, installed apps, FAL availability) — no game screenshots, no
+  r/unixporn references, no art movement examples.
+  **Fix:** During the proposal phase, run 1–2 web searches based on the user's brief
+  (reference anchor + mood words) and inject a short digest of findings into the proposal
+  context. At minimum, inject 3–5 curated reference descriptors from the user's stated
+  anchors (e.g. "Hollow Knight visual notes: muted earth tones, hand-drawn textures,
+  dim candlelit ambiance, no saturated colors").
+
+- [ ] **[CREATIVE] No session history / anti-gravity — the workflow starts fresh every run**
+  Every session starts from a blank slate. With no memory of prior outputs the model
+  returns to its strongest attractors (Garden+Ghost, dark atmospheric) on every run.
+  Research (Luo et al., 2026) shows LLMs hit a diversity ceiling early and repeat
+  themselves without explicit exclusion of prior concepts.
+  **Fix:** At session start, load `stance` + `mood_tags` + `reference_anchor` + `name`
+  from the last 5 `design.json` files under `~/.local/share/hermes/sessions/*/design.json`
+  (or equivalent). Inject into `_proposal_prompt()` as a negative constraint block:
+  *"These themes were generated recently — do NOT produce variations of them: [list].*
+  *Find aesthetic territory that is genuinely different."*
+  Consider also storing a session-history summary in `~/.local/share/hermes/history.json`
+  for fast loading without directory scanning.
+
+### Medium
+
+- [ ] **[CREATIVE] `workflow/nodes/explore.py`: `_fallback_direction()` hardcodes Ghost+Blade aesthetic**
+  Every sentinel-parse failure (which is common — sentinel parsing is fragile) silently
+  defaults to `"stance": "Ghost+Blade"`, `"mood": ["dark", "readable", "atmospheric"]`,
+  `"name_hypothesis": "fast-shadow-signal"`. This bakes in a specific aesthetic bias for
+  all failure cases and inflates Ghost+Blade frequency in session history.
+  **Fix:** Replace the hardcoded stance with a random choice from the 7 stances (excluding
+  any stance already present in recent session history), or derive a fallback stance from
+  the user's intake brief keywords.
+
+- [ ] **[CREATIVE] `workflow/config.py`: creativity judge audits form, not aesthetic novelty**
+  `DESIGN_CREATIVITY_JUDGE_PROMPT` checks that `non_default_moves` are specific and that
+  `chrome_strategy` explains implementation — structural correctness, not semantic novelty.
+  Two sessions with identical vibes but different implementation specifics both pass.
+  **Fix:** Add a semantic novelty check to the judge prompt:
+  *"5. novelty: the design's reference_anchor, mood_tags, and primary palette must not
+  closely echo a recent session. If the design is semantically near a prior session
+  (same reference anchor, same dominant hue family, same stance), REJECT with:
+  'Too similar to [session name] — shift reference anchor and palette to new territory.'"*
+  Load recent session descriptors into the judge context the same way as the anti-gravity
+  injection above.
+
+- [ ] **[CREATIVE] `workflow/config.py`: `RECIPE_PROMPT_FIELDS` examples anchor the model to default themes**
+  Every refine call sees `e.g. "KvDark"`, `e.g. "Adwaita-dark"`, `e.g. "default"` as
+  the illustrative values for kvantum_theme, gtk_theme, and cursor_theme. The smoke log
+  confirms: `"kvantum_theme": "KvDark"` and `"gtk_theme": "Adwaita-dark"` appear verbatim.
+  Examples in prompts are strong anchors; these push the model toward the dark-default end
+  of the spectrum on every refine call regardless of the user's brief.
+  **Fix:** Replace static examples with stance-appropriate examples or remove examples
+  entirely and describe the field semantically:
+  `"- kvantum_theme: installed Kvantum theme name that matches the brief's aesthetic"`
+
+- [ ] **[CREATIVE] `workflow/nodes/explore.py`: `_proposal_prompt()` forces one-sentence descriptions — too compressed for divergence**
+  *"Each option: number, 2-4 word name, one vivid sentence, stance/blend."*
+  30 tokens per direction is not enough semantic surface for genuine divergence. The model
+  optimizes for punchy phrases that all rhyme tonally; the one-sentence constraint
+  mechanically reduces diversity.
+  **Fix:** Expand to 3–4 sentences per proposal: name, core visual concept, two concrete
+  implementation notes (palette ballpark + one distinctive UI element), and stance.
+  Alternatively, add a specification-first step (see below).
+
+- [ ] **[CREATIVE] Add specification-first / Chain-of-Specification step before design JSON generation**
+  Research ("Chain-of-Specification", 2024) shows that generating a prose specification
+  first — then encoding it into a schema — separates creative reasoning from structural
+  constraint. Currently `refine_node` does both simultaneously, which pulls creative
+  reasoning toward "what fits the schema well."
+  **Fix:** Before generating the design JSON, add a lightweight spec turn:
+  *"In 2–3 sentences describe what this desktop looks and feels like. A user sits down.
+  What's the first color they notice? What does an active window border communicate?
+  What emotional register do notifications carry?"*
+  Pass this prose as additional context into the JSON generation call.
+
+- [ ] **[CREATIVE] Add parallel proposal sampling with diversity selection**
+  Running one LLM call at the proposal step produces the model's single most-likely
+  cluster. Research ("Control the Temperature: Selective Sampling", 2024; "On the Effect
+  of Sampling Diversity in Scaling LLM Inference", 2025) shows that running 2–3
+  independent samples and selecting for diversity cleanly dominates single-sample
+  approaches on both quality and diversity metrics.
+  **Fix:** Call `get_llm(0.9)` twice in parallel in `explore_node` with the same proposal
+  prompt. Collect the combined direction list. Run a cheap selection call at temperature
+  0.0: *"Here are N proposed directions. Select the 3 most different from each other and
+  most interesting given the brief."* Return those 3 to the user.
+
+- [ ] **[CREATIVE] Add multi-persona priming to the explore phase**
+  Cambridge Core (2024) found that sequential multi-persona prompting produces more
+  diverse design concepts than any single-persona approach. The mechanism: sequential
+  exposure accumulates and builds; parallel exposure allows clustering.
+  **Fix (lightweight version):** Before the standard proposal call, prepend a paragraph
+  to the system prompt that rotates through 3 named designer archetypes per session
+  (e.g. post-punk typographer / game UI art director / Japanese lo-fi zine maker) and
+  instructs the model to synthesize a proposal space that honors all three lenses.
+  **Fix (heavier version):** Run 3 separate short "perspective priming" calls from each
+  persona, collect their one-sentence design intuitions, inject all three into the main
+  proposal call as context.

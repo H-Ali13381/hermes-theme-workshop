@@ -39,13 +39,13 @@ def score_element(element: str, spec: dict, design: dict, verify: dict) -> dict:
             if Path(f).expanduser().exists()
         ]
         all_ok = bool(existing_sizes) and all(s > 20 for s in existing_sizes)
-        sc["shape"] = 2 if all_ok else 1
+        sc["shape"] = 2 if all_ok and files_missing == 0 else 1
 
     # diegesis — does the element fit the design? (heuristic: files exist)
-    sc["diegesis"] = 2 if files_written > 0 else 0
+    sc["diegesis"] = 2 if files_written > 0 and files_missing == 0 else (1 if files_written > 0 else 0)
 
-    # usability — no syntax errors in written files
-    sc["usability"] = 2 if _syntax_ok(verify.get("files_written", [])) else 1
+    # usability — no syntax errors in written files and no unresolved missing targets
+    sc["usability"] = 2 if files_missing == 0 and _syntax_ok(verify.get("files_written", [])) else 1
 
     # preview_match — correct palette keys used and files written.
     # Previously this was floored at 1, meaning a completely failed element
@@ -75,6 +75,8 @@ def _syntax_ok(files: list[str]) -> bool:
     for f in files:
         p = Path(f).expanduser()
         if not p.exists():
+            continue
+        if p.is_dir():
             continue
         try:
             text = p.read_text(encoding="utf-8", errors="replace")

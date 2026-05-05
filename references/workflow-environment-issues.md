@@ -60,6 +60,80 @@ If the second form fails while the first succeeds, look for a file in
 matches a stdlib module: `logging.py`, `json.py`, `tokenize.py`, `typing.py`,
 `io.py`, etc.
 
+## Resolved: Step 2.5 FAL image generation fails because `fal-client` is absent (2026-05-03)
+
+### Symptom
+
+The workflow reaches Step 2.5 and emits a generic user-facing interrupt:
+
+```text
+⚠  Image generation failed. Proceeding without AI desktop preview.
+Check your FAL_KEY and account credits.
+```
+
+But the adjacent workflow log contains the real cause:
+
+```text
+[WARNING] ricer.visualize: fal_client not installed — image generation unavailable
+[WARNING] ricer.visualize: FAL image generation failed — skipping AI desktop preview
+```
+
+### Root cause
+
+`workflow/nodes/visualize.py` resolves `FAL_KEY` first, then calls
+`_generate_style_image()`, which imports `fal_client`. If the import fails,
+the helper returns an empty image URL and the node falls through to the generic
+"key/account credits" interrupt. In this case, `FAL_KEY` was resolvable from
+the user's shell/Hermes environment; the actual problem was that the skill venv
+lacked `fal-client` because `requirements.txt` did not include it, while
+`setup.sh` only installs from `requirements.txt`.
+
+### Fix
+
+`fal-client>=0.5.0` belongs in the skill's `requirements.txt` under workflow
+dependencies. After adding it, update the existing skill venv from requirements
+with explicit user permission:
+
+```bash
+source ~/.hermes/skills/creative/linux-ricing/.venv/bin/activate
+uv pip install --python ~/.hermes/skills/creative/linux-ricing/.venv -r ~/.hermes/skills/creative/linux-ricing/requirements.txt
+# or, if uv is unavailable:
+python3 -m pip install -r ~/.hermes/skills/creative/linux-ricing/requirements.txt
+```
+
+### Verification
+
+```bash
+source ~/.hermes/skills/creative/linux-ricing/.venv/bin/activate
+python3 - <<'PY'
+import importlib.util, fal_client
+print(importlib.util.find_spec('fal_client') is not None)
+print(fal_client.__file__)
+PY
+python3 -m pytest tests/test_env_secret_resolution.py -q
+```
+
+Also separately verify the key path, without printing secrets:
+
+```bash
+python3 - <<'PY'
+import sys, os
+sys.path.insert(0, os.path.expanduser('~/.hermes/skills/creative/linux-ricing'))
+from workflow.config import resolve_env_secret
+print('FAL_KEY', 'set' if resolve_env_secret('FAL_KEY') else 'not set')
+PY
+```
+
+### Agent behavior
+
+Do not diagnose the generic Step 2.5 interrupt as a key/credit problem until
+checking the immediately preceding workflow warnings. If stdout names
+`fal_client not installed`, treat it as a dependency packaging/setup failure,
+not a fal.ai account issue. The normal workflow Failure Protocol forbids ad-hoc
+`pip install`; however, if the user explicitly switches from running a rice
+session to fixing the skill code itself, it is appropriate to patch
+`requirements.txt`, update the venv, and verify import/tests.
+
 ## General guidance
 
 ### Do not name modules after stdlib

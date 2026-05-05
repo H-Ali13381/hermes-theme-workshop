@@ -21,7 +21,8 @@ class InstallPackagesTests(unittest.TestCase):
         from workflow.nodes.install.resolver import install_packages
 
         errors = []
-        with patch("workflow.nodes.install.resolver.subprocess.run", return_value=self._ok()) as mock_run:
+        with patch("workflow.nodes.install.resolver._package_installed", return_value=False), \
+             patch("workflow.nodes.install.resolver.subprocess.run", return_value=self._ok()) as mock_run:
             install_packages(["some-pkg"], errors, sudo_password="secret")
 
         self.assertEqual(errors, [])
@@ -45,7 +46,8 @@ class InstallPackagesTests(unittest.TestCase):
             m.returncode = 0
             return m
 
-        with patch("workflow.nodes.install.resolver.subprocess.run", side_effect=side_effect):
+        with patch("workflow.nodes.install.resolver._package_installed", return_value=False), \
+             patch("workflow.nodes.install.resolver.subprocess.run", side_effect=side_effect):
             install_packages(["some-pkg"], errors, sudo_password="")
 
         self.assertEqual(errors, [])
@@ -124,6 +126,17 @@ class InstallPackagesTests(unittest.TestCase):
         self.assertEqual(errors, [])
         self.assertGreaterEqual(mock_run.call_count, 3)
 
+    def test_already_installed_package_is_not_reported_failed(self):
+        from workflow.nodes.install.resolver import install_packages
+
+        errors = []
+        with patch("workflow.nodes.install.resolver._package_installed", return_value=True), \
+             patch("workflow.nodes.install.resolver._try_install_pkg") as try_install:
+            install_packages(["breeze"], errors, sudo_password="")
+
+        self.assertEqual(errors, [])
+        try_install.assert_not_called()
+
     def test_resolve_packages_adds_eww_for_kde_widget_layout(self):
         from workflow.nodes.install.resolver import resolve_packages
 
@@ -184,6 +197,39 @@ class VerifyInstalledTests(unittest.TestCase):
             missing = verify_installed(["pkg-a", "pkg-b"])
 
         self.assertEqual(missing, ["pkg-b"])
+
+
+class InstallNodeMilestoneTests(unittest.TestCase):
+    """Verify install_node stamps session.md when key transitions occur."""
+
+    def _state(self):
+        return {
+            "design": {"name": "x", "palette": {}, "mood_tags": []},
+            "device_profile": {},
+            "session_dir": "/tmp/rice-session-test",
+        }
+
+    def test_no_packages_records_milestone(self):
+        from workflow.nodes import install as install_pkg
+        with patch.object(install_pkg, "resolve_packages", return_value=[]), \
+             patch.object(install_pkg, "append_step") as step:
+            install_pkg.install_node(self._state())
+        step.assert_called_once()
+        args = step.call_args.args
+        self.assertEqual(args[1], 5)
+
+    def test_successful_install_records_milestone(self):
+        from workflow.nodes import install as install_pkg
+        with patch.object(install_pkg, "resolve_packages", return_value=["pkg-a"]), \
+             patch.object(install_pkg, "interrupt", return_value="install"), \
+             patch.object(install_pkg, "can_sudo_noninteractive", return_value=True), \
+             patch.object(install_pkg, "install_packages"), \
+             patch.object(install_pkg, "append_step") as step:
+            install_pkg.install_node(self._state())
+        step.assert_called_once()
+        # Note text should mention package count.
+        note = step.call_args.args[2] if len(step.call_args.args) > 2 else step.call_args.kwargs.get("note", "")
+        self.assertIn("1", note)
 
 
 if __name__ == "__main__":

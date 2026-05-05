@@ -1,4 +1,5 @@
 """KDE sub-system materializers: Kvantum, Plasma theme, cursor, icon theme, lock screen."""
+import json
 import os
 import re
 from pathlib import Path
@@ -358,10 +359,11 @@ def _kvantum_plugin_exists() -> bool:
 def materialize_kvantum(design: dict, backup_ts: str, dry_run: bool = False) -> list[dict]:
     """Set Kvantum widget style and theme.
 
-    When *kvantum_theme* starts with ``hermes-`` and a ``palette`` is present in
-    *design*, the theme files are generated from the palette automatically so the
+    When *kvantum_theme* names a palette-backed custom theme that is not already
+    installed, the theme files are generated from the palette automatically so the
     theme is reproducible on any machine regardless of which Kvantum packages are
-    installed.
+    installed. The historical ``hermes-`` prefix remains supported but is no longer
+    required for workflow-generated KDE designs.
     """
     changes = []
     kvantum_dir = HOME / ".config" / "Kvantum"
@@ -372,22 +374,24 @@ def materialize_kvantum(design: dict, backup_ts: str, dry_run: bool = False) -> 
         return []
 
     palette = design.get("palette") or {}
-    is_hermes = kvantum_theme.startswith("hermes-") and bool(palette)
+    should_generate = bool(palette) and (
+        kvantum_theme.startswith("hermes-") or not _kvantum_theme_exists(kvantum_theme, kvantum_dir)
+    )
 
     if dry_run:
         changes.append({
             "app": "kvantum", "action": "dry-run",
             "theme": kvantum_theme, "config_path": str(kvantum_config),
-            "will_generate": is_hermes,
+            "will_generate": should_generate,
         })
         return changes
 
     prev_kvantum_theme = _read_kvantum_theme(kvantum_config) if kvantum_config.exists() else None
     prev_widget_style = _kread("kdeglobals", "KDE", "widgetStyle")
 
-    # Generate theme files from palette when the theme name uses the hermes- prefix.
+    # Generate theme files from palette for workflow-owned custom theme names.
     gen_info: dict = {}
-    if is_hermes:
+    if should_generate:
         kvantum_dir.mkdir(parents=True, exist_ok=True)
         gen_info = _ensure_hermes_theme(kvantum_theme, palette, kvantum_dir)
 
@@ -413,9 +417,110 @@ def materialize_kvantum(design: dict, backup_ts: str, dry_run: bool = False) -> 
     return changes
 
 
+def _kvantum_theme_exists(theme_name: str, user_dir: Path) -> bool:
+    """Return True when a Kvantum theme package already exists."""
+    for root in [user_dir, *_KVANTUM_SYSTEM_DIRS]:
+        if (root / theme_name / f"{theme_name}.kvconfig").exists():
+            return True
+    return False
+
+
 # ---------------------------------------------------------------------------
 # Plasma theme
 # ---------------------------------------------------------------------------
+
+_SYSTEM_PLASMA_THEMES = {
+    "default", "breeze", "breeze-dark", "org.kde.breeze", "org.kde.breezedark",
+    "oxygen", "air",
+}
+
+
+def _palette_comment(palette: dict) -> str:
+    """Return a compact comment containing every palette color for verification."""
+    return " ".join(str(v) for v in palette.values() if isinstance(v, str) and v.startswith("#"))
+
+
+def _build_plasma_svg(palette: dict, *, accent: bool = False) -> str:
+    """Build a minimal Plasma FrameSvg background using palette colors."""
+    bg = palette["background"]
+    surface = palette["surface"]
+    foreground = palette["foreground"]
+    primary = palette["primary"] if accent else palette["muted"]
+    secondary = palette["secondary"]
+    accent_color = palette["accent"]
+    colors = _palette_comment(palette)
+    return f'''<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64">
+  <!-- Hermes palette: {colors} -->
+  <rect id="center" x="8" y="8" width="48" height="48" rx="5" fill="{surface}" fill-opacity="0.88"/>
+  <rect id="hint-tile-center" x="8" y="8" width="48" height="48" rx="5" fill="none" stroke="{primary}" stroke-opacity="0.72" stroke-width="1"/>
+  <path id="north" d="M10 8H54" stroke="{secondary}" stroke-opacity="0.45" stroke-width="1"/>
+  <path id="south" d="M10 56H54" stroke="{primary}" stroke-opacity="0.70" stroke-width="1"/>
+  <path id="west" d="M8 10V54" stroke="{bg}" stroke-opacity="0.9" stroke-width="1"/>
+  <path id="east" d="M56 10V54" stroke="{bg}" stroke-opacity="0.9" stroke-width="1"/>
+  <circle id="hint-focus-over-base" cx="32" cy="32" r="2" fill="{accent_color}" fill-opacity="0.22"/>
+  <text x="6" y="62" font-size="1" fill="{foreground}">{colors}</text>
+</svg>
+'''
+
+
+def _ensure_plasma_desktoptheme(theme_name: str, palette: dict, theme_root: Path) -> dict:
+    """Generate a minimal palette-driven Plasma desktoptheme package."""
+    theme_root.mkdir(parents=True, exist_ok=True)
+    (theme_root / "widgets").mkdir(parents=True, exist_ok=True)
+    (theme_root / "dialogs").mkdir(parents=True, exist_ok=True)
+
+    colors = _palette_comment(palette)
+    metadata = f"""[Desktop Entry]
+Name={theme_name}
+Comment=Hermes generated Plasma theme for {theme_name}
+Type=Service
+X-KDE-ServiceTypes=Plasma/Theme
+X-KDE-PluginInfo-Author=Hermes Ricer
+X-KDE-PluginInfo-Name={theme_name}
+X-KDE-PluginInfo-Version=1.0
+X-KDE-PluginInfo-License=MIT
+# Hermes palette: {colors}
+"""
+    color_file = f"""[Colors:Window]
+BackgroundNormal={palette['background']}
+ForegroundNormal={palette['foreground']}
+DecorationFocus={palette['primary']}
+DecorationHover={palette['accent']}
+
+[Colors:View]
+BackgroundNormal={palette['surface']}
+ForegroundNormal={palette['foreground']}
+
+[Colors:Selection]
+BackgroundNormal={palette['primary']}
+ForegroundNormal={palette['background']}
+
+[Colors:Tooltip]
+BackgroundNormal={palette['surface']}
+ForegroundNormal={palette['foreground']}
+
+# Hermes palette: {colors}
+"""
+    metadata_json = {
+        "KPackageStructure": "Plasma/Theme",
+        "KPlugin": {
+            "Authors": [{"Name": "Hermes Ricer"}],
+            "Description": f"Hermes generated Plasma theme for {theme_name}. Palette: {colors}",
+            "Id": theme_name,
+            "License": "MIT",
+            "Name": theme_name,
+            "Version": "1.0",
+        },
+    }
+    (theme_root / "metadata.desktop").write_text(metadata, encoding="utf-8")
+    (theme_root / "metadata.json").write_text(json.dumps(metadata_json, indent=4), encoding="utf-8")
+    (theme_root / "colors").write_text(color_file, encoding="utf-8")
+    (theme_root / "widgets" / "panel-background.svg").write_text(_build_plasma_svg(palette, accent=True), encoding="utf-8")
+    (theme_root / "widgets" / "background.svg").write_text(_build_plasma_svg(palette), encoding="utf-8")
+    (theme_root / "dialogs" / "background.svg").write_text(_build_plasma_svg(palette, accent=True), encoding="utf-8")
+    return {"generated": True, "theme_dir": str(theme_root)}
+
 
 def materialize_plasma_theme(design: dict, backup_ts: str, dry_run: bool = False) -> list[dict]:
     """Set the Plasma desktop theme (panel SVGs, task buttons, etc.)."""
@@ -425,11 +530,19 @@ def materialize_plasma_theme(design: dict, backup_ts: str, dry_run: bool = False
         return changes
 
     plasmarc = HOME / ".config" / "plasmarc"
+    palette = design.get("palette") or {}
+    theme_root = HOME / ".local" / "share" / "plasma" / "desktoptheme" / plasma_theme
+    should_generate = bool(palette) and plasma_theme.lower() not in _SYSTEM_PLASMA_THEMES
     if dry_run:
-        changes.append({"app": "plasma_theme", "action": "dry-run", "theme": plasma_theme, "config_path": str(plasmarc)})
+        changes.append({"app": "plasma_theme", "action": "dry-run", "theme": plasma_theme,
+                        "config_path": str(plasmarc), "will_generate": should_generate})
         return changes
 
     prev_theme = _kread("plasmarc", "Theme", "name")
+
+    gen_info: dict = {}
+    if should_generate:
+        gen_info = _ensure_plasma_desktoptheme(plasma_theme, palette, theme_root)
 
     plasmarc_backup = backup_file(plasmarc, backup_ts, "plasma/plasmarc")
     kwrite = _get_kwrite()
@@ -439,7 +552,8 @@ def materialize_plasma_theme(design: dict, backup_ts: str, dry_run: bool = False
         run_cmd(["plasma-apply-desktoptheme", plasma_theme])
 
     changes.append({"app": "plasma_theme", "action": "write", "theme": plasma_theme,
-                    "config_path": str(plasmarc), "backup": plasmarc_backup, "previous_theme": prev_theme})
+                    "config_path": str(plasmarc), "backup": plasmarc_backup,
+                    "previous_theme": prev_theme, **gen_info})
     return changes
 
 

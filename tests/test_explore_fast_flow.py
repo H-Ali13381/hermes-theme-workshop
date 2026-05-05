@@ -21,7 +21,7 @@ class ExploreFastFlowTests(unittest.TestCase):
         self.assertIn("place", lowered)
         self.assertIn("mood", lowered)
         self.assertIn("subtle", lowered)
-        self.assertLessEqual(len(prompt.splitlines()), 5)
+        self.assertLessEqual(len(prompt.splitlines()), 6)
         for banned in ("agent", "workflow", "orchestrator", "designer asks"):
             self.assertNotIn(banned, lowered)
 

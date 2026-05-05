@@ -74,17 +74,88 @@ def detect_chassis() -> str:
 
 
 def detect_screens() -> int:
-    _, out = run(["xrandr", "--listmonitors"])
-    lines = [line for line in out.splitlines() if line.strip().startswith("+")]
-    if lines:
-        return len(lines)
-    _, out2 = run(["hyprctl", "monitors", "-j"])
-    if out2:
-        try:
-            return len(json.loads(out2))
-        except (json.JSONDecodeError, ValueError):
-            pass
+    geometries = detect_screen_geometries()
+    if geometries:
+        return len(geometries)
     return 1
+
+
+def detect_screen_geometries() -> list[dict]:
+    """Return logical screen rectangles for target-aware preview generation."""
+    geometries = _detect_kscreen_geometries()
+    if geometries:
+        return geometries
+    geometries = _detect_hyprland_geometries()
+    if geometries:
+        return geometries
+    return _detect_xrandr_geometries()
+
+
+def _detect_kscreen_geometries() -> list[dict]:
+    rc, out = run(["kscreen-doctor", "-o"])
+    if rc != 0 or not out:
+        return []
+    screens: list[dict] = []
+    current: dict | None = None
+    for line in out.splitlines():
+        if line.startswith("Output:"):
+            if current and current.get("width") and current.get("height"):
+                screens.append(current)
+            parts = line.split()
+            current = {"name": parts[2] if len(parts) > 2 else ""}
+            continue
+        if current is None:
+            continue
+        m = re.search(r"Geometry:\s*(-?\d+),(-?\d+)\s+(\d+)x(\d+)", line)
+        if m:
+            current.update({
+                "x": int(m.group(1)), "y": int(m.group(2)),
+                "width": int(m.group(3)), "height": int(m.group(4)),
+            })
+    if current and current.get("width") and current.get("height"):
+        screens.append(current)
+    return screens
+
+
+def _detect_hyprland_geometries() -> list[dict]:
+    rc, out = run(["hyprctl", "monitors", "-j"])
+    if rc != 0 or not out:
+        return []
+    try:
+        data = json.loads(out)
+    except (json.JSONDecodeError, ValueError):
+        return []
+    screens = []
+    for item in data if isinstance(data, list) else []:
+        try:
+            scale = float(item.get("scale") or 1) or 1
+            screens.append({
+                "name": item.get("name", ""),
+                "x": int(float(item.get("x", 0)) / scale),
+                "y": int(float(item.get("y", 0)) / scale),
+                "width": int(float(item.get("width", 0)) / scale),
+                "height": int(float(item.get("height", 0)) / scale),
+            })
+        except (TypeError, ValueError):
+            continue
+    return [s for s in screens if s.get("width") and s.get("height")]
+
+
+def _detect_xrandr_geometries() -> list[dict]:
+    rc, out = run(["xrandr", "--listmonitors"])
+    if rc != 0 or not out:
+        return []
+    screens = []
+    for line in out.splitlines():
+        # Example: " 0: +*DP-1 2560/597x1440/336+0+0  DP-1"
+        m = re.search(r"\s\d+:\s+[+*]*([^\s]+)\s+(\d+)/\d+x(\d+)/\d+([+-]\d+)([+-]\d+)", line)
+        if not m:
+            continue
+        screens.append({
+            "name": m.group(1), "width": int(m.group(2)), "height": int(m.group(3)),
+            "x": int(m.group(4)), "y": int(m.group(5)),
+        })
+    return screens
 
 
 def detect_gpu() -> dict:
@@ -98,7 +169,7 @@ def detect_gpu() -> dict:
 def detect_apps() -> dict[str, bool]:
     apps = [
         "kitty", "alacritty", "konsole", "foot", "wezterm",
-        "waybar", "polybar", "eww",
+        "waybar", "polybar", "eww", "quickshell",
         "rofi", "wofi",
         "dunst", "mako", "swaync",
         "hyprlock", "swaylock",

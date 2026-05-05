@@ -1,6 +1,7 @@
 import os
 import sys
 from pathlib import Path
+import shlex
 
 # ── Module-level constants ────────────────────────────────────────────────────
 # Last-resort model fallback — only used when RICER_MODEL env var is unset
@@ -216,18 +217,74 @@ def judge_design_creativity(design: dict, direction: dict) -> tuple[bool, list[s
     return False, [str(r) for r in reasons]
 
 
-def _parse_dotenv(path: Path) -> dict:
+def _parse_env_assignments(path: Path) -> dict:
+    """Parse simple shell/.env assignments without executing the file.
+
+    This intentionally supports the forms users put in shell startup files:
+    ``KEY=value`` and ``export KEY=value`` with optional shell quoting.  We do
+    not source the file because interactive guards such as ``[[ $- != *i* ]] &&
+    return`` hide later exports from non-interactive workflow runs, and sourcing
+    arbitrary startup files would execute unrelated user code.
+    """
     result = {}
     try:
         for line in path.read_text(encoding="utf-8").splitlines():
             line = line.strip()
-            if line and not line.startswith("#") and "=" in line:
-                k, _, v = line.partition("=")
-                result[k.strip()] = v.strip()
+            if not line or line.startswith("#") or "=" not in line:
+                continue
+            if line.startswith("export "):
+                line = line[len("export "):].lstrip()
+            k, _, v = line.partition("=")
+            k = k.strip()
+            if not k or not k.replace("_", "").isalnum() or k[0].isdigit():
+                continue
+            v = v.strip()
+            try:
+                parts = shlex.split(v, comments=True, posix=True)
+                v = parts[0] if parts else ""
+            except ValueError:
+                v = v.strip().strip('"').strip("'")
+            result[k] = v
     except Exception as e:
         from .log_setup import get_logger
         get_logger("config").warning("could not parse %s: %s", path, e)
     return result
+
+
+def _parse_dotenv(path: Path) -> dict:
+    """Backward-compatible alias for parsing .env-style files."""
+    return _parse_env_assignments(path)
+
+
+def resolve_env_secret(name: str) -> str:
+    """Resolve a secret from env, Hermes .env, or user shell startup files.
+
+    Priority is intentionally conservative:
+      1. The live process environment.
+      2. ~/.hermes/.env, where Hermes-managed secrets usually live.
+      3. Common shell startup files parsed as text, including exports that appear
+         after an interactive-only return guard in ~/.bashrc.
+
+    The value is returned but never logged by this helper.
+    """
+    live = os.environ.get(name, "").strip()
+    if live:
+        return live
+
+    home = Path.home()
+    for path in (
+        home / ".hermes" / ".env",
+        home / ".bashrc",
+        home / ".zshrc",
+        home / ".profile",
+        home / ".bash_profile",
+        home / ".zprofile",
+    ):
+        value = _parse_env_assignments(path).get(name, "").strip()
+        if value:
+            os.environ.setdefault(name, value)
+            return value
+    return ""
 
 
 _PROVIDER_KEY_ENV: dict[str, str] = {
@@ -239,6 +296,9 @@ _PROVIDER_KEY_ENV: dict[str, str] = {
     "xai":        "XAI_API_KEY",
     "copilot":    "GITHUB_TOKEN",
 }
+OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1"
+CODEX_BASE_URL = "https://chatgpt.com/backend-api/codex"
+HERMES_AGENT_DIR = Path.home() / ".hermes" / "hermes-agent"
 
 
 def _load_hermes_config() -> dict:
@@ -295,15 +355,103 @@ def resolve_llm_config() -> dict:
 
     # Always load Hermes config so we can fill in missing fields (especially model).
     h = _load_hermes_config()
+    provider = h.get("provider", "")
     base_url = base_url or h.get("base_url", "")
     api_key  = api_key  or h.get("api_key",  "")
     api_mode = h.get("api_mode", "")
     if not model and h.get("model"):
         model = h["model"]
+
+    ricer_overrides_auth = bool(os.environ.get("RICER_API_KEY", "") or os.environ.get("RICER_BASE_URL", ""))
+    if provider == "openai-codex" and not ricer_overrides_auth:
+        # Use the same OAuth-backed Responses API path as Hermes Agent.  Do not
+        # translate this to OpenRouter: Hermes stores/refreshes ChatGPT Codex
+        # tokens in ~/.hermes/auth.json, and get_llm() wraps that client in a
+        # LangChain-compatible shim below.
+        base_url = CODEX_BASE_URL
+        api_key = ""
+        api_mode = "codex_responses"
+
     if not model:
         model = MODEL
 
-    return {"base_url": base_url, "api_key": api_key, "model": model, "api_mode": api_mode}
+    return {
+        "base_url": base_url,
+        "api_key": api_key,
+        "model": model,
+        "api_mode": api_mode,
+        "provider": provider,
+    }
+
+
+class _CodexOAuthLLM:
+    """LangChain-shaped shim over Hermes Agent's OpenAI Codex OAuth path."""
+
+    def __init__(self, model: str, temperature: float = 0.7, max_tokens: int | None = None):
+        self.model = model
+        self.model_name = model
+        self.temperature = temperature
+        self.max_tokens = max_tokens
+        self.base_url = CODEX_BASE_URL
+
+    @staticmethod
+    def _ensure_hermes_agent_importable() -> None:
+        if HERMES_AGENT_DIR.exists() and str(HERMES_AGENT_DIR) not in sys.path:
+            sys.path.insert(0, str(HERMES_AGENT_DIR))
+
+    @staticmethod
+    def _message_content(message) -> object:
+        return getattr(message, "content", message.get("content", "") if isinstance(message, dict) else str(message))
+
+    @staticmethod
+    def _message_role(message) -> str:
+        if isinstance(message, dict):
+            return str(message.get("role", "user") or "user")
+        type_name = getattr(message, "type", "") or message.__class__.__name__.lower()
+        if type_name in {"system", "systemmessage"}:
+            return "system"
+        if type_name in {"ai", "assistant", "aimessage"}:
+            return "assistant"
+        return "user"
+
+    @classmethod
+    def _messages_to_dicts(cls, messages) -> list[dict]:
+        if isinstance(messages, str):
+            return [{"role": "user", "content": messages}]
+        return [
+            {"role": cls._message_role(message), "content": cls._message_content(message)}
+            for message in messages
+        ]
+
+    def invoke(self, messages):
+        self._ensure_hermes_agent_importable()
+        from hermes_cli.auth import AuthError, resolve_codex_runtime_credentials
+        from agent.auxiliary_client import resolve_provider_client
+        from langchain_core.messages import AIMessage
+
+        try:
+            # Refresh through Hermes' auth store before auxiliary_client reads the
+            # token. This is the same OAuth refresh path used by Hermes Agent.
+            resolve_codex_runtime_credentials()
+        except AuthError as exc:
+            raise RuntimeError(
+                "OpenAI Codex OAuth credentials are unavailable. Run: hermes login --provider openai-codex"
+            ) from exc
+
+        client, final_model = resolve_provider_client("openai-codex", model=self.model)
+        if client is None:
+            raise RuntimeError(
+                "OpenAI Codex OAuth client could not be constructed. Run: hermes login --provider openai-codex"
+            )
+
+        message_dicts = self._messages_to_dicts(messages)
+        kwargs = {"model": final_model or self.model, "messages": message_dicts}
+        # The Codex backend rejects temperature/max_output_tokens on this path;
+        # Hermes' Codex adapter intentionally omits them too.
+        response = client.chat.completions.create(**kwargs)
+        choice = response.choices[0]
+        content = getattr(choice.message, "content", "") or ""
+        return AIMessage(content=content)
 
 
 def get_llm(temperature: float = 0.7, max_tokens: int | None = None):
@@ -313,6 +461,10 @@ def get_llm(temperature: float = 0.7, max_tokens: int | None = None):
     api_key = resolved["api_key"]
     model = resolved["model"]
     api_mode = resolved["api_mode"]
+    provider = resolved.get("provider", "")
+
+    if provider == "openai-codex" and api_mode == "codex_responses":
+        return _CodexOAuthLLM(model=model, temperature=temperature, max_tokens=max_tokens)
 
     is_anthropic_native = (
         api_mode == "anthropic_messages"

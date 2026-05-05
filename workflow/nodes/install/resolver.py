@@ -80,11 +80,38 @@ def detect_distro() -> str:
 
 
 def install_packages(packages: list[str], errors: list[str], sudo_password: str = "") -> None:
-    """Install packages. Dispatches to the appropriate package manager for the running distro."""
+    """Install packages. Dispatches to the appropriate package manager for the running distro.
+
+    A package-manager command can fail for reasons unrelated to the final state
+    (for example sudo credential handling while the package was already present).
+    Verify final installation state before surfacing a package as failed.
+    """
     distro = detect_distro()
+    log = get_logger("install.resolver")
     for pkg in packages:
-        if not _try_install_pkg(pkg, sudo_password, distro):
-            errors.append(pkg)
+        if _package_installed(pkg, distro):
+            log.info("package already installed: %s", pkg)
+            continue
+        if _try_install_pkg(pkg, sudo_password, distro):
+            continue
+        if _package_installed(pkg, distro):
+            log.info("package present after failed install command: %s", pkg)
+            continue
+        errors.append(pkg)
+
+
+def _package_installed(pkg: str, distro: str) -> bool:
+    """Return True if *pkg* is installed for the already-detected distro."""
+    try:
+        if distro == "arch":
+            return subprocess.run(["pacman", "-Q", pkg], capture_output=True, timeout=30).returncode == 0
+        if distro == "debian":
+            return subprocess.run(["dpkg", "-s", pkg], capture_output=True, timeout=30).returncode == 0
+        if distro in {"fedora", "suse"}:
+            return subprocess.run(["rpm", "-q", pkg], capture_output=True, timeout=30).returncode == 0
+    except subprocess.TimeoutExpired:
+        return False
+    return bool(shutil.which(pkg))
 
 
 def can_sudo_noninteractive() -> bool:

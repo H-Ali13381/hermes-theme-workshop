@@ -1,0 +1,20 @@
+#game-button {
+  min-width: 52px;
+  min-height: 42px;
+  border: 1px solid var(--gold);
+  border-radius: 8px;
+  background-color: var(--dark-panel);
+  color: var(--fg);
+  transition: all 90ms ease;
+}
+#game-button:hover,
+#game-button:focus {
+  background-color: var(--surface-bright);
+  box-shadow: 0 0 8px rgba(255, 215, 94, .45);
+}
+#game-button:active {
+  transform: translateY(2px) scale(.97);
+}
+#game-button.dangerous:hover {
+  color: var(--warning);
+}

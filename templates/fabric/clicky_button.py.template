@@ -1,0 +1,15 @@
+# Fabric clicky button template for generated dashboards.
+# Use a real Button for controls; use EventBox only when custom hitbox art is required.
+from fabric.widgets.button import Button
+from fabric.widgets.label import Label
+
+
+def game_button(label: str, on_clicked, *, name: str = "game-button", dangerous: bool = False) -> Button:
+    classes = ["dangerous"] if dangerous else []
+    return Button(
+        name=name,
+        style_classes=classes,
+        child=Label(label=label),
+        on_clicked=on_clicked,
+        tooltip_text=label,
+    )

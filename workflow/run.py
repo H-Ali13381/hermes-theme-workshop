@@ -60,7 +60,7 @@ def main() -> None:
         graph = build_graph(checkpointer)
 
         if args.list:
-            _list_sessions(checkpointer, as_json=args.json)
+            _list_sessions(graph, checkpointer, as_json=args.json)
             return
 
         if args.resume:
@@ -164,7 +164,21 @@ def _run_loop(graph, config: dict, initial_input) -> None:
 
 def _run_once(graph, config: dict, answer: str, as_json: bool = False) -> None:
     """Resume once with *answer*, stop at the next interrupt/end, and report status."""
-    current_input = Command(resume=_normalize_resume_answer(answer))
+    normalized = _normalize_resume_answer(answer)
+    pre_state = graph.get_state(config)
+    try:
+        _require_pending_interrupt(pre_state, normalized)
+    except ValueError as e:
+        status = _session_status(pre_state)
+        status["error"] = str(e)
+        if as_json:
+            print(json.dumps(status, indent=2, default=str))
+        else:
+            print(f"\n[ERROR] {e}\n", file=sys.stderr)
+            _display_pending_status(status)
+        raise SystemExit(2) from e
+
+    current_input = Command(resume=normalized)
     try:
         for chunk in graph.stream(current_input, config, stream_mode="updates"):
             if not as_json:
@@ -187,29 +201,66 @@ def _normalize_resume_answer(answer: str) -> str:
     return normalized
 
 
-def _session_status(state) -> dict:
-    """Return a JSON-serializable snapshot of current graph resume status."""
-    pending_messages = []
+def _pending_interrupt_values(state) -> list:
+    """Return pending interrupt payloads from a LangGraph state snapshot."""
+    pending = []
     for task in getattr(state, "tasks", []):
         for interrupt in getattr(task, "interrupts", []):
-            val = interrupt.value
-            if isinstance(val, dict):
-                pending_messages.append({
-                    "step": val.get("step"),
-                    "type": val.get("type"),
-                    "element": val.get("element"),
-                    "score": val.get("score"),
-                    "message": val.get("message"),
-                })
-            else:
-                pending_messages.append({"message": str(val)})
+            pending.append(interrupt.value)
+    return pending
+
+
+def _require_pending_interrupt(state, answer: str) -> None:
+    """Fail before resuming if *answer* has no interrupt to answer.
+
+    LangGraph treats ``Command(resume=...)`` as graph input.  If there is no
+    pending interrupt, a control word like "skip" can accidentally start normal
+    execution instead of answering a score gate.  Guard this sharp edge.
+    """
+    if _pending_interrupt_values(state):
+        return
+    next_nodes = list(getattr(state, "next", []) or [])
+    raise ValueError(
+        f"cannot resume with answer {answer!r}: session has no pending interrupt "
+        f"(next={next_nodes}). Check status first or run without --answer."
+    )
+
+
+def _session_status(state) -> dict:
+    """Return a compact JSON-serializable snapshot of current graph resume status.
+
+    Trims noisy fields like full ``design`` and ``device_profile`` to summary
+    keys so bridge JSON stays scannable.  Adds ``queue_head``/``queue_len`` for
+    quick situational awareness without dumping the whole element queue.
+    """
+    pending_messages = []
+    for val in _pending_interrupt_values(state):
+        if isinstance(val, dict):
+            pending_messages.append({
+                "step": val.get("step"),
+                "type": val.get("type"),
+                "element": val.get("element"),
+                "score": val.get("score"),
+                "message": val.get("message"),
+            })
+        else:
+            pending_messages.append({"message": str(val)})
     values = getattr(state, "values", {}) or {}
+    queue = list(values.get("element_queue") or [])
+    compact: dict = {k: values[k] for k in ("current_step", "session_dir") if k in values}
+    if queue:
+        compact["queue_head"] = queue[:5]
+        compact["queue_len"] = len(queue)
+    if "design" in values and isinstance(values["design"], dict):
+        compact["design_name"] = values["design"].get("name")
+    if "device_profile" in values and isinstance(values["device_profile"], dict):
+        dp = values["device_profile"]
+        compact["device_profile"] = {k: dp.get(k) for k in ("wm", "session_type", "desktop_recipe") if k in dp}
+    if values.get("errors"):
+        compact["errors_count"] = len(values["errors"])
     return {
         "next": list(getattr(state, "next", []) or []),
-        "values": {k: values.get(k) for k in (
-            "current_step", "session_dir", "device_profile", "design",
-            "element_queue", "cleanup_actions", "effective_state", "capability_report",
-        ) if k in values},
+        "values": compact,
         "pending_messages": pending_messages,
     }
 
@@ -266,11 +317,11 @@ def _display_interrupt(val) -> None:
     print()
 
 
-def _list_sessions(checkpointer, as_json: bool = False) -> None:
-    """List all sessions in the checkpoint store.
+def _list_sessions(graph, checkpointer, as_json: bool = False) -> None:
+    """List resumable sessions in the checkpoint store.
 
-    When *as_json* is True the output is a JSON array so callers (e.g.
-    session_manager.py) can parse it without screen-scraping human text.
+    Completed graph threads have a latest checkpoint but no ``state.next``.  They
+    are not resumable and must not appear in resume-check.
     """
     sessions: list[dict] = []
     try:
@@ -284,9 +335,13 @@ def _list_sessions(checkpointer, as_json: bool = False) -> None:
             if thread_id in seen:
                 continue  # show only the latest checkpoint per thread
             seen.add(thread_id)
+            state = graph.get_state({"configurable": {"thread_id": thread_id}})
+            if not getattr(state, "next", None):
+                continue
+            current_step = state.values.get("current_step") if isinstance(state.values, dict) else None
             sessions.append({
                 "thread_id": thread_id,
-                "step": str(c.metadata.get("step", "?")),
+                "step": str(current_step or c.metadata.get("step", "?")),
                 "created_at": c.metadata.get("created_at", "unknown"),
             })
     except Exception as e:

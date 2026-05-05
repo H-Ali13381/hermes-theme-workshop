@@ -35,11 +35,12 @@ class KdeFinalizationTests(unittest.TestCase):
 
         state = {
             "device_profile": {"wm": "kde"},
-            "design": {"name": "moss", "wallpaper_path": str(wallpaper)},
+            "design": {"name": "moss", "wallpaper_path": str(wallpaper), "kvantum_theme": "MossIron"},
             "impl_log": [
                 {"element": "fastfetch"},
                 {"element": "terminal:kitty"},
                 {"element": "window_decorations:kde"},
+                {"element": "kvantum_theme"},
                 {"element": "cursor_theme"},
             ],
         }
@@ -64,9 +65,12 @@ class KdeFinalizationTests(unittest.TestCase):
         self.assertTrue((ff.parent / "config.json").is_symlink())
         self.assertNotIn(["pkill", "-SIGUSR1", "kitty"], calls)
         self.assertIn(["plasma-apply-colorscheme", "hermes-moss"], calls)
+        self.assertIn(["kwriteconfig6", "--file", "kdeglobals", "--group", "KDE", "--key", "widgetStyle", "kvantum"], calls)
         self.assertIn(["plasma-apply-wallpaperimage", str(wallpaper)], calls)
         self.assertIn(["qdbus6", "org.kde.KWin", "/KWin", "reconfigure"], calls)
+        self.assertEqual((tmp / ".config" / "Kvantum" / "kvantum.kvconfig").read_text(encoding="utf-8"), "[General]\ntheme=MossIron\n")
         self.assertIn("kde-colorscheme", reloaded)
+        self.assertIn("kvantum-theme", reloaded)
         self.assertTrue([a for a in actions if a["action"] == "kitty-reload" and a["status"] == "deferred"])
         self.assertTrue([a for a in actions if a["action"] == "plasmashell-health" and a["status"] == "ok"])
 

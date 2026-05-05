@@ -1,0 +1,24 @@
+.game-button {
+  all: unset;
+  border: 1px solid $gold;
+  border-radius: 8px;
+  background: $dark-panel;
+  color: $fg;
+  padding: 8px 14px;
+  transition: all 90ms ease;
+}
+.game-button:hover,
+.game-button.hover,
+.game-button:focus {
+  background: lighten($dark-panel, 8%);
+  box-shadow: 0 0 8px rgba($gold, .45);
+}
+.game-button:active,
+.game-button.active,
+.game-button:checked {
+  background: darken($dark-panel, 8%);
+  transform: translateY(2px) scale(.97);
+}
+.game-button.dangerous:hover {
+  color: $warning;
+}

@@ -21,6 +21,7 @@ from ..config import (
 from ..log_setup import get_logger
 from ..session import append_step
 from ..state import RiceSessionState
+from .preview_renderer import render_preview_html
 
 # Marker prefixed onto every plan-feedback HumanMessage so subsequent invocations
 # of plan_node can identify and re-use prior user critiques without entangling
@@ -28,32 +29,59 @@ from ..state import RiceSessionState
 PLAN_FEEDBACK_MARKER = "[PLAN_FEEDBACK] "
 
 SYSTEM_PROMPT = """\
-You are generating a static HTML mockup for a Linux desktop theme preview.
+You are generating the secondary HTML preview for a Linux desktop theme whose primary
+creative artifact is a single AI-generated desktop overview image.
 
-Given a design_system JSON, produce a complete, self-contained HTML file that shows a full desktop composition:
-1. A palette board — swatches for all 10 color slots with labels and hex values
-2. A terminal mockup using the palette colors (background, foreground, primary)
-3. A non-stock composition based on originality_strategy and chrome_strategy — never a plain KDE/Breeze toolbar
-4. A launcher/rofi row mockup
-5. Optional widgets/overlays from widget_layout when they serve the user's vision
-6. The theme name and stance as a header
+The image-generation model has creative authority. The HTML is secondary: it should frame
+that hero image as the centerpiece, expose the extracted palette, and show terminal/color
+implementation views that orbit around the generated overview. Do not replace the hero
+with a generic style guide, generic cards, or a safer re-interpretation.
 
-Requirements:
-- Single self-contained HTML file (no external dependencies)
-- Use inline CSS with actual hex values from the palette
-- Use monospace fonts for terminal areas
-- Make it beautiful enough to judge color harmony at a glance
-- The body background should be the theme's background color
-- If this is KDE, the preview must make the originality_strategy obvious enough to reject "palette swap" designs
-- Do not center the preview on a generic status bar; make user-specific custom chrome/composition dominate the scene
+## What to include
+1. The approved single AI-generated desktop overview as the dominant hero centerpiece when
+   a reference_image_url is provided. It should visually own the page.
+2. Theme name, stance/mood, and one-sentence description — styled as title/chrome around
+   the hero rather than as a detached brochure card.
+3. Palette board — all 10 color swatches (background, foreground, primary, secondary, accent,
+   surface, muted, danger, success, warning) with hex labels.
+4. Terminal and color views — palette-colored, 3-4 lines of evocative shell output, and
+   practical terminal color samples derived from the hero.
+5. Launcher / app-row — styled to match the design's chrome_strategy.
+6. If widget_layout is present, render the widgets as they are intended to appear.
+7. If visual_element_plan is present, include an implementation-contract section that lists
+   each interpreted image element, the concrete implementation_tool/fallback_tool, config
+   targets, and validation_probe. This is a validation gate, not decorative copy.
+8. The overall layout should make everything revolve around the hero desktop image.
 
 Preview honesty contract:
-- Do NOT draw macOS traffic-light window controls (red/yellow/green circles at the top-left) unless the design explicitly includes an implemented macOS-style window-decoration materializer. This workflow does not currently implement those controls.
-- Terminal previews should be frameless, embedded in custom widget chrome, or use Linux/KDE-realistic top-right window controls only.
-- Rounded terminal/window corners, custom borders, and ornamental titlebars are allowed only when chrome_strategy declares an implementable method such as eww_frame/custom_overlay/kvantum/terminal_config.
+- Do NOT draw macOS traffic-light window controls (red/yellow/green circles at the
+  top-left) unless the design explicitly includes an implemented macOS-style
+  window-decoration materializer. This workflow does not currently implement
+  those controls.
+- Terminal previews should be frameless, embedded in custom widget chrome, or use
+  Linux/KDE-realistic top-right window controls only.
+- Rounded terminal/window corners, custom borders, and ornamental titlebars are
+  allowed only when chrome_strategy declares an implementable method such as
+  eww_frame/custom_overlay/kvantum/terminal_config.
 - Never preview app/window chrome that the implementation will not actually change.
 
-Output ONLY the HTML — no explanation, no markdown fences.
+## Craft
+- Use the full CSS toolkit: custom properties, animations, @keyframes, gradients (linear,
+  radial, conic), filters, backdrop-filter, mix-blend-mode, clip-path, SVG fills, anything.
+- JavaScript is allowed and encouraged for subtle motion: glowing pulses, typing effects,
+  particle drifts, scanline overlays, reactive color shifts — whatever fits the mood.
+- Inline SVG is encouraged for ornamental borders, gothic filigree, game-UI framing, rune
+  dividers, circuit traces, etc.
+- Google Fonts CDN is allowed for typography. No other external image URLs beyond the
+  provided reference_image_url.
+- If originality_strategy describes a visual metaphor (bonfire glow, gothic clinic, cosmic HUD,
+  mossy chapel), BUILD THAT THING around the hero — use the metaphor as literal layout
+  language, not flavour text on top of a generic dark card.
+- The body background MUST be the theme's background hex.
+- The palette hex values MUST appear verbatim in the rendered styles.
+
+## Output
+Output ONLY the complete HTML file. No markdown fences, no explanation.
 """
 
 _MACOS_TRAFFIC_LIGHT_HEXES = {
@@ -85,10 +113,9 @@ def plan_node(state: RiceSessionState) -> dict:
 
     html_path = _get_html_path(session_dir)
     if not html_path.exists() or html_path.stat().st_size < 500:
-        _render_preview(html_path, design, feedback_block)
+        _render_preview(html_path, design, feedback_block, visual_context=dict(state.get("visual_context") or {}))
 
     contract_violations = _existing_contract_violations(html_path, design)
-
     violation_note = ""
     if contract_violations:
         violation_note = (
@@ -96,6 +123,7 @@ def plan_node(state: RiceSessionState) -> dict:
             f"Reason: {'; '.join(contract_violations)}\n"
             "Type 'regenerate' so the workflow produces an honest preview."
         )
+
     decision = interrupt({
         "step": 4,
         "type": "approval",
@@ -118,7 +146,7 @@ def plan_node(state: RiceSessionState) -> dict:
             "plan_html_path": "",
             "plan_feedback_route": "render",
             "messages": [_make_feedback_message(
-                "Regenerate the preview without unimplemented macOS traffic-light chrome."
+                "Regenerate the preview without unimplemented macOS traffic-light or rounded window chrome."
             )],
             "loop_counts": loop_counts,
         }
@@ -176,26 +204,59 @@ def plan_node(state: RiceSessionState) -> dict:
     )
 
 
-def _render_preview(html_path: Path, design: dict, feedback_block: str) -> None:
-    """Generate the preview HTML and write it atomically to *html_path*."""
+def _render_preview(
+    html_path: Path,
+    design: dict,
+    feedback_block: str,
+    visual_context: dict | None = None,
+) -> None:
+    """Generate the preview HTML via LLM and write it atomically to *html_path*.
+
+    The approved Step 2.5 image is the creative source of truth when available:
+    plan.html frames that hero desktop overview and adds palette/terminal views
+    around it. The deterministic renderer remains a fallback if the LLM call
+    fails or returns something that doesn't look like HTML. A small honesty
+    validator blocks obvious unimplemented window chrome.
+    """
     log = get_logger("plan")
-    log.info("generating visual preview")
-    llm = get_llm(0.2, max_tokens=8192)
+    log.info("generating LLM HTML visual preview")
 
-    user_content = f"Design system:\n```json\n{json.dumps(design, indent=2)}\n```"
+    design_json = json.dumps(design, indent=2)
+    prompt_parts = [f"Design JSON:\n```json\n{design_json}\n```"]
+    if visual_context:
+        prompt_parts.append(
+            "Approved Step 2.5 visual context — treat this as the hero centerpiece; "
+            "HTML is secondary and should orbit around this single AI-generated desktop overview:\n"
+            f"```json\n{json.dumps(visual_context, indent=2)}\n```"
+        )
     if feedback_block:
-        user_content += f"\n\nUser feedback so far on prior previews:\n{feedback_block}"
+        prompt_parts.append(f"Prior user feedback to incorporate:\n{feedback_block}")
 
-    prompt_messages = [
-        SystemMessage(content=SYSTEM_PROMPT),
-        HumanMessage(content=user_content),
-    ]
-    response = llm.invoke(prompt_messages)
-    html_content = _extract_html(response.content or "")
+    html_content = ""
+    try:
+        llm = get_llm(0.85)
+        response = llm.invoke([
+            SystemMessage(content=SYSTEM_PROMPT),
+            HumanMessage(content="\n\n".join(prompt_parts)),
+        ])
+        html_content = _extract_html(response.content or "")
+        if html_content:
+            log.info("LLM preview generated (%d chars)", len(html_content))
+    except Exception as e:
+        log.warning("LLM preview generation failed (%s); using deterministic fallback", e)
+
+    if not html_content:
+        log.info("falling back to deterministic SVG renderer")
+        html_content = render_preview_html(design, feedback_block)
+
+    if not html_content.strip():
+        raise ValueError("preview renderer returned empty HTML")
+
     contract_violations = _preview_contract_violations(html_content, design)
     if contract_violations:
         log.warning("preview contract violation: %s", "; ".join(contract_violations))
         html_content = _contract_violation_html(design, contract_violations)
+
     html_path.parent.mkdir(parents=True, exist_ok=True)
     tmp_path = None
     try:
@@ -426,7 +487,10 @@ def _looks_like_rounded_window_or_terminal(lower_html: str) -> bool:
     """Heuristic for rounded app/window chrome, not ordinary rounded buttons."""
     if "border-radius" not in lower_html and "rounded window" not in lower_html and "rounded terminal" not in lower_html:
         return False
-    chrome_terms = ("terminal", "titlebar", "title-bar", "window-frame", "window frame", "app-window", "app window")
+    chrome_terms = (
+        "terminal", "titlebar", "title-bar", "window-frame", "window frame",
+        "app-window", "app window",
+    )
     return any(term in lower_html for term in chrome_terms)
 
 
@@ -434,9 +498,8 @@ def _rounded_chrome_is_implementable(design: dict) -> bool:
     chrome = design.get("chrome_strategy", {}) if isinstance(design, dict) else {}
     if not isinstance(chrome, dict):
         return False
+
     rounded = chrome.get("rounded_corners")
-    # Explicit opt-out only — a missing field is permissive when chrome methods
-    # are declared, since methods like kvantum/kitty/eww can implement rounding.
     explicitly_off = (
         rounded is False
         or (isinstance(rounded, str) and rounded.strip().lower() in ("false", "none", "no", "off", "disabled"))
@@ -444,6 +507,7 @@ def _rounded_chrome_is_implementable(design: dict) -> bool:
     )
     if explicitly_off:
         return False
+
     method = str(chrome.get("method", "")).lower()
     targets = " ".join(str(t).lower() for t in chrome.get("implementation_targets", []))
     implementable_terms = ("eww", "frame", "overlay", "custom", "kvantum", "terminal_config", "kitty")
@@ -483,5 +547,9 @@ def _existing_contract_violations(path: Path, design: dict | None = None) -> lis
 
 
 def _html_escape(value: str) -> str:
-    return (value.replace("&", "&amp;").replace("<", "&lt;")
-            .replace(">", "&gt;").replace('"', "&quot;"))
+    return (
+        value.replace("&", "&amp;")
+        .replace("<", "&lt;")
+        .replace(">", "&gt;")
+        .replace('"', "&quot;")
+    )

@@ -1,0 +1,16 @@
+// AGS v1 clicky button template for generated dashboards.
+// Generated widgets must define hover and active/pressed styles in SCSS.
+import Widget from "resource:///com/github/Aylur/ags/widget.js";
+
+export const GameButton = ({
+  label = "Button",
+  className = "game-button",
+  onClicked = () => {},
+  dangerous = false,
+}) => Widget.Button({
+  class_names: [className, dangerous ? "dangerous" : ""].filter(Boolean),
+  on_clicked: self => onClicked(self),
+  on_hover: self => self.toggleClassName("hover", true),
+  on_hover_lost: self => self.toggleClassName("hover", false),
+  child: Widget.Label({ label }),
+});

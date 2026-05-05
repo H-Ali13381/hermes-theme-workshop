@@ -1,0 +1,34 @@
+flowchart TD
+    S0[Sample Harness / Fixture Replay] -. dry-run image + fixed contracts .-> B
+    S0 -. fixture contract override .-> D
+    A[Widget Intake] --> B[Preview Source Resolution]
+    B --> C[UI Element Segmentation]
+    C --> D[Element Contract Normalization]
+    D --> E[Texture Intent Extraction]
+    E --> F{Ornate/textured assets needed?}
+    F -- no --> J[Framework Selection]
+    F -- yes --> G[Asset Bundle Generation]
+    G --> H[Asset Bundle Validation]
+    H --> I{Assets pass?}
+    I -- no --> G2[Asset Feedback / Recipe Revision]
+    G2 --> G
+    I -- yes --> J
+    J --> K[Sandbox Scaffolding]
+    K --> L[Per-Element Codegen]
+    L --> M[Static Validation]
+    M --> N[Sandbox Runtime Launch]
+    N --> O[Screenshot Capture]
+    O --> P[Visual Loss Scoring]
+    P --> Q{Visual pass?}
+    Q -- no --> R[Feedback Prompt Construction]
+    R --> L
+    Q -- yes --> S[Functional Validation]
+    S --> T{Function pass?}
+    T -- no --> U[Function Feedback Construction]
+    U --> L
+    T -- yes --> V[Integration Composition]
+    T -. dry-run only .-> S1[Sample Replay Report]
+    V --> W[Desktop Promotion]
+    W --> X[Live Desktop Screenshot]
+    X --> Y[Final Visual + Interaction Gate]
+    Y --> Z[Craft Log + Manifest]

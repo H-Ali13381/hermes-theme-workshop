@@ -11,12 +11,15 @@ the LLM to study them but never copy.
 """
 from __future__ import annotations
 
+import json
 from pathlib import Path
+from typing import Any
 
 from ...log_setup import get_logger
 
 _REPO_ROOT = Path(__file__).resolve().parents[3]
 _TEMPLATES_ROOT = _REPO_ROOT / "templates"
+_REFERENCES_ROOT = _REPO_ROOT / "references"
 
 
 def _load_reference_templates(paths: list[str]) -> list[dict]:
@@ -39,6 +42,27 @@ def _load_reference_templates(paths: list[str]) -> list[dict]:
             "language": fp.suffix.lstrip(".") or "txt",
             "content":  content,
         })
+    return out
+
+
+def _load_reference_docs(paths: list[str]) -> list[dict[str, Any]]:
+    """Load pinned framework documentation relative to references/.
+
+    These are source-of-truth docs snapshots, not examples. They should be used
+    to constrain codegen/static validation when editing framework config.
+    """
+    out: list[dict[str, Any]] = []
+    for rel in paths:
+        fp = _REFERENCES_ROOT / rel
+        try:
+            if fp.suffix == ".json":
+                parsed = json.loads(fp.read_text(encoding="utf-8"))
+                out.append({"name": rel, "language": "json", "content": parsed})
+            else:
+                out.append({"name": rel, "language": fp.suffix.lstrip(".") or "txt", "content": fp.read_text(encoding="utf-8")})
+        except (OSError, json.JSONDecodeError) as exc:
+            get_logger("craft.frameworks").warning("could not read reference doc %s: %s", fp, exc)
+            continue
     return out
 
 # Elements whose provider belongs to the craft pipeline (agentic codegen).
@@ -86,28 +110,29 @@ _EWW = {
         "box, label, image, button, graph, scale, scroll are the core widgets.\n"
         "Anchors: top-left, top-center, top-right, center-left, center, bottom-right, etc.\n"
         "Windows use :monitor, :geometry, :anchor, :stacking (foreground/background).\n"
+        "EWW geometry lengths must be literal values such as \"42px\" or \"80%\"; never use CSS calc() in :geometry.\n"
+        "Inside defpoll/deflisten shell commands, avoid awk positional fields like $1/$2/$3 or escape them so EWW does not consume them as variables. Prefer grep/cut/python one-liners.\n"
+        "EWW progress/scale :value must always be numeric at first render; avoid binding raw defpoll variables that can start empty, or use a text label/fallback.\n"
+        "Keep compositor commands desktop-aware: hyprctl is Hyprland-only; do not use it on KDE/Plasma.\n"
     ),
     "example": """\
 (defvar volume 50)
-(deflisten workspaces :initial "[]"
-  `hyprctl workspaces -j | jq '[.[] | {id, name}]'`)
+(defvar launcher_items '["Terminal", "Files", "Browser", "Settings", "Lock"]')
+(defpoll active_title :interval "2s" "xdotool getactivewindow getwindowname 2>/dev/null || echo Desktop")
 
-(defwidget bar []
-  (box :class "bar" :orientation "h" :halign "fill"
-    (box :class "workspaces" :space-evenly false
-      (for ws in workspaces
-        (button :class "ws-btn ${ws.id}" :onclick "hyprctl dispatch workspace ${ws.id}"
-          (label :text "${ws.name}"))))
-    (box :class "center" :halign "center"
-      (label :class "time" :text {formattime(EWW_TIME, "%H:%M")}))
-    (label :class "vol" :text "Vol: ${volume}%")))
+(defwidget action-menu []
+  (box :class "relic-menu" :orientation "v" :space-evenly false
+    (label :class "title" :text "${active_title}")
+    (for item in launcher_items
+      (button :class "menu-row" :onclick "printf '%s\\n' '${item}'"
+        (label :text "${item}")))))
 
-(defwindow main-bar
+(defwindow shrine-menu
   :monitor 0
-  :geometry (geometry :x "0" :y "0" :width "100%" :height "36px" :anchor "top center")
+  :geometry (geometry :x "24px" :y "72px" :width "260px" :height "360px" :anchor "top right")
   :stacking "fg"
-  :exclusive true
-  (bar))
+  :exclusive false
+  (action-menu))
 """,
 }
 
@@ -117,7 +142,12 @@ _QUICKSHELL = {
     "key_files": ["shell.qml"],
     "syntax_hint": (
         "Quickshell uses QML (Qt Modeling Language).\n"
-        "ShellRoot is the entry point; PanelWindow, FloatingWindow create surfaces.\n"
+        "ShellRoot is the entry point; use PanelWindow for shell chrome surfaces.\n"
+        "Do NOT use FloatingWindow for bars, launchers, menus, notification cards, or desktop widgets; "
+        "on KDE/Wayland it may appear as a normal decorated app window with a titlebar.\n"
+        "For visually floating widgets, still use PanelWindow with edge/corner anchors, margins, and exclusionMode Ignore.\n"
+        "When the design asks for ornate, thorned, carved, Diablo/RPG, relic, or inventory-frame chrome, use QtQuick BorderImage 9-slice/tiled borders for panels/buttons/slots; plain Rectangle border lines are not ornate enough.\n"
+        "If GENERATED ORNATE TEXTURE ASSETS are present in the prompt, BorderImage.source must use those exact relative paths (for example assets/<theme>/panel_ornate_9slice.png), border.left/right/top/bottom must use the listed slice_px, and horizontal/vertical tile modes should repeat edge segments.\n"
         "Use Quickshell.io APIs: SystemTray, Brightness, Audio, Hyprland.\n"
         "Layouts: RowLayout, ColumnLayout, Item, Rectangle, Text.\n"
         "Anchors: anchors.fill, anchors.top, anchors.horizontalCenter.\n"
@@ -232,6 +262,15 @@ _REFERENCE_TEMPLATE_PATHS: dict[str, list[str]] = {
     "waybar":  [],
 }
 
+# Source-of-truth documentation paths, relative to <repo>/references/.
+# These are docs snapshots/schemas used to constrain framework config editing.
+_REFERENCE_DOC_PATHS: dict[str, list[str]] = {
+    "quickshell": [
+        "quickshell-v0.3.0-types/index.json",
+        "quickshell-v0.3.0-types/summary.md",
+    ],
+}
+
 
 FRAMEWORK_REFS: dict[str, dict] = {
     "eww":        _EWW,
@@ -252,10 +291,11 @@ def get_reference(framework: str) -> dict:
     if ref is None:
         return {
             "name": framework, "config_dir": "", "key_files": [],
-            "syntax_hint": "", "example": "", "reference_templates": [],
+            "syntax_hint": "", "example": "", "reference_templates": [], "reference_docs": [],
         }
     paths = _REFERENCE_TEMPLATE_PATHS.get(framework, [])
-    return {**ref, "reference_templates": _load_reference_templates(paths)}
+    docs = _REFERENCE_DOC_PATHS.get(framework, [])
+    return {**ref, "reference_templates": _load_reference_templates(paths), "reference_docs": _load_reference_docs(docs)}
 
 
 def config_dir(framework: str) -> Path | None:

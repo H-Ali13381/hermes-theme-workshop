@@ -62,6 +62,8 @@ Produce a JSON object with exactly these top-level keys:
   All values must be valid #rrggbb hex.
 {recipe_fields}
 - mood_tags: list of 2-3 lowercase strings
+- visual_element_plan: list of objects copied/adapted from Step 2.5 vision decomposition when available. Each object must connect one visible preview element to one concrete implementation path: id, source_visual_description, desktop_element, implementation_tool, fallback_tool, config_targets, validation_probe, acceptable_deviation.
+- validation_checklist: list of concrete post-implementation visual checks derived from the approved overview image. Include checks for wallpaper/background, toolbar/panel/widget replacement, and originality beyond palette/icon swaps when those appear in the concept.
 
 ## Color Rules
 - background should be dark (YIQ < 128) for dark themes
@@ -122,17 +124,51 @@ def refine_node(state: RiceSessionState) -> dict:
     log.info("refine invocation #%d (recipe=%s)", prior_refine_count + 1, recipe)
 
     new_messages: list = []
-    if prior_refine_count == 0 or not messages:
-        # Seed with system + direction context
+    # Reseed only when the conversation hasn't been primed with a SystemMessage
+    # yet. Using prior_refine_count as the guard breaks on backward jumps from
+    # plan_node, which resets loop_counts["refine"] to 0 to keep the loop limit
+    # fair — the reset would otherwise force us to discard the feedback +
+    # revision seed messages plan_node just appended, sending the LLM right
+    # back to the original direction prompt.
+    has_system_seed = any(isinstance(m, SystemMessage) for m in messages)
+    if not has_system_seed:
+        # Seed with system + direction context (+ AI desktop concept if available)
+        visual_context = state.get("visual_context") or {}
+        human_parts = [f"Creative direction established:\n{json.dumps(direction, indent=2)}"]
+        if visual_context:
+            extracted = visual_context.get("extracted_palette", {})
+            desc = visual_context.get("style_description", "")
+            atmo = visual_context.get("atmosphere", "")
+            ui_rec = visual_context.get("ui_recommendations", "")
+            composition_notes = visual_context.get("composition_notes", "")
+            visual_element_plan = visual_context.get("visual_element_plan", [])
+            validation_checklist = visual_context.get("validation_checklist", [])
+            human_parts.append(
+                "AI desktop concept analysis (user-approved full-desktop preview image):\n"
+                + json.dumps({
+                    "style_description": desc,
+                    "atmosphere": atmo,
+                    "extracted_palette": extracted,
+                    "ui_recommendations": ui_rec,
+                    "composition_notes": composition_notes,
+                    "visual_element_plan": visual_element_plan,
+                    "validation_checklist": validation_checklist,
+                }, indent=2)
+                + "\n\nAnchor the palette closely to the extracted colors above, preserve the UI/chrome cues from the desktop concept image, and carry the visual_element_plan into design.json so implementation can map each visible element to a concrete tool/materializer and verification probe."
+            )
+        human_parts.append("Please produce the design_system.json for this theme.")
         messages = [
             SystemMessage(content=system_prompt),
-            HumanMessage(content=(
-                f"Creative direction established:\n{json.dumps(direction, indent=2)}\n\n"
-                "Please produce the design_system.json for this theme."
-            )),
+            HumanMessage(content="\n\n".join(human_parts)),
         ]
         new_messages = list(messages)  # seed messages are new on first turn
-        log.debug("seeded conversation with system + direction prompt")
+        log.debug("seeded conversation with system + direction prompt%s",
+                  " + visual_context" if visual_context else "")
+    else:
+        log.debug(
+            "reusing existing conversation (%d messages) — preserving prior turns",
+            len(messages),
+        )
 
     # Self-healing retry loop: try to extract a valid design up to
     # MAX_REFINE_RETRIES extra times before falling through to a user interrupt.
@@ -290,18 +326,26 @@ def _queue_design_elements(queue: list[str], design: dict, profile: dict | None 
     Picks the widget framework based on the running compositor:
       - Hyprland or KDE Wayland → widgets:quickshell (default)
       - Everything else (KDE X11, GNOME, X11) → widgets:eww (fallback)
-    An explicit element name in implementation_targets overrides the default.
+    An explicit `widgets:quickshell` target overrides the default. `widgets:eww` is
+    only honored on Wayland-native desktops when the design also marks
+    `eww_required: true`; otherwise KDE/Hyprland Wayland normalize to Quickshell so
+    LLM design drift does not force the fallback framework.
     """
     updated = list(queue or [])
+    for planned_tool in _tools_from_visual_element_plan(design if isinstance(design, dict) else {}):
+        if planned_tool not in updated:
+            updated.append(planned_tool)
     chrome = design.get("chrome_strategy", {}) if isinstance(design, dict) else {}
     method = str(chrome.get("method", "")).lower() if isinstance(chrome, dict) else ""
     targets = " ".join(str(x).lower() for x in chrome.get("implementation_targets", [])) if isinstance(chrome, dict) else ""
 
+    default_provider = _default_widget_element(profile or {})
+    eww_required = bool(chrome.get("eww_required") or design.get("eww_required")) if isinstance(chrome, dict) else False
     explicit = None
     if "widgets:quickshell" in targets:
         explicit = "widgets:quickshell"
     elif "widgets:eww" in targets:
-        explicit = "widgets:eww"
+        explicit = "widgets:eww" if (default_provider != "widgets:quickshell" or eww_required) else "widgets:quickshell"
 
     needs_widget = bool(design.get("widget_layout")) or any(
         term in method or term in targets
@@ -310,11 +354,52 @@ def _queue_design_elements(queue: list[str], design: dict, profile: dict | None 
     if not needs_widget:
         return updated
 
-    provider = explicit or _default_widget_element(profile or {})
+    provider = explicit or default_provider
     if provider not in updated:
         insert_at = 1 if updated else 0
         updated.insert(insert_at, provider)
     return updated
+
+
+def _tools_from_visual_element_plan(design: dict) -> list[str]:
+    """Extract concrete element/materializer targets from the vision decomposition.
+
+    Step 2.5 may identify visible desktop elements and recommend an
+    implementation_tool/fallback_tool for each. Only pass through workflow element
+    names we already know how to route; unknown free-form tool names stay as design
+    metadata and must not poison the element queue.
+    """
+    known = {
+        "terminal:kitty",
+        "terminal:konsole",
+        "widgets:quickshell",
+        "widgets:eww",
+        "look_and_feel:kde",
+        "lock_screen:kde",
+        "wallpaper",
+        "icons",
+        "cursor",
+        "gtk_theme",
+        "kvantum",
+        "plasma_theme",
+        "notifications",
+        "launcher",
+        "fastfetch",
+        "shell_prompt",
+    }
+    plan = design.get("visual_element_plan", []) if isinstance(design, dict) else []
+    if not isinstance(plan, list):
+        return []
+    tools: list[str] = []
+    for item in plan:
+        if not isinstance(item, dict):
+            continue
+        for key in ("implementation_tool", "fallback_tool"):
+            tool = str(item.get(key, "")).strip().lower()
+            if tool in known and tool not in tools:
+                tools.append(tool)
+                break
+    return tools
 
 
 def _default_widget_element(profile: dict) -> str:

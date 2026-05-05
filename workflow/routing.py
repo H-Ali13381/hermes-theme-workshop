@@ -39,10 +39,35 @@ def after_audit(state: dict) -> str:
 
 
 def after_explore(state: dict) -> str:
-    """Loop until creative direction is confirmed; abort if loop limit is hit."""
+    """Loop until creative direction is confirmed; then hand off to visualize."""
     if _loop_limit_reached(state, "explore", "Explore"):
         return END
-    return "refine" if validators.direction_confirmed(state.get("design", {})) else "explore"
+    return "visualize" if validators.direction_confirmed(state.get("design", {})) else "explore"
+
+
+def after_visualize(state: dict) -> str:
+    """Dispatch on the visualize-feedback signal set by visualize_node.
+
+    Routes:
+      - "approve"    → refine (visual locked in; carry visual_context forward)
+      - "skip"       → refine (FAL unavailable or generation failed; proceed without)
+      - "regenerate" → visualize (loop: generate a new style image)
+      - "explore"    → explore (user wants to revise the creative direction)
+      - unset        → refine if visual_context is populated, else visualize
+    """
+    if _loop_limit_reached(state, "visualize", "Visualize"):
+        return END
+
+    route = (state.get("visualize_route") or "").strip().lower()
+    if route in ("approve", "skip"):
+        return "refine"
+    if route == "regenerate":
+        return "visualize"
+    if route == "explore":
+        return "explore"
+
+    # Fallback: visual_context populated means we can proceed
+    return "refine" if state.get("visual_context") else "visualize"
 
 
 def after_refine(state: dict) -> str:

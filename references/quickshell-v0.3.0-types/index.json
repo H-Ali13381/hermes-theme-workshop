@@ -1,0 +1,6368 @@
+{
+  "base_url": "https://quickshell.org",
+  "critical_types": [
+    "Quickshell.Io/Process",
+    "Quickshell.Services.Mpris/Mpris",
+    "Quickshell.Services.Mpris/MprisPlayer",
+    "Quickshell.Services.Notifications/Notification",
+    "Quickshell.Services.Notifications/NotificationServer",
+    "Quickshell.Services.Pipewire/Pipewire",
+    "Quickshell.Services.SystemTray/SystemTray",
+    "Quickshell.Services.SystemTray/SystemTrayItem",
+    "Quickshell.Services.UPower/UPower",
+    "Quickshell.Wayland/WlrLayer",
+    "Quickshell.Wayland/WlrLayershell",
+    "Quickshell.Widgets/IconImage",
+    "Quickshell.Widgets/WrapperMouseArea",
+    "Quickshell/Edges",
+    "Quickshell/ExclusionMode",
+    "Quickshell/FloatingWindow",
+    "Quickshell/PanelWindow",
+    "Quickshell/PopupWindow",
+    "Quickshell/QsWindow",
+    "Quickshell/ShellRoot"
+  ],
+  "index_url": "https://quickshell.org/docs/v0.3.0/types/",
+  "ingested_at_utc": "2026-05-04T15:47:35+00:00",
+  "module_count": 18,
+  "modules": [
+    "Quickshell",
+    "Quickshell.Bluetooth",
+    "Quickshell.DBusMenu",
+    "Quickshell.Hyprland",
+    "Quickshell.I3",
+    "Quickshell.Io",
+    "Quickshell.Networking",
+    "Quickshell.Services.Greetd",
+    "Quickshell.Services.Mpris",
+    "Quickshell.Services.Notifications",
+    "Quickshell.Services.Pam",
+    "Quickshell.Services.Pipewire",
+    "Quickshell.Services.Polkit",
+    "Quickshell.Services.SystemTray",
+    "Quickshell.Services.UPower",
+    "Quickshell.Wayland",
+    "Quickshell.Widgets",
+    "Quickshell.WindowManager"
+  ],
+  "schema_version": 1,
+  "source": "quickshell-docs-types",
+  "type_count": 148,
+  "types": [
+    {
+      "description": "Provides access to bluetooth devices and adapters.",
+      "functions": [],
+      "import": "Quickshell.Bluetooth",
+      "markdown_path": "pages/Quickshell.Bluetooth/Bluetooth.md",
+      "module": "Quickshell.Bluetooth",
+      "name": "Bluetooth",
+      "properties": [
+        {
+          "description": "",
+          "name": "devices",
+          "type": "ObjectModel < BluetoothDevice >"
+        },
+        {
+          "description": "",
+          "name": "adapters",
+          "type": "ObjectModel < BluetoothAdapter >"
+        },
+        {
+          "description": "",
+          "name": "defaultAdapter",
+          "type": "BluetoothAdapter"
+        }
+      ],
+      "qualified_name": "Quickshell.Bluetooth",
+      "title": "Bluetooth : QtObject",
+      "url": "https://quickshell.org/docs/v0.3.0/types/Quickshell.Bluetooth/Bluetooth/",
+      "variants": []
+    },
+    {
+      "description": "A Bluetooth adapter",
+      "functions": [],
+      "import": "Quickshell.Bluetooth",
+      "markdown_path": "pages/Quickshell.Bluetooth/BluetoothAdapter.md",
+      "module": "Quickshell.Bluetooth",
+      "name": "BluetoothAdapter",
+      "properties": [
+        {
+          "description": "",
+          "name": "dbusPath",
+          "type": "string"
+        },
+        {
+          "description": "",
+          "name": "adapterId",
+          "type": "string"
+        },
+        {
+          "description": "",
+          "name": "devices",
+          "type": "ObjectModel < BluetoothDevice >"
+        },
+        {
+          "description": "",
+          "name": "pairable",
+          "type": "bool"
+        },
+        {
+          "description": "",
+          "name": "pairableTimeout",
+          "type": "int"
+        },
+        {
+          "description": "",
+          "name": "discoverable",
+          "type": "bool"
+        },
+        {
+          "description": "",
+          "name": "discovering",
+          "type": "bool"
+        },
+        {
+          "description": "",
+          "name": "discoverableTimeout",
+          "type": "int"
+        },
+        {
+          "description": "",
+          "name": "enabled",
+          "type": "bool"
+        },
+        {
+          "description": "",
+          "name": "name",
+          "type": "string"
+        },
+        {
+          "description": "",
+          "name": "state",
+          "type": "BluetoothAdapterState"
+        }
+      ],
+      "qualified_name": "Quickshell.Bluetooth.BluetoothAdapter",
+      "title": "BluetoothAdapter : QtObject",
+      "url": "https://quickshell.org/docs/v0.3.0/types/Quickshell.Bluetooth/BluetoothAdapter/",
+      "variants": []
+    },
+    {
+      "description": "Power state of a Bluetooth adapter.",
+      "functions": [
+        {
+          "args": " state ",
+          "description": ": string",
+          "name": "toString"
+        }
+      ],
+      "import": "Quickshell.Bluetooth",
+      "markdown_path": "pages/Quickshell.Bluetooth/BluetoothAdapterState.md",
+      "module": "Quickshell.Bluetooth",
+      "name": "BluetoothAdapterState",
+      "properties": [],
+      "qualified_name": "Quickshell.Bluetooth.BluetoothAdapterState",
+      "title": "BluetoothAdapterState : QtObject",
+      "url": "https://quickshell.org/docs/v0.3.0/types/Quickshell.Bluetooth/BluetoothAdapterState/",
+      "variants": [
+        "Enabling",
+        "Disabling",
+        "Disabled",
+        "Enabled",
+        "Blocked",
+        "toString"
+      ]
+    },
+    {
+      "description": "A tracked Bluetooth device.",
+      "functions": [
+        {
+          "args": " ",
+          "description": ": void",
+          "name": "cancelPair"
+        },
+        {
+          "args": " ",
+          "description": ": void",
+          "name": "connect"
+        },
+        {
+          "args": " ",
+          "description": ": void",
+          "name": "disconnect"
+        },
+        {
+          "args": " ",
+          "description": ": void",
+          "name": "forget"
+        },
+        {
+          "args": " ",
+          "description": ": void",
+          "name": "pair"
+        }
+      ],
+      "import": "Quickshell.Bluetooth",
+      "markdown_path": "pages/Quickshell.Bluetooth/BluetoothDevice.md",
+      "module": "Quickshell.Bluetooth",
+      "name": "BluetoothDevice",
+      "properties": [
+        {
+          "description": "",
+          "name": "blocked",
+          "type": "bool"
+        },
+        {
+          "description": "",
+          "name": "icon",
+          "type": "string"
+        },
+        {
+          "description": "",
+          "name": "wakeAllowed",
+          "type": "bool"
+        },
+        {
+          "description": "",
+          "name": "address",
+          "type": "string"
+        },
+        {
+          "description": "",
+          "name": "connected",
+          "type": "bool"
+        },
+        {
+          "description": "",
+          "name": "trusted",
+          "type": "bool"
+        },
+        {
+          "description": "",
+          "name": "battery",
+          "type": "real"
+        },
+        {
+          "description": "",
+          "name": "batteryAvailable",
+          "type": "bool"
+        },
+        {
+          "description": "",
+          "name": "dbusPath",
+          "type": "string"
+        },
+        {
+          "description": "",
+          "name": "adapter",
+          "type": "BluetoothAdapter"
+        },
+        {
+          "description": "",
+          "name": "bonded",
+          "type": "bool"
+        },
+        {
+          "description": "",
+          "name": "deviceName",
+          "type": "string"
+        },
+        {
+          "description": "",
+          "name": "name",
+          "type": "string"
+        },
+        {
+          "description": "",
+          "name": "paired",
+          "type": "bool"
+        },
+        {
+          "description": "",
+          "name": "pairing",
+          "type": "bool"
+        },
+        {
+          "description": "",
+          "name": "state",
+          "type": "BluetoothDeviceState"
+        }
+      ],
+      "qualified_name": "Quickshell.Bluetooth.BluetoothDevice",
+      "title": "BluetoothDevice : QtObject",
+      "url": "https://quickshell.org/docs/v0.3.0/types/Quickshell.Bluetooth/BluetoothDevice/",
+      "variants": []
+    },
+    {
+      "description": "Connection state of a Bluetooth device.",
+      "functions": [
+        {
+          "args": " state ",
+          "description": ": string",
+          "name": "toString"
+        }
+      ],
+      "import": "Quickshell.Bluetooth",
+      "markdown_path": "pages/Quickshell.Bluetooth/BluetoothDeviceState.md",
+      "module": "Quickshell.Bluetooth",
+      "name": "BluetoothDeviceState",
+      "properties": [],
+      "qualified_name": "Quickshell.Bluetooth.BluetoothDeviceState",
+      "title": "BluetoothDeviceState : QtObject",
+      "url": "https://quickshell.org/docs/v0.3.0/types/Quickshell.Bluetooth/BluetoothDeviceState/",
+      "variants": [
+        "Disconnected",
+        "Connected",
+        "Connecting",
+        "Disconnecting",
+        "toString"
+      ]
+    },
+    {
+      "description": "Handle to a menu tree provided by a remote process.",
+      "functions": [],
+      "import": "Quickshell.DBusMenu",
+      "markdown_path": "pages/Quickshell.DBusMenu/DBusMenuHandle.md",
+      "module": "Quickshell.DBusMenu",
+      "name": "DBusMenuHandle",
+      "properties": [
+        {
+          "description": "",
+          "name": "menu",
+          "type": "DBusMenuItem"
+        }
+      ],
+      "qualified_name": "Quickshell.DBusMenu.DBusMenuHandle",
+      "title": "DBusMenuHandle : QtObject",
+      "url": "https://quickshell.org/docs/v0.3.0/types/Quickshell.DBusMenu/DBusMenuHandle/",
+      "variants": []
+    },
+    {
+      "description": "Menu item shared by an external program via the DBusMenu specification .",
+      "functions": [
+        {
+          "args": " ",
+          "description": ": void",
+          "name": "updateLayout"
+        }
+      ],
+      "import": "Quickshell.DBusMenu",
+      "markdown_path": "pages/Quickshell.DBusMenu/DBusMenuItem.md",
+      "module": "Quickshell.DBusMenu",
+      "name": "DBusMenuItem",
+      "properties": [
+        {
+          "description": "",
+          "name": "menuHandle",
+          "type": "DBusMenuHandle"
+        }
+      ],
+      "qualified_name": "Quickshell.DBusMenu.DBusMenuItem",
+      "title": "DBusMenuItem : QsMenuEntry",
+      "url": "https://quickshell.org/docs/v0.3.0/types/Quickshell.DBusMenu/DBusMenuItem/",
+      "variants": []
+    },
+    {
+      "description": "Global shortcut implemented with hyprland_global_shortcuts_v1 .",
+      "functions": [],
+      "import": "Quickshell.Hyprland",
+      "markdown_path": "pages/Quickshell.Hyprland/GlobalShortcut.md",
+      "module": "Quickshell.Hyprland",
+      "name": "GlobalShortcut",
+      "properties": [
+        {
+          "description": "",
+          "name": "triggerDescription",
+          "type": "string"
+        },
+        {
+          "description": "",
+          "name": "name",
+          "type": "string"
+        },
+        {
+          "description": "",
+          "name": "appid",
+          "type": "string"
+        },
+        {
+          "description": "",
+          "name": "description",
+          "type": "string"
+        },
+        {
+          "description": "",
+          "name": "pressed",
+          "type": "bool"
+        }
+      ],
+      "qualified_name": "Quickshell.Hyprland.GlobalShortcut",
+      "title": "GlobalShortcut : QtObject",
+      "url": "https://quickshell.org/docs/v0.3.0/types/Quickshell.Hyprland/GlobalShortcut/",
+      "variants": []
+    },
+    {
+      "description": "readonly",
+      "functions": [
+        {
+          "args": " request ",
+          "description": ": void",
+          "name": "dispatch"
+        },
+        {
+          "args": " screen ",
+          "description": ": HyprlandMonitor",
+          "name": "monitorFor"
+        },
+        {
+          "args": " ",
+          "description": ": void",
+          "name": "refreshMonitors"
+        },
+        {
+          "args": " ",
+          "description": ": void",
+          "name": "refreshToplevels"
+        },
+        {
+          "args": " ",
+          "description": ": void",
+          "name": "refreshWorkspaces"
+        }
+      ],
+      "import": "Quickshell.Hyprland",
+      "markdown_path": "pages/Quickshell.Hyprland/Hyprland.md",
+      "module": "Quickshell.Hyprland",
+      "name": "Hyprland",
+      "properties": [
+        {
+          "description": "",
+          "name": "focusedWorkspace",
+          "type": "HyprlandWorkspace"
+        },
+        {
+          "description": "",
+          "name": "requestSocketPath",
+          "type": "string"
+        },
+        {
+          "description": "",
+          "name": "toplevels",
+          "type": "ObjectModel < HyprlandToplevel >"
+        },
+        {
+          "description": "",
+          "name": "usingLua",
+          "type": "bool"
+        },
+        {
+          "description": "",
+          "name": "activeToplevel",
+          "type": "HyprlandToplevel"
+        },
+        {
+          "description": "",
+          "name": "eventSocketPath",
+          "type": "string"
+        },
+        {
+          "description": "",
+          "name": "workspaces",
+          "type": "ObjectModel < HyprlandWorkspace >"
+        },
+        {
+          "description": "",
+          "name": "focusedMonitor",
+          "type": "HyprlandMonitor"
+        },
+        {
+          "description": "",
+          "name": "monitors",
+          "type": "ObjectModel < HyprlandMonitor >"
+        }
+      ],
+      "qualified_name": "Quickshell.Hyprland",
+      "title": "Hyprland : QtObject",
+      "url": "https://quickshell.org/docs/v0.3.0/types/Quickshell.Hyprland/Hyprland/",
+      "variants": []
+    },
+    {
+      "description": "Live Hyprland IPC event. Holding this object after the signal handler exits is undefined as the event instance is reused.",
+      "functions": [
+        {
+          "args": " argumentCount ",
+          "description": ": list",
+          "name": "parse"
+        }
+      ],
+      "import": "Quickshell.Hyprland",
+      "markdown_path": "pages/Quickshell.Hyprland/HyprlandEvent.md",
+      "module": "Quickshell.Hyprland",
+      "name": "HyprlandEvent",
+      "properties": [
+        {
+          "description": "",
+          "name": "name",
+          "type": "string"
+        },
+        {
+          "description": "",
+          "name": "data",
+          "type": "string"
+        }
+      ],
+      "qualified_name": "Quickshell.Hyprland.HyprlandEvent",
+      "title": "HyprlandEvent : QtObject",
+      "url": "https://quickshell.org/docs/v0.3.0/types/Quickshell.Hyprland/HyprlandEvent/",
+      "variants": []
+    },
+    {
+      "description": "Object for managing input focus grabs via the hyprland_focus_grab_v1 wayland protocol.",
+      "functions": [],
+      "import": "Quickshell.Hyprland",
+      "markdown_path": "pages/Quickshell.Hyprland/HyprlandFocusGrab.md",
+      "module": "Quickshell.Hyprland",
+      "name": "HyprlandFocusGrab",
+      "properties": [
+        {
+          "description": "",
+          "name": "active",
+          "type": "bool"
+        },
+        {
+          "description": "",
+          "name": "windows",
+          "type": "list < QtObject >"
+        }
+      ],
+      "qualified_name": "Quickshell.Hyprland.HyprlandFocusGrab",
+      "title": "HyprlandFocusGrab : QtObject",
+      "url": "https://quickshell.org/docs/v0.3.0/types/Quickshell.Hyprland/HyprlandFocusGrab/",
+      "variants": []
+    },
+    {
+      "description": "readonly",
+      "functions": [],
+      "import": "Quickshell.Hyprland",
+      "markdown_path": "pages/Quickshell.Hyprland/HyprlandMonitor.md",
+      "module": "Quickshell.Hyprland",
+      "name": "HyprlandMonitor",
+      "properties": [
+        {
+          "description": "",
+          "name": "x",
+          "type": "int"
+        },
+        {
+          "description": "",
+          "name": "activeWorkspace",
+          "type": "HyprlandWorkspace"
+        },
+        {
+          "description": "",
+          "name": "name",
+          "type": "string"
+        },
+        {
+          "description": "",
+          "name": "description",
+          "type": "string"
+        },
+        {
+          "description": "",
+          "name": "height",
+          "type": "int"
+        },
+        {
+          "description": "",
+          "name": "focused",
+          "type": "bool"
+        },
+        {
+          "description": "",
+          "name": "y",
+          "type": "int"
+        },
+        {
+          "description": "",
+          "name": "id",
+          "type": "int"
+        },
+        {
+          "description": "",
+          "name": "lastIpcObject",
+          "type": "unknown"
+        },
+        {
+          "description": "",
+          "name": "width",
+          "type": "int"
+        },
+        {
+          "description": "",
+          "name": "scale",
+          "type": "real"
+        }
+      ],
+      "qualified_name": "Quickshell.Hyprland.HyprlandMonitor",
+      "title": "HyprlandMonitor : QtObject",
+      "url": "https://quickshell.org/docs/v0.3.0/types/Quickshell.Hyprland/HyprlandMonitor/",
+      "variants": []
+    },
+    {
+      "description": "Represents a window as Hyprland exposes it. Can also be used as an attached object of a Toplevel , to resolve a handle to an Hyprland toplevel.",
+      "functions": [],
+      "import": "Quickshell.Hyprland",
+      "markdown_path": "pages/Quickshell.Hyprland/HyprlandToplevel.md",
+      "module": "Quickshell.Hyprland",
+      "name": "HyprlandToplevel",
+      "properties": [
+        {
+          "description": "",
+          "name": "handle",
+          "type": "HyprlandToplevel"
+        },
+        {
+          "description": "",
+          "name": "title",
+          "type": "string"
+        },
+        {
+          "description": "",
+          "name": "address",
+          "type": "string"
+        },
+        {
+          "description": "",
+          "name": "lastIpcObject",
+          "type": "unknown"
+        },
+        {
+          "description": "",
+          "name": "workspace",
+          "type": "HyprlandWorkspace"
+        },
+        {
+          "description": "",
+          "name": "monitor",
+          "type": "HyprlandMonitor"
+        },
+        {
+          "description": "",
+          "name": "activated",
+          "type": "bool"
+        },
+        {
+          "description": "",
+          "name": "urgent",
+          "type": "bool"
+        },
+        {
+          "description": "",
+          "name": "wayland",
+          "type": "Toplevel"
+        }
+      ],
+      "qualified_name": "Quickshell.Hyprland.HyprlandToplevel",
+      "title": "HyprlandToplevel : QtObject",
+      "url": "https://quickshell.org/docs/v0.3.0/types/Quickshell.Hyprland/HyprlandToplevel/",
+      "variants": []
+    },
+    {
+      "description": "Allows setting hyprland specific window properties on a QsWindow or subclass, as an attached object.",
+      "functions": [],
+      "import": "Quickshell.Hyprland",
+      "markdown_path": "pages/Quickshell.Hyprland/HyprlandWindow.md",
+      "module": "Quickshell.Hyprland",
+      "name": "HyprlandWindow",
+      "properties": [
+        {
+          "description": "",
+          "name": "opacity",
+          "type": "real"
+        },
+        {
+          "description": "",
+          "name": "visibleMask",
+          "type": "Region"
+        }
+      ],
+      "qualified_name": "Quickshell.Hyprland.HyprlandWindow",
+      "title": "HyprlandWindow : QtObject",
+      "url": "https://quickshell.org/docs/v0.3.0/types/Quickshell.Hyprland/HyprlandWindow/",
+      "variants": []
+    },
+    {
+      "description": "readonly",
+      "functions": [
+        {
+          "args": " ",
+          "description": ": void",
+          "name": "activate"
+        }
+      ],
+      "import": "Quickshell.Hyprland",
+      "markdown_path": "pages/Quickshell.Hyprland/HyprlandWorkspace.md",
+      "module": "Quickshell.Hyprland",
+      "name": "HyprlandWorkspace",
+      "properties": [
+        {
+          "description": "",
+          "name": "name",
+          "type": "string"
+        },
+        {
+          "description": "",
+          "name": "active",
+          "type": "bool"
+        },
+        {
+          "description": "",
+          "name": "id",
+          "type": "int"
+        },
+        {
+          "description": "",
+          "name": "lastIpcObject",
+          "type": "unknown"
+        },
+        {
+          "description": "",
+          "name": "hasFullscreen",
+          "type": "bool"
+        },
+        {
+          "description": "",
+          "name": "monitor",
+          "type": "HyprlandMonitor"
+        },
+        {
+          "description": "",
+          "name": "urgent",
+          "type": "bool"
+        },
+        {
+          "description": "",
+          "name": "focused",
+          "type": "bool"
+        },
+        {
+          "description": "",
+          "name": "toplevels",
+          "type": "ObjectModel"
+        }
+      ],
+      "qualified_name": "Quickshell.Hyprland.HyprlandWorkspace",
+      "title": "HyprlandWorkspace : QtObject",
+      "url": "https://quickshell.org/docs/v0.3.0/types/Quickshell.Hyprland/HyprlandWorkspace/",
+      "variants": []
+    },
+    {
+      "description": "I3/Sway IPC integration",
+      "functions": [
+        {
+          "args": " request ",
+          "description": ": void",
+          "name": "dispatch"
+        },
+        {
+          "args": " name ",
+          "description": ": I3Monitor",
+          "name": "findMonitorByName"
+        },
+        {
+          "args": " name ",
+          "description": ": I3Workspace",
+          "name": "findWorkspaceByName"
+        },
+        {
+          "args": " screen ",
+          "description": ": I3Monitor",
+          "name": "monitorFor"
+        },
+        {
+          "args": " ",
+          "description": ": void",
+          "name": "refreshMonitors"
+        },
+        {
+          "args": " ",
+          "description": ": void",
+          "name": "refreshWorkspaces"
+        }
+      ],
+      "import": "Quickshell.I3",
+      "markdown_path": "pages/Quickshell.I3/I3.md",
+      "module": "Quickshell.I3",
+      "name": "I3",
+      "properties": [
+        {
+          "description": "",
+          "name": "focusedWorkspace",
+          "type": "I3Workspace"
+        },
+        {
+          "description": "",
+          "name": "monitors",
+          "type": "ObjectModel < I3Monitor >"
+        },
+        {
+          "description": "",
+          "name": "socketPath",
+          "type": "string"
+        },
+        {
+          "description": "",
+          "name": "focusedMonitor",
+          "type": "I3Monitor"
+        },
+        {
+          "description": "",
+          "name": "workspaces",
+          "type": "ObjectModel < I3Workspace >"
+        }
+      ],
+      "qualified_name": "Quickshell.I3",
+      "title": "I3 : QtObject",
+      "url": "https://quickshell.org/docs/v0.3.0/types/Quickshell.I3/I3/",
+      "variants": []
+    },
+    {
+      "description": "Emitted by I3.rawEvent()",
+      "functions": [],
+      "import": "Quickshell.I3",
+      "markdown_path": "pages/Quickshell.I3/I3Event.md",
+      "module": "Quickshell.I3",
+      "name": "I3Event",
+      "properties": [
+        {
+          "description": "",
+          "name": "type",
+          "type": "string"
+        },
+        {
+          "description": "",
+          "name": "data",
+          "type": "string"
+        }
+      ],
+      "qualified_name": "Quickshell.I3.I3Event",
+      "title": "I3Event : QtObject",
+      "url": "https://quickshell.org/docs/v0.3.0/types/Quickshell.I3/I3Event/",
+      "variants": []
+    },
+    {
+      "description": "subscriptions: [\"input\"]",
+      "functions": [],
+      "import": "Quickshell.I3",
+      "markdown_path": "pages/Quickshell.I3/I3IpcListener.md",
+      "module": "Quickshell.I3",
+      "name": "I3IpcListener",
+      "properties": [
+        {
+          "description": "",
+          "name": "subscriptions",
+          "type": "list < string >"
+        }
+      ],
+      "qualified_name": "Quickshell.I3.I3IpcListener",
+      "title": "I3IpcListener : QtObject",
+      "url": "https://quickshell.org/docs/v0.3.0/types/Quickshell.I3/I3IpcListener/",
+      "variants": []
+    },
+    {
+      "description": "I3/Sway monitors",
+      "functions": [],
+      "import": "Quickshell.I3",
+      "markdown_path": "pages/Quickshell.I3/I3Monitor.md",
+      "module": "Quickshell.I3",
+      "name": "I3Monitor",
+      "properties": [
+        {
+          "description": "",
+          "name": "focusedWorkspace",
+          "type": "I3Workspace"
+        },
+        {
+          "description": "",
+          "name": "x",
+          "type": "int"
+        },
+        {
+          "description": "",
+          "name": "activeWorkspace",
+          "type": "I3Workspace"
+        },
+        {
+          "description": "",
+          "name": "name",
+          "type": "string"
+        },
+        {
+          "description": "",
+          "name": "power",
+          "type": "bool"
+        },
+        {
+          "description": "",
+          "name": "height",
+          "type": "int"
+        },
+        {
+          "description": "",
+          "name": "focused",
+          "type": "bool"
+        },
+        {
+          "description": "",
+          "name": "id",
+          "type": "int"
+        },
+        {
+          "description": "",
+          "name": "lastIpcObject",
+          "type": "unknown"
+        },
+        {
+          "description": "",
+          "name": "y",
+          "type": "int"
+        },
+        {
+          "description": "",
+          "name": "width",
+          "type": "int"
+        },
+        {
+          "description": "",
+          "name": "scale",
+          "type": "real"
+        }
+      ],
+      "qualified_name": "Quickshell.I3.I3Monitor",
+      "title": "I3Monitor : QtObject",
+      "url": "https://quickshell.org/docs/v0.3.0/types/Quickshell.I3/I3Monitor/",
+      "variants": []
+    },
+    {
+      "description": "I3/Sway workspaces",
+      "functions": [
+        {
+          "args": " ",
+          "description": ": void",
+          "name": "activate"
+        }
+      ],
+      "import": "Quickshell.I3",
+      "markdown_path": "pages/Quickshell.I3/I3Workspace.md",
+      "module": "Quickshell.I3",
+      "name": "I3Workspace",
+      "properties": [
+        {
+          "description": "",
+          "name": "id",
+          "type": "int"
+        },
+        {
+          "description": "",
+          "name": "focused",
+          "type": "bool"
+        },
+        {
+          "description": "",
+          "name": "name",
+          "type": "string"
+        },
+        {
+          "description": "",
+          "name": "num",
+          "type": "int"
+        },
+        {
+          "description": "",
+          "name": "active",
+          "type": "bool"
+        },
+        {
+          "description": "",
+          "name": "urgent",
+          "type": "bool"
+        },
+        {
+          "description": "",
+          "name": "number",
+          "type": "int"
+        },
+        {
+          "description": "",
+          "name": "lastIpcObject",
+          "type": "unknown"
+        },
+        {
+          "description": "",
+          "name": "monitor",
+          "type": "I3Monitor"
+        }
+      ],
+      "qualified_name": "Quickshell.I3.I3Workspace",
+      "title": "I3Workspace : QtObject",
+      "url": "https://quickshell.org/docs/v0.3.0/types/Quickshell.I3/I3Workspace/",
+      "variants": []
+    },
+    {
+      "description": "See also: DataStreamParser",
+      "functions": [],
+      "import": "Quickshell.Io",
+      "markdown_path": "pages/Quickshell.Io/DataStream.md",
+      "module": "Quickshell.Io",
+      "name": "DataStream",
+      "properties": [
+        {
+          "description": "",
+          "name": "parser",
+          "type": "DataStreamParser"
+        }
+      ],
+      "qualified_name": "Quickshell.Io.DataStream",
+      "title": "DataStream : QtObject",
+      "url": "https://quickshell.org/docs/v0.3.0/types/Quickshell.Io/DataStream/",
+      "variants": []
+    },
+    {
+      "description": "See also: DataStream , SplitParser .",
+      "functions": [],
+      "import": "Quickshell.Io",
+      "markdown_path": "pages/Quickshell.Io/DataStreamParser.md",
+      "module": "Quickshell.Io",
+      "name": "DataStreamParser",
+      "properties": [],
+      "qualified_name": "Quickshell.Io.DataStreamParser",
+      "title": "DataStreamParser : QtObject",
+      "url": "https://quickshell.org/docs/v0.3.0/types/Quickshell.Io/DataStreamParser/",
+      "variants": []
+    },
+    {
+      "description": "A reader for small to medium files that don\u2019t need seeking/cursor access, suitable for most text files.",
+      "functions": [
+        {
+          "args": " ",
+          "description": ": unknown",
+          "name": "data"
+        },
+        {
+          "args": " ",
+          "description": ": void",
+          "name": "reload"
+        },
+        {
+          "args": " data ",
+          "description": ": void",
+          "name": "setData"
+        },
+        {
+          "args": " text ",
+          "description": ": void",
+          "name": "setText"
+        },
+        {
+          "args": " ",
+          "description": ": string",
+          "name": "text"
+        },
+        {
+          "args": " ",
+          "description": ": bool",
+          "name": "waitForJob"
+        },
+        {
+          "args": " ",
+          "description": ": void",
+          "name": "writeAdapter"
+        }
+      ],
+      "import": "Quickshell.Io",
+      "markdown_path": "pages/Quickshell.Io/FileView.md",
+      "module": "Quickshell.Io",
+      "name": "FileView",
+      "properties": [
+        {
+          "description": "",
+          "name": "blockWrites",
+          "type": "bool"
+        },
+        {
+          "description": "",
+          "name": "adapter",
+          "type": "FileViewAdapter"
+        },
+        {
+          "description": "",
+          "name": "preload",
+          "type": "bool"
+        },
+        {
+          "description": "",
+          "name": "atomicWrites",
+          "type": "bool"
+        },
+        {
+          "description": "",
+          "name": "watchChanges",
+          "type": "bool"
+        },
+        {
+          "description": "",
+          "name": "path",
+          "type": "string"
+        },
+        {
+          "description": "",
+          "name": "loaded",
+          "type": "bool"
+        },
+        {
+          "description": "",
+          "name": "blockLoading",
+          "type": "bool"
+        },
+        {
+          "description": "",
+          "name": "blockAllReads",
+          "type": "bool"
+        },
+        {
+          "description": "",
+          "name": "printErrors",
+          "type": "bool"
+        }
+      ],
+      "qualified_name": "Quickshell.Io.FileView",
+      "title": "FileView : QtObject",
+      "url": "https://quickshell.org/docs/v0.3.0/types/Quickshell.Io/FileView/",
+      "variants": []
+    },
+    {
+      "description": "See FileView.adapter .",
+      "functions": [],
+      "import": "Quickshell.Io",
+      "markdown_path": "pages/Quickshell.Io/FileViewAdapter.md",
+      "module": "Quickshell.Io",
+      "name": "FileViewAdapter",
+      "properties": [],
+      "qualified_name": "Quickshell.Io.FileViewAdapter",
+      "title": "FileViewAdapter : QtObject",
+      "url": "https://quickshell.org/docs/v0.3.0/types/Quickshell.Io/FileViewAdapter/",
+      "variants": []
+    },
+    {
+      "description": "value : FileViewError",
+      "functions": [
+        {
+          "args": " value ",
+          "description": ": string",
+          "name": "toString"
+        }
+      ],
+      "import": "Quickshell.Io",
+      "markdown_path": "pages/Quickshell.Io/FileViewError.md",
+      "module": "Quickshell.Io",
+      "name": "FileViewError",
+      "properties": [],
+      "qualified_name": "Quickshell.Io.FileViewError",
+      "title": "FileViewError : QtObject",
+      "url": "https://quickshell.org/docs/v0.3.0/types/Quickshell.Io/FileViewError/",
+      "variants": [
+        "NotAFile",
+        "Success",
+        "FileNotFound",
+        "Unknown",
+        "PermissionDenied",
+        "toString"
+      ]
+    },
+    {
+      "description": "Each IpcHandler is registered into a per-instance map by its unique target . Functions and properties defined on the IpcHandler can be accessed via qs ipc .",
+      "functions": [],
+      "import": "Quickshell.Io",
+      "markdown_path": "pages/Quickshell.Io/IpcHandler.md",
+      "module": "Quickshell.Io",
+      "name": "IpcHandler",
+      "properties": [
+        {
+          "description": "",
+          "name": "enabled",
+          "type": "bool"
+        },
+        {
+          "description": "",
+          "name": "target",
+          "type": "string"
+        }
+      ],
+      "qualified_name": "Quickshell.Io.IpcHandler",
+      "title": "IpcHandler : QtObject",
+      "url": "https://quickshell.org/docs/v0.3.0/types/Quickshell.Io/IpcHandler/",
+      "variants": []
+    },
+    {
+      "description": "JsonAdapter is a FileView adapter that exposes a JSON file as a set of QML properties that can be read and written to.",
+      "functions": [],
+      "import": "Quickshell.Io",
+      "markdown_path": "pages/Quickshell.Io/JsonAdapter.md",
+      "module": "Quickshell.Io",
+      "name": "JsonAdapter",
+      "properties": [],
+      "qualified_name": "Quickshell.Io.JsonAdapter",
+      "title": "JsonAdapter : FileViewAdapter",
+      "url": "https://quickshell.org/docs/v0.3.0/types/Quickshell.Io/JsonAdapter/",
+      "variants": []
+    },
+    {
+      "description": "See JsonAdapter .",
+      "functions": [],
+      "import": "Quickshell.Io",
+      "markdown_path": "pages/Quickshell.Io/JsonObject.md",
+      "module": "Quickshell.Io",
+      "name": "JsonObject",
+      "properties": [],
+      "qualified_name": "Quickshell.Io.JsonObject",
+      "title": "JsonObject : QtObject",
+      "url": "https://quickshell.org/docs/v0.3.0/types/Quickshell.Io/JsonObject/",
+      "variants": []
+    },
+    {
+      "description": "running: true",
+      "functions": [
+        {
+          "args": " context ",
+          "description": ": void",
+          "name": "exec"
+        },
+        {
+          "args": "",
+          "description": ": A list containing the command and all its arguments. See Process.command .",
+          "name": "command"
+        },
+        {
+          "args": "",
+          "description": ": Changes to make to the process environment. See Process.environment .",
+          "name": "environment"
+        },
+        {
+          "args": "",
+          "description": ": Removes all variables from the environment if true.",
+          "name": "clearEnvironment"
+        },
+        {
+          "args": "",
+          "description": ": The working directory the command should run in.",
+          "name": "workingDirectory"
+        },
+        {
+          "args": " signal ",
+          "description": ": void",
+          "name": "signal"
+        },
+        {
+          "args": " ",
+          "description": ": void",
+          "name": "startDetached"
+        },
+        {
+          "args": " data ",
+          "description": ": void",
+          "name": "write"
+        }
+      ],
+      "import": "Quickshell.Io",
+      "markdown_path": "pages/Quickshell.Io/Process.md",
+      "module": "Quickshell.Io",
+      "name": "Process",
+      "properties": [
+        {
+          "description": "",
+          "name": "stdout",
+          "type": "DataStreamParser"
+        },
+        {
+          "description": "",
+          "name": "running",
+          "type": "bool"
+        },
+        {
+          "description": "",
+          "name": "clearEnvironment",
+          "type": "bool"
+        },
+        {
+          "description": "",
+          "name": "command",
+          "type": "list < string >"
+        },
+        {
+          "description": "",
+          "name": "processId",
+          "type": "variant"
+        },
+        {
+          "description": "",
+          "name": "environment",
+          "type": "unknown"
+        },
+        {
+          "description": "",
+          "name": "stderr",
+          "type": "DataStreamParser"
+        },
+        {
+          "description": "",
+          "name": "stdinEnabled",
+          "type": "bool"
+        },
+        {
+          "description": "",
+          "name": "workingDirectory",
+          "type": "string"
+        }
+      ],
+      "qualified_name": "Quickshell.Io.Process",
+      "title": "Process : QtObject",
+      "url": "https://quickshell.org/docs/v0.3.0/types/Quickshell.Io/Process/",
+      "variants": []
+    },
+    {
+      "description": "Unix socket listener.",
+      "functions": [
+        {
+          "args": " ",
+          "description": ": void",
+          "name": "flush"
+        },
+        {
+          "args": " data ",
+          "description": ": void",
+          "name": "write"
+        }
+      ],
+      "import": "Quickshell.Io",
+      "markdown_path": "pages/Quickshell.Io/Socket.md",
+      "module": "Quickshell.Io",
+      "name": "Socket",
+      "properties": [
+        {
+          "description": "",
+          "name": "connected",
+          "type": "bool"
+        },
+        {
+          "description": "",
+          "name": "path",
+          "type": "string"
+        }
+      ],
+      "qualified_name": "Quickshell.Io.Socket",
+      "title": "Socket : DataStream",
+      "url": "https://quickshell.org/docs/v0.3.0/types/Quickshell.Io/Socket/",
+      "variants": []
+    },
+    {
+      "description": "active: true",
+      "functions": [],
+      "import": "Quickshell.Io",
+      "markdown_path": "pages/Quickshell.Io/SocketServer.md",
+      "module": "Quickshell.Io",
+      "name": "SocketServer",
+      "properties": [
+        {
+          "description": "",
+          "name": "path",
+          "type": "string"
+        },
+        {
+          "description": "",
+          "name": "active",
+          "type": "bool"
+        },
+        {
+          "description": "",
+          "name": "handler",
+          "type": "Component"
+        }
+      ],
+      "qualified_name": "Quickshell.Io.SocketServer",
+      "title": "SocketServer : Reloadable",
+      "url": "https://quickshell.org/docs/v0.3.0/types/Quickshell.Io/SocketServer/",
+      "variants": []
+    },
+    {
+      "description": "DataStreamParser for delimited data streams. DataStreamParser.read() is emitted once per delimited chunk of the stream.",
+      "functions": [],
+      "import": "Quickshell.Io",
+      "markdown_path": "pages/Quickshell.Io/SplitParser.md",
+      "module": "Quickshell.Io",
+      "name": "SplitParser",
+      "properties": [
+        {
+          "description": "",
+          "name": "splitMarker",
+          "type": "string"
+        }
+      ],
+      "qualified_name": "Quickshell.Io.SplitParser",
+      "title": "SplitParser : DataStreamParser",
+      "url": "https://quickshell.org/docs/v0.3.0/types/Quickshell.Io/SplitParser/",
+      "variants": []
+    },
+    {
+      "description": "StdioCollector collects all process output into a buffer exposed as text or data .",
+      "functions": [],
+      "import": "Quickshell.Io",
+      "markdown_path": "pages/Quickshell.Io/StdioCollector.md",
+      "module": "Quickshell.Io",
+      "name": "StdioCollector",
+      "properties": [
+        {
+          "description": "",
+          "name": "data",
+          "type": "unknown"
+        },
+        {
+          "description": "",
+          "name": "waitForEnd",
+          "type": "bool"
+        },
+        {
+          "description": "",
+          "name": "text",
+          "type": "string"
+        }
+      ],
+      "qualified_name": "Quickshell.Io.StdioCollector",
+      "title": "StdioCollector : DataStreamParser",
+      "url": "https://quickshell.org/docs/v0.3.0/types/Quickshell.Io/StdioCollector/",
+      "variants": []
+    },
+    {
+      "description": "The reason a connection failed.",
+      "functions": [
+        {
+          "args": " reason ",
+          "description": ": string",
+          "name": "toString"
+        }
+      ],
+      "import": "Quickshell.Networking",
+      "markdown_path": "pages/Quickshell.Networking/ConnectionFailReason.md",
+      "module": "Quickshell.Networking",
+      "name": "ConnectionFailReason",
+      "properties": [],
+      "qualified_name": "Quickshell.Networking.ConnectionFailReason",
+      "title": "ConnectionFailReason : QtObject",
+      "url": "https://quickshell.org/docs/v0.3.0/types/Quickshell.Networking/ConnectionFailReason/",
+      "variants": [
+        "WifiAuthTimeout",
+        "NoSecrets",
+        "WifiClientDisconnected",
+        "WifiNetworkLost",
+        "WifiClientFailed",
+        "Unknown",
+        "toString"
+      ]
+    },
+    {
+      "description": "The connection state of a device or network.",
+      "functions": [
+        {
+          "args": " state ",
+          "description": ": string",
+          "name": "toString"
+        }
+      ],
+      "import": "Quickshell.Networking",
+      "markdown_path": "pages/Quickshell.Networking/ConnectionState.md",
+      "module": "Quickshell.Networking",
+      "name": "ConnectionState",
+      "properties": [],
+      "qualified_name": "Quickshell.Networking.ConnectionState",
+      "title": "ConnectionState : QtObject",
+      "url": "https://quickshell.org/docs/v0.3.0/types/Quickshell.Networking/ConnectionState/",
+      "variants": [
+        "Connecting",
+        "Disconnected",
+        "Unknown",
+        "Connected",
+        "Disconnecting",
+        "toString"
+      ]
+    },
+    {
+      "description": "Type of a NetworkDevice .",
+      "functions": [
+        {
+          "args": " type ",
+          "description": ": string",
+          "name": "toString"
+        }
+      ],
+      "import": "Quickshell.Networking",
+      "markdown_path": "pages/Quickshell.Networking/DeviceType.md",
+      "module": "Quickshell.Networking",
+      "name": "DeviceType",
+      "properties": [],
+      "qualified_name": "Quickshell.Networking.DeviceType",
+      "title": "DeviceType : QtObject",
+      "url": "https://quickshell.org/docs/v0.3.0/types/Quickshell.Networking/DeviceType/",
+      "variants": [
+        "None",
+        "Wifi",
+        "Wired",
+        "toString"
+      ]
+    },
+    {
+      "description": "A NetworkManager connection settings profile.",
+      "functions": [
+        {
+          "args": " ",
+          "description": ": void",
+          "name": "clearSecrets"
+        },
+        {
+          "args": " ",
+          "description": ": void",
+          "name": "forget"
+        },
+        {
+          "args": " ",
+          "description": ": unknown",
+          "name": "read"
+        },
+        {
+          "args": " settings ",
+          "description": ": void",
+          "name": "write"
+        }
+      ],
+      "import": "Quickshell.Networking",
+      "markdown_path": "pages/Quickshell.Networking/NMSettings.md",
+      "module": "Quickshell.Networking",
+      "name": "NMSettings",
+      "properties": [
+        {
+          "description": "",
+          "name": "uuid",
+          "type": "string"
+        },
+        {
+          "description": "",
+          "name": "id",
+          "type": "string"
+        }
+      ],
+      "qualified_name": "Quickshell.Networking.NMSettings",
+      "title": "NMSettings : QtObject",
+      "url": "https://quickshell.org/docs/v0.3.0/types/Quickshell.Networking/NMSettings/",
+      "variants": []
+    },
+    {
+      "description": "A network. Networks derived from a WifiDevice are WifiNetwork instances.",
+      "functions": [
+        {
+          "args": " ",
+          "description": ": void",
+          "name": "connect"
+        },
+        {
+          "args": " settings ",
+          "description": ": void",
+          "name": "connectWithSettings"
+        },
+        {
+          "args": " ",
+          "description": ": void",
+          "name": "disconnect"
+        },
+        {
+          "args": " ",
+          "description": ": void",
+          "name": "forget"
+        }
+      ],
+      "import": "Quickshell.Networking",
+      "markdown_path": "pages/Quickshell.Networking/Network.md",
+      "module": "Quickshell.Networking",
+      "name": "Network",
+      "properties": [
+        {
+          "description": "",
+          "name": "stateChanging",
+          "type": "bool"
+        },
+        {
+          "description": "",
+          "name": "name",
+          "type": "string"
+        },
+        {
+          "description": "",
+          "name": "connected",
+          "type": "bool"
+        },
+        {
+          "description": "",
+          "name": "device",
+          "type": "NetworkDevice"
+        },
+        {
+          "description": "",
+          "name": "nmSettings",
+          "type": "list < NMSettings >"
+        },
+        {
+          "description": "",
+          "name": "known",
+          "type": "bool"
+        },
+        {
+          "description": "",
+          "name": "state",
+          "type": "ConnectionState"
+        }
+      ],
+      "qualified_name": "Quickshell.Networking.Network",
+      "title": "Network : QtObject",
+      "url": "https://quickshell.org/docs/v0.3.0/types/Quickshell.Networking/Network/",
+      "variants": []
+    },
+    {
+      "description": "The backend supplying the Network service.",
+      "functions": [
+        {
+          "args": " type ",
+          "description": ": string",
+          "name": "toString"
+        }
+      ],
+      "import": "Quickshell.Networking",
+      "markdown_path": "pages/Quickshell.Networking/NetworkBackendType.md",
+      "module": "Quickshell.Networking",
+      "name": "NetworkBackendType",
+      "properties": [],
+      "qualified_name": "Quickshell.Networking.NetworkBackendType",
+      "title": "NetworkBackendType : QtObject",
+      "url": "https://quickshell.org/docs/v0.3.0/types/Quickshell.Networking/NetworkBackendType/",
+      "variants": [
+        "NetworkManager",
+        "None",
+        "toString"
+      ]
+    },
+    {
+      "description": "The degree to which the host can reach the internet.",
+      "functions": [
+        {
+          "args": " conn ",
+          "description": ": string",
+          "name": "toString"
+        }
+      ],
+      "import": "Quickshell.Networking",
+      "markdown_path": "pages/Quickshell.Networking/NetworkConnectivity.md",
+      "module": "Quickshell.Networking",
+      "name": "NetworkConnectivity",
+      "properties": [],
+      "qualified_name": "Quickshell.Networking.NetworkConnectivity",
+      "title": "NetworkConnectivity : QtObject",
+      "url": "https://quickshell.org/docs/v0.3.0/types/Quickshell.Networking/NetworkConnectivity/",
+      "variants": [
+        "Portal",
+        "Full",
+        "Limited",
+        "Unknown",
+        "None",
+        "toString"
+      ]
+    },
+    {
+      "description": "The type property may be used to determine if this device is a WifiDevice or WiredDevice .",
+      "functions": [
+        {
+          "args": " ",
+          "description": ": void",
+          "name": "disconnect"
+        }
+      ],
+      "import": "Quickshell.Networking",
+      "markdown_path": "pages/Quickshell.Networking/NetworkDevice.md",
+      "module": "Quickshell.Networking",
+      "name": "NetworkDevice",
+      "properties": [
+        {
+          "description": "",
+          "name": "networks",
+          "type": "ObjectModel < Network >"
+        },
+        {
+          "description": "",
+          "name": "state",
+          "type": "ConnectionState"
+        },
+        {
+          "description": "",
+          "name": "type",
+          "type": "DeviceType"
+        },
+        {
+          "description": "",
+          "name": "autoconnect",
+          "type": "bool"
+        },
+        {
+          "description": "",
+          "name": "name",
+          "type": "string"
+        },
+        {
+          "description": "",
+          "name": "address",
+          "type": "string"
+        },
+        {
+          "description": "",
+          "name": "connected",
+          "type": "bool"
+        }
+      ],
+      "qualified_name": "Quickshell.Networking.NetworkDevice",
+      "title": "NetworkDevice : QtObject",
+      "url": "https://quickshell.org/docs/v0.3.0/types/Quickshell.Networking/NetworkDevice/",
+      "variants": []
+    },
+    {
+      "description": "An interface to a network backend (currently only NetworkManager), which can be used to view, configure, and connect to various networks.",
+      "functions": [
+        {
+          "args": " ",
+          "description": ": void",
+          "name": "checkConnectivity"
+        }
+      ],
+      "import": "Quickshell.Networking",
+      "markdown_path": "pages/Quickshell.Networking/Networking.md",
+      "module": "Quickshell.Networking",
+      "name": "Networking",
+      "properties": [
+        {
+          "description": "",
+          "name": "wifiHardwareEnabled",
+          "type": "bool"
+        },
+        {
+          "description": "",
+          "name": "wifiEnabled",
+          "type": "bool"
+        },
+        {
+          "description": "",
+          "name": "canCheckConnectivity",
+          "type": "bool"
+        },
+        {
+          "description": "",
+          "name": "connectivityCheckEnabled",
+          "type": "bool"
+        },
+        {
+          "description": "",
+          "name": "backend",
+          "type": "NetworkBackendType"
+        },
+        {
+          "description": "",
+          "name": "devices",
+          "type": "ObjectModel < NetworkDevice >"
+        },
+        {
+          "description": "",
+          "name": "connectivity",
+          "type": "NetworkConnectivity"
+        }
+      ],
+      "qualified_name": "Quickshell.Networking",
+      "title": "Networking : QtObject",
+      "url": "https://quickshell.org/docs/v0.3.0/types/Quickshell.Networking/Networking/",
+      "variants": []
+    },
+    {
+      "description": "WiFi variant of a NetworkDevice .",
+      "functions": [],
+      "import": "Quickshell.Networking",
+      "markdown_path": "pages/Quickshell.Networking/WifiDevice.md",
+      "module": "Quickshell.Networking",
+      "name": "WifiDevice",
+      "properties": [
+        {
+          "description": "",
+          "name": "scannerEnabled",
+          "type": "bool"
+        },
+        {
+          "description": "",
+          "name": "mode",
+          "type": "WifiDeviceMode"
+        }
+      ],
+      "qualified_name": "Quickshell.Networking.WifiDevice",
+      "title": "WifiDevice : NetworkDevice",
+      "url": "https://quickshell.org/docs/v0.3.0/types/Quickshell.Networking/WifiDevice/",
+      "variants": []
+    },
+    {
+      "description": "The 802.11 mode of a WifiDevice .",
+      "functions": [
+        {
+          "args": " mode ",
+          "description": ": string",
+          "name": "toString"
+        }
+      ],
+      "import": "Quickshell.Networking",
+      "markdown_path": "pages/Quickshell.Networking/WifiDeviceMode.md",
+      "module": "Quickshell.Networking",
+      "name": "WifiDeviceMode",
+      "properties": [],
+      "qualified_name": "Quickshell.Networking.WifiDeviceMode",
+      "title": "WifiDeviceMode : QtObject",
+      "url": "https://quickshell.org/docs/v0.3.0/types/Quickshell.Networking/WifiDeviceMode/",
+      "variants": [
+        "AdHoc",
+        "Mesh",
+        "Unknown",
+        "Station",
+        "AccessPoint",
+        "toString"
+      ]
+    },
+    {
+      "description": "WiFi subtype of Network .",
+      "functions": [
+        {
+          "args": " psk ",
+          "description": ": void",
+          "name": "connectWithPsk"
+        }
+      ],
+      "import": "Quickshell.Networking",
+      "markdown_path": "pages/Quickshell.Networking/WifiNetwork.md",
+      "module": "Quickshell.Networking",
+      "name": "WifiNetwork",
+      "properties": [
+        {
+          "description": "",
+          "name": "security",
+          "type": "WifiSecurityType"
+        },
+        {
+          "description": "",
+          "name": "signalStrength",
+          "type": "real"
+        }
+      ],
+      "qualified_name": "Quickshell.Networking.WifiNetwork",
+      "title": "WifiNetwork : Network",
+      "url": "https://quickshell.org/docs/v0.3.0/types/Quickshell.Networking/WifiNetwork/",
+      "variants": []
+    },
+    {
+      "description": "The security type of a WifiNetwork .",
+      "functions": [
+        {
+          "args": " type ",
+          "description": ": string",
+          "name": "toString"
+        }
+      ],
+      "import": "Quickshell.Networking",
+      "markdown_path": "pages/Quickshell.Networking/WifiSecurityType.md",
+      "module": "Quickshell.Networking",
+      "name": "WifiSecurityType",
+      "properties": [],
+      "qualified_name": "Quickshell.Networking.WifiSecurityType",
+      "title": "WifiSecurityType : QtObject",
+      "url": "https://quickshell.org/docs/v0.3.0/types/Quickshell.Networking/WifiSecurityType/",
+      "variants": [
+        "DynamicWep",
+        "WpaPsk",
+        "Wpa2Psk",
+        "Unknown",
+        "Sae",
+        "Wpa3SuiteB192",
+        "Wpa2Eap",
+        "StaticWep",
+        "Leap",
+        "Owe",
+        "Open",
+        "WpaEap",
+        "toString"
+      ]
+    },
+    {
+      "description": "Wired variant of a NetworkDevice .",
+      "functions": [],
+      "import": "Quickshell.Networking",
+      "markdown_path": "pages/Quickshell.Networking/WiredDevice.md",
+      "module": "Quickshell.Networking",
+      "name": "WiredDevice",
+      "properties": [
+        {
+          "description": "",
+          "name": "linkSpeed",
+          "type": "int"
+        },
+        {
+          "description": "",
+          "name": "network",
+          "type": "Network"
+        },
+        {
+          "description": "",
+          "name": "hasLink",
+          "type": "bool"
+        }
+      ],
+      "qualified_name": "Quickshell.Networking.WiredDevice",
+      "title": "WiredDevice : NetworkDevice",
+      "url": "https://quickshell.org/docs/v0.3.0/types/Quickshell.Networking/WiredDevice/",
+      "variants": []
+    },
+    {
+      "description": "This object provides access to a running greetd instance if present. With it you can authenticate a user and launch a session.",
+      "functions": [
+        {
+          "args": " ",
+          "description": ": void",
+          "name": "cancelSession"
+        },
+        {
+          "args": " user ",
+          "description": ": void",
+          "name": "createSession"
+        },
+        {
+          "args": " command ",
+          "description": ": void",
+          "name": "launch"
+        },
+        {
+          "args": " command, environment ",
+          "description": ": void",
+          "name": "launch"
+        },
+        {
+          "args": " command, environment, quit ",
+          "description": ": void",
+          "name": "launch"
+        },
+        {
+          "args": " response ",
+          "description": ": void",
+          "name": "respond"
+        }
+      ],
+      "import": "Quickshell.Services.Greetd",
+      "markdown_path": "pages/Quickshell.Services.Greetd/Greetd.md",
+      "module": "Quickshell.Services.Greetd",
+      "name": "Greetd",
+      "properties": [
+        {
+          "description": "",
+          "name": "user",
+          "type": "string"
+        },
+        {
+          "description": "",
+          "name": "state",
+          "type": "GreetdState"
+        },
+        {
+          "description": "",
+          "name": "available",
+          "type": "bool"
+        }
+      ],
+      "qualified_name": "Quickshell.Services.Greetd",
+      "title": "Greetd : QtObject",
+      "url": "https://quickshell.org/docs/v0.3.0/types/Quickshell.Services.Greetd/Greetd/",
+      "variants": []
+    },
+    {
+      "description": "See Greetd.state .",
+      "functions": [
+        {
+          "args": " value ",
+          "description": ": string",
+          "name": "toString"
+        }
+      ],
+      "import": "Quickshell.Services.Greetd",
+      "markdown_path": "pages/Quickshell.Services.Greetd/GreetdState.md",
+      "module": "Quickshell.Services.Greetd",
+      "name": "GreetdState",
+      "properties": [],
+      "qualified_name": "Quickshell.Services.Greetd.GreetdState",
+      "title": "GreetdState : QtObject",
+      "url": "https://quickshell.org/docs/v0.3.0/types/Quickshell.Services.Greetd/GreetdState/",
+      "variants": [
+        "Launched",
+        "Inactive",
+        "ReadyToLaunch",
+        "Launching",
+        "Authenticating",
+        "toString"
+      ]
+    },
+    {
+      "description": "readonly",
+      "functions": [],
+      "import": "Quickshell.Services.Mpris",
+      "markdown_path": "pages/Quickshell.Services.Mpris/Mpris.md",
+      "module": "Quickshell.Services.Mpris",
+      "name": "Mpris",
+      "properties": [
+        {
+          "description": "",
+          "name": "players",
+          "type": "ObjectModel < MprisPlayer >"
+        }
+      ],
+      "qualified_name": "Quickshell.Services.Mpris",
+      "title": "Mpris : QtObject",
+      "url": "https://quickshell.org/docs/v0.3.0/types/Quickshell.Services.Mpris/Mpris/",
+      "variants": []
+    },
+    {
+      "description": "See MprisPlayer.loopState .",
+      "functions": [
+        {
+          "args": " status ",
+          "description": ": string",
+          "name": "toString"
+        }
+      ],
+      "import": "Quickshell.Services.Mpris",
+      "markdown_path": "pages/Quickshell.Services.Mpris/MprisLoopState.md",
+      "module": "Quickshell.Services.Mpris",
+      "name": "MprisLoopState",
+      "properties": [],
+      "qualified_name": "Quickshell.Services.Mpris.MprisLoopState",
+      "title": "MprisLoopState : QtObject",
+      "url": "https://quickshell.org/docs/v0.3.0/types/Quickshell.Services.Mpris/MprisLoopState/",
+      "variants": [
+        "None",
+        "Track",
+        "Playlist",
+        "toString"
+      ]
+    },
+    {
+      "description": "See MprisPlayer.playbackState .",
+      "functions": [
+        {
+          "args": " status ",
+          "description": ": string",
+          "name": "toString"
+        }
+      ],
+      "import": "Quickshell.Services.Mpris",
+      "markdown_path": "pages/Quickshell.Services.Mpris/MprisPlaybackState.md",
+      "module": "Quickshell.Services.Mpris",
+      "name": "MprisPlaybackState",
+      "properties": [],
+      "qualified_name": "Quickshell.Services.Mpris.MprisPlaybackState",
+      "title": "MprisPlaybackState : QtObject",
+      "url": "https://quickshell.org/docs/v0.3.0/types/Quickshell.Services.Mpris/MprisPlaybackState/",
+      "variants": [
+        "Stopped",
+        "Playing",
+        "Paused",
+        "toString"
+      ]
+    },
+    {
+      "description": "A media player exposed over MPRIS.",
+      "functions": [
+        {
+          "args": " ",
+          "description": ": void",
+          "name": "next"
+        },
+        {
+          "args": " uri ",
+          "description": ": void",
+          "name": "openUri"
+        },
+        {
+          "args": " ",
+          "description": ": void",
+          "name": "pause"
+        },
+        {
+          "args": " ",
+          "description": ": void",
+          "name": "play"
+        },
+        {
+          "args": " ",
+          "description": ": void",
+          "name": "previous"
+        },
+        {
+          "args": " ",
+          "description": ": void",
+          "name": "quit"
+        },
+        {
+          "args": " ",
+          "description": ": void",
+          "name": "raise"
+        },
+        {
+          "args": " offset ",
+          "description": ": void",
+          "name": "seek"
+        },
+        {
+          "args": " ",
+          "description": ": void",
+          "name": "stop"
+        },
+        {
+          "args": " ",
+          "description": ": void",
+          "name": "togglePlaying"
+        }
+      ],
+      "import": "Quickshell.Services.Mpris",
+      "markdown_path": "pages/Quickshell.Services.Mpris/MprisPlayer.md",
+      "module": "Quickshell.Services.Mpris",
+      "name": "MprisPlayer",
+      "properties": [
+        {
+          "description": "",
+          "name": "isPlaying",
+          "type": "bool"
+        },
+        {
+          "description": "",
+          "name": "trackAlbumArtist",
+          "type": "string"
+        },
+        {
+          "description": "",
+          "name": "shuffleSupported",
+          "type": "bool"
+        },
+        {
+          "description": "",
+          "name": "lengthSupported",
+          "type": "bool"
+        },
+        {
+          "description": "",
+          "name": "position",
+          "type": "real"
+        },
+        {
+          "description": "",
+          "name": "trackArtist",
+          "type": "string"
+        },
+        {
+          "description": "",
+          "name": "uniqueId",
+          "type": "int"
+        },
+        {
+          "description": "",
+          "name": "canPlay",
+          "type": "bool"
+        },
+        {
+          "description": "",
+          "name": "loopSupported",
+          "type": "bool"
+        },
+        {
+          "description": "",
+          "name": "desktopEntry",
+          "type": "string"
+        },
+        {
+          "description": "",
+          "name": "metadata",
+          "type": "unknown"
+        },
+        {
+          "description": "",
+          "name": "canSeek",
+          "type": "bool"
+        },
+        {
+          "description": "",
+          "name": "positionSupported",
+          "type": "bool"
+        },
+        {
+          "description": "",
+          "name": "canPause",
+          "type": "bool"
+        },
+        {
+          "description": "",
+          "name": "dbusName",
+          "type": "string"
+        },
+        {
+          "description": "",
+          "name": "trackAlbum",
+          "type": "string"
+        },
+        {
+          "description": "",
+          "name": "length",
+          "type": "real"
+        },
+        {
+          "description": "",
+          "name": "minRate",
+          "type": "real"
+        },
+        {
+          "description": "",
+          "name": "maxRate",
+          "type": "real"
+        },
+        {
+          "description": "",
+          "name": "rate",
+          "type": "real"
+        },
+        {
+          "description": "",
+          "name": "trackArtists",
+          "type": "string"
+        },
+        {
+          "description": "",
+          "name": "volume",
+          "type": "real"
+        },
+        {
+          "description": "",
+          "name": "trackTitle",
+          "type": "string"
+        },
+        {
+          "description": "",
+          "name": "volumeSupported",
+          "type": "bool"
+        },
+        {
+          "description": "",
+          "name": "canGoPrevious",
+          "type": "bool"
+        },
+        {
+          "description": "",
+          "name": "loopState",
+          "type": "MprisLoopState"
+        },
+        {
+          "description": "",
+          "name": "canControl",
+          "type": "bool"
+        },
+        {
+          "description": "",
+          "name": "canRaise",
+          "type": "bool"
+        },
+        {
+          "description": "",
+          "name": "supportedUriSchemes",
+          "type": "list < string >"
+        },
+        {
+          "description": "",
+          "name": "canSetFullscreen",
+          "type": "bool"
+        },
+        {
+          "description": "",
+          "name": "shuffle",
+          "type": "bool"
+        },
+        {
+          "description": "",
+          "name": "trackArtUrl",
+          "type": "string"
+        },
+        {
+          "description": "",
+          "name": "canGoNext",
+          "type": "bool"
+        },
+        {
+          "description": "",
+          "name": "fullscreen",
+          "type": "bool"
+        },
+        {
+          "description": "",
+          "name": "canTogglePlaying",
+          "type": "bool"
+        },
+        {
+          "description": "",
+          "name": "playbackState",
+          "type": "MprisPlaybackState"
+        },
+        {
+          "description": "",
+          "name": "supportedMimeTypes",
+          "type": "list < string >"
+        },
+        {
+          "description": "",
+          "name": "identity",
+          "type": "string"
+        },
+        {
+          "description": "",
+          "name": "canQuit",
+          "type": "bool"
+        }
+      ],
+      "qualified_name": "Quickshell.Services.Mpris.MprisPlayer",
+      "title": "MprisPlayer : QtObject",
+      "url": "https://quickshell.org/docs/v0.3.0/types/Quickshell.Services.Mpris/MprisPlayer/",
+      "variants": []
+    },
+    {
+      "description": "A notification emitted by a NotificationServer.",
+      "functions": [
+        {
+          "args": " ",
+          "description": ": void",
+          "name": "dismiss"
+        },
+        {
+          "args": " ",
+          "description": ": void",
+          "name": "expire"
+        },
+        {
+          "args": " replyText ",
+          "description": ": void",
+          "name": "sendInlineReply"
+        }
+      ],
+      "import": "Quickshell.Services.Notifications",
+      "markdown_path": "pages/Quickshell.Services.Notifications/Notification.md",
+      "module": "Quickshell.Services.Notifications",
+      "name": "Notification",
+      "properties": [
+        {
+          "description": "",
+          "name": "id",
+          "type": "int"
+        },
+        {
+          "description": "",
+          "name": "desktopEntry",
+          "type": "string"
+        },
+        {
+          "description": "",
+          "name": "tracked",
+          "type": "bool"
+        },
+        {
+          "description": "",
+          "name": "body",
+          "type": "string"
+        },
+        {
+          "description": "",
+          "name": "image",
+          "type": "string"
+        },
+        {
+          "description": "",
+          "name": "expireTimeout",
+          "type": "real"
+        },
+        {
+          "description": "",
+          "name": "transient",
+          "type": "bool"
+        },
+        {
+          "description": "",
+          "name": "appName",
+          "type": "string"
+        },
+        {
+          "description": "",
+          "name": "lastGeneration",
+          "type": "bool"
+        },
+        {
+          "description": "",
+          "name": "actions",
+          "type": "list < NotificationAction >"
+        },
+        {
+          "description": "",
+          "name": "resident",
+          "type": "bool"
+        },
+        {
+          "description": "",
+          "name": "appIcon",
+          "type": "string"
+        },
+        {
+          "description": "",
+          "name": "hints",
+          "type": "unknown"
+        },
+        {
+          "description": "",
+          "name": "inlineReplyPlaceholder",
+          "type": "string"
+        },
+        {
+          "description": "",
+          "name": "hasInlineReply",
+          "type": "bool"
+        },
+        {
+          "description": "",
+          "name": "urgency",
+          "type": "NotificationUrgency"
+        },
+        {
+          "description": "",
+          "name": "hasActionIcons",
+          "type": "bool"
+        },
+        {
+          "description": "",
+          "name": "summary",
+          "type": "string"
+        }
+      ],
+      "qualified_name": "Quickshell.Services.Notifications.Notification",
+      "title": "Notification : QtObject",
+      "url": "https://quickshell.org/docs/v0.3.0/types/Quickshell.Services.Notifications/Notification/",
+      "variants": []
+    },
+    {
+      "description": "See Notification.actions .",
+      "functions": [
+        {
+          "args": " ",
+          "description": ": void",
+          "name": "invoke"
+        }
+      ],
+      "import": "Quickshell.Services.Notifications",
+      "markdown_path": "pages/Quickshell.Services.Notifications/NotificationAction.md",
+      "module": "Quickshell.Services.Notifications",
+      "name": "NotificationAction",
+      "properties": [
+        {
+          "description": "",
+          "name": "identifier",
+          "type": "string"
+        },
+        {
+          "description": "",
+          "name": "text",
+          "type": "string"
+        }
+      ],
+      "qualified_name": "Quickshell.Services.Notifications.NotificationAction",
+      "title": "NotificationAction : QtObject",
+      "url": "https://quickshell.org/docs/v0.3.0/types/Quickshell.Services.Notifications/NotificationAction/",
+      "variants": []
+    },
+    {
+      "description": "See Notification.closed() .",
+      "functions": [
+        {
+          "args": " value ",
+          "description": ": string",
+          "name": "toString"
+        }
+      ],
+      "import": "Quickshell.Services.Notifications",
+      "markdown_path": "pages/Quickshell.Services.Notifications/NotificationCloseReason.md",
+      "module": "Quickshell.Services.Notifications",
+      "name": "NotificationCloseReason",
+      "properties": [],
+      "qualified_name": "Quickshell.Services.Notifications.NotificationCloseReason",
+      "title": "NotificationCloseReason : QtObject",
+      "url": "https://quickshell.org/docs/v0.3.0/types/Quickshell.Services.Notifications/NotificationCloseReason/",
+      "variants": [
+        "Expired",
+        "Dismissed",
+        "CloseRequested",
+        "toString"
+      ]
+    },
+    {
+      "description": "An implementation of the Desktop Notifications Specification for receiving notifications from external applications.",
+      "functions": [],
+      "import": "Quickshell.Services.Notifications",
+      "markdown_path": "pages/Quickshell.Services.Notifications/NotificationServer.md",
+      "module": "Quickshell.Services.Notifications",
+      "name": "NotificationServer",
+      "properties": [
+        {
+          "description": "",
+          "name": "imageSupported",
+          "type": "bool"
+        },
+        {
+          "description": "",
+          "name": "extraHints",
+          "type": "list < string >"
+        },
+        {
+          "description": "",
+          "name": "actionsSupported",
+          "type": "bool"
+        },
+        {
+          "description": "",
+          "name": "actionIconsSupported",
+          "type": "bool"
+        },
+        {
+          "description": "",
+          "name": "bodySupported",
+          "type": "bool"
+        },
+        {
+          "description": "",
+          "name": "inlineReplySupported",
+          "type": "bool"
+        },
+        {
+          "description": "",
+          "name": "persistenceSupported",
+          "type": "bool"
+        },
+        {
+          "description": "",
+          "name": "bodyImagesSupported",
+          "type": "bool"
+        },
+        {
+          "description": "",
+          "name": "trackedNotifications",
+          "type": "ObjectModel < Notification >"
+        },
+        {
+          "description": "",
+          "name": "bodyHyperlinksSupported",
+          "type": "bool"
+        },
+        {
+          "description": "",
+          "name": "bodyMarkupSupported",
+          "type": "bool"
+        },
+        {
+          "description": "",
+          "name": "keepOnReload",
+          "type": "bool"
+        }
+      ],
+      "qualified_name": "Quickshell.Services.Notifications.NotificationServer",
+      "title": "NotificationServer : QtObject",
+      "url": "https://quickshell.org/docs/v0.3.0/types/Quickshell.Services.Notifications/NotificationServer/",
+      "variants": []
+    },
+    {
+      "description": "See Notification.urgency .",
+      "functions": [
+        {
+          "args": " value ",
+          "description": ": string",
+          "name": "toString"
+        }
+      ],
+      "import": "Quickshell.Services.Notifications",
+      "markdown_path": "pages/Quickshell.Services.Notifications/NotificationUrgency.md",
+      "module": "Quickshell.Services.Notifications",
+      "name": "NotificationUrgency",
+      "properties": [],
+      "qualified_name": "Quickshell.Services.Notifications.NotificationUrgency",
+      "title": "NotificationUrgency : QtObject",
+      "url": "https://quickshell.org/docs/v0.3.0/types/Quickshell.Services.Notifications/NotificationUrgency/",
+      "variants": [
+        "Critical",
+        "Low",
+        "Normal",
+        "toString"
+      ]
+    },
+    {
+      "description": "Connection to pam. See the module documentation for pam configuration advice.",
+      "functions": [
+        {
+          "args": " ",
+          "description": ": void",
+          "name": "abort"
+        },
+        {
+          "args": " response ",
+          "description": ": void",
+          "name": "respond"
+        },
+        {
+          "args": " ",
+          "description": ": bool",
+          "name": "start"
+        }
+      ],
+      "import": "Quickshell.Services.Pam",
+      "markdown_path": "pages/Quickshell.Services.Pam/PamContext.md",
+      "module": "Quickshell.Services.Pam",
+      "name": "PamContext",
+      "properties": [
+        {
+          "description": "",
+          "name": "config",
+          "type": "string"
+        },
+        {
+          "description": "",
+          "name": "active",
+          "type": "bool"
+        },
+        {
+          "description": "",
+          "name": "configDirectory",
+          "type": "string"
+        },
+        {
+          "description": "",
+          "name": "responseVisible",
+          "type": "bool"
+        },
+        {
+          "description": "",
+          "name": "responseRequired",
+          "type": "bool"
+        },
+        {
+          "description": "",
+          "name": "user",
+          "type": "string"
+        },
+        {
+          "description": "",
+          "name": "messageIsError",
+          "type": "bool"
+        },
+        {
+          "description": "",
+          "name": "message",
+          "type": "string"
+        }
+      ],
+      "qualified_name": "Quickshell.Services.Pam.PamContext",
+      "title": "PamContext : QtObject",
+      "url": "https://quickshell.org/docs/v0.3.0/types/Quickshell.Services.Pam/PamContext/",
+      "variants": []
+    },
+    {
+      "description": "See PamContext.error() .",
+      "functions": [
+        {
+          "args": " value ",
+          "description": ": string",
+          "name": "toString"
+        }
+      ],
+      "import": "Quickshell.Services.Pam",
+      "markdown_path": "pages/Quickshell.Services.Pam/PamError.md",
+      "module": "Quickshell.Services.Pam",
+      "name": "PamError",
+      "properties": [],
+      "qualified_name": "Quickshell.Services.Pam.PamError",
+      "title": "PamError : QtObject",
+      "url": "https://quickshell.org/docs/v0.3.0/types/Quickshell.Services.Pam/PamError/",
+      "variants": [
+        "StartFailed",
+        "TryAuthFailed",
+        "InternalError",
+        "toString"
+      ]
+    },
+    {
+      "description": "See PamContext.completed() .",
+      "functions": [
+        {
+          "args": " value ",
+          "description": ": string",
+          "name": "toString"
+        }
+      ],
+      "import": "Quickshell.Services.Pam",
+      "markdown_path": "pages/Quickshell.Services.Pam/PamResult.md",
+      "module": "Quickshell.Services.Pam",
+      "name": "PamResult",
+      "properties": [],
+      "qualified_name": "Quickshell.Services.Pam.PamResult",
+      "title": "PamResult : QtObject",
+      "url": "https://quickshell.org/docs/v0.3.0/types/Quickshell.Services.Pam/PamResult/",
+      "variants": [
+        "Failed",
+        "Error",
+        "MaxTries",
+        "Success",
+        "toString"
+      ]
+    },
+    {
+      "description": "Contains links to all pipewire objects.",
+      "functions": [],
+      "import": "Quickshell.Services.Pipewire",
+      "markdown_path": "pages/Quickshell.Services.Pipewire/Pipewire.md",
+      "module": "Quickshell.Services.Pipewire",
+      "name": "Pipewire",
+      "properties": [
+        {
+          "description": "",
+          "name": "links",
+          "type": "ObjectModel < PwLink >"
+        },
+        {
+          "description": "",
+          "name": "defaultAudioSource",
+          "type": "PwNode"
+        },
+        {
+          "description": "",
+          "name": "nodes",
+          "type": "ObjectModel < PwNode >"
+        },
+        {
+          "description": "",
+          "name": "ready",
+          "type": "bool"
+        },
+        {
+          "description": "",
+          "name": "preferredDefaultAudioSource",
+          "type": "PwNode"
+        },
+        {
+          "description": "",
+          "name": "preferredDefaultAudioSink",
+          "type": "PwNode"
+        },
+        {
+          "description": "",
+          "name": "linkGroups",
+          "type": "ObjectModel < PwLinkGroup >"
+        },
+        {
+          "description": "",
+          "name": "defaultAudioSink",
+          "type": "PwNode"
+        }
+      ],
+      "qualified_name": "Quickshell.Services.Pipewire",
+      "title": "Pipewire : QtObject",
+      "url": "https://quickshell.org/docs/v0.3.0/types/Quickshell.Services.Pipewire/Pipewire/",
+      "variants": []
+    },
+    {
+      "description": "See PwNodeAudio.channels .",
+      "functions": [
+        {
+          "args": " value ",
+          "description": ": string",
+          "name": "toString"
+        }
+      ],
+      "import": "Quickshell.Services.Pipewire",
+      "markdown_path": "pages/Quickshell.Services.Pipewire/PwAudioChannel.md",
+      "module": "Quickshell.Services.Pipewire",
+      "name": "PwAudioChannel",
+      "properties": [],
+      "qualified_name": "Quickshell.Services.Pipewire.PwAudioChannel",
+      "title": "PwAudioChannel : QtObject",
+      "url": "https://quickshell.org/docs/v0.3.0/types/Quickshell.Services.Pipewire/PwAudioChannel/",
+      "variants": [
+        "RearLeftCenter",
+        "TopSideRight",
+        "TopSideLeft",
+        "LowFrequencyEffects",
+        "LowFrequencyEffectsLeft",
+        "TopFrontRight",
+        "BottomRightCenter",
+        "SideRight",
+        "TopRearCenter",
+        "NA",
+        "FrontRightCenter",
+        "TopFrontCenter",
+        "TopFrontLeft",
+        "RearLeft",
+        "FrontLeftWide",
+        "TopFrontLeftCenter",
+        "RearRightCenter",
+        "FrontRight",
+        "TopFrontRightCenter",
+        "FrontLeftHigh",
+        "FrontRightHigh",
+        "FrontRightWide",
+        "FrontCenterHigh",
+        "RearRight",
+        "Mono",
+        "SideLeft",
+        "TopCenter",
+        "Unknown",
+        "LowFrequencyEffects2",
+        "BottomCenter",
+        "AuxRangeStart",
+        "LowFrequencyEffectsRight",
+        "FrontLeftCenter",
+        "RearCenter",
+        "BottomLeftCenter",
+        "CustomRangeStart",
+        "AuxRangeEnd",
+        "FrontCenter",
+        "FrontLeft",
+        "TopRearRight",
+        "TopRearLeft",
+        "toString"
+      ]
+    },
+    {
+      "description": "Note that there is one link per channel of a connection between nodes. You usually want PwLinkGroup .",
+      "functions": [],
+      "import": "Quickshell.Services.Pipewire",
+      "markdown_path": "pages/Quickshell.Services.Pipewire/PwLink.md",
+      "module": "Quickshell.Services.Pipewire",
+      "name": "PwLink",
+      "properties": [
+        {
+          "description": "",
+          "name": "target",
+          "type": "PwNode"
+        },
+        {
+          "description": "",
+          "name": "id",
+          "type": "int"
+        },
+        {
+          "description": "",
+          "name": "state",
+          "type": "PwLinkState"
+        },
+        {
+          "description": "",
+          "name": "source",
+          "type": "PwNode"
+        }
+      ],
+      "qualified_name": "Quickshell.Services.Pipewire.PwLink",
+      "title": "PwLink : QtObject",
+      "url": "https://quickshell.org/docs/v0.3.0/types/Quickshell.Services.Pipewire/PwLink/",
+      "variants": []
+    },
+    {
+      "description": "A group of connections between pipewire nodes, one per source->target pair.",
+      "functions": [],
+      "import": "Quickshell.Services.Pipewire",
+      "markdown_path": "pages/Quickshell.Services.Pipewire/PwLinkGroup.md",
+      "module": "Quickshell.Services.Pipewire",
+      "name": "PwLinkGroup",
+      "properties": [
+        {
+          "description": "",
+          "name": "target",
+          "type": "PwNode"
+        },
+        {
+          "description": "",
+          "name": "state",
+          "type": "PwLinkState"
+        },
+        {
+          "description": "",
+          "name": "source",
+          "type": "PwNode"
+        }
+      ],
+      "qualified_name": "Quickshell.Services.Pipewire.PwLinkGroup",
+      "title": "PwLinkGroup : QtObject",
+      "url": "https://quickshell.org/docs/v0.3.0/types/Quickshell.Services.Pipewire/PwLinkGroup/",
+      "variants": []
+    },
+    {
+      "description": "See PwLink.state .",
+      "functions": [
+        {
+          "args": " value ",
+          "description": ": string",
+          "name": "toString"
+        }
+      ],
+      "import": "Quickshell.Services.Pipewire",
+      "markdown_path": "pages/Quickshell.Services.Pipewire/PwLinkState.md",
+      "module": "Quickshell.Services.Pipewire",
+      "name": "PwLinkState",
+      "properties": [],
+      "qualified_name": "Quickshell.Services.Pipewire.PwLinkState",
+      "title": "PwLinkState : QtObject",
+      "url": "https://quickshell.org/docs/v0.3.0/types/Quickshell.Services.Pipewire/PwLinkState/",
+      "variants": [
+        "Error",
+        "Unlinked",
+        "Negotiating",
+        "Init",
+        "Allocating",
+        "Paused",
+        "Active",
+        "toString"
+      ]
+    },
+    {
+      "description": "A node in the pipewire connection graph.",
+      "functions": [],
+      "import": "Quickshell.Services.Pipewire",
+      "markdown_path": "pages/Quickshell.Services.Pipewire/PwNode.md",
+      "module": "Quickshell.Services.Pipewire",
+      "name": "PwNode",
+      "properties": [
+        {
+          "description": "",
+          "name": "type",
+          "type": "unknown"
+        },
+        {
+          "description": "",
+          "name": "audio",
+          "type": "PwNodeAudio"
+        },
+        {
+          "description": "",
+          "name": "isSink",
+          "type": "bool"
+        },
+        {
+          "description": "",
+          "name": "isStream",
+          "type": "bool"
+        },
+        {
+          "description": "",
+          "name": "name",
+          "type": "string"
+        },
+        {
+          "description": "",
+          "name": "id",
+          "type": "int"
+        },
+        {
+          "description": "",
+          "name": "ready",
+          "type": "bool"
+        },
+        {
+          "description": "",
+          "name": "nickname",
+          "type": "string"
+        },
+        {
+          "description": "",
+          "name": "properties",
+          "type": "unknown"
+        },
+        {
+          "description": "",
+          "name": "description",
+          "type": "string"
+        }
+      ],
+      "qualified_name": "Quickshell.Services.Pipewire.PwNode",
+      "title": "PwNode : QtObject",
+      "url": "https://quickshell.org/docs/v0.3.0/types/Quickshell.Services.Pipewire/PwNode/",
+      "variants": []
+    },
+    {
+      "description": "Extra properties of a PwNode if the node is an audio node.",
+      "functions": [],
+      "import": "Quickshell.Services.Pipewire",
+      "markdown_path": "pages/Quickshell.Services.Pipewire/PwNodeAudio.md",
+      "module": "Quickshell.Services.Pipewire",
+      "name": "PwNodeAudio",
+      "properties": [
+        {
+          "description": "",
+          "name": "channels",
+          "type": "list < PwAudioChannel >"
+        },
+        {
+          "description": "",
+          "name": "muted",
+          "type": "bool"
+        },
+        {
+          "description": "",
+          "name": "volumes",
+          "type": "list < real >"
+        },
+        {
+          "description": "",
+          "name": "volume",
+          "type": "real"
+        }
+      ],
+      "qualified_name": "Quickshell.Services.Pipewire.PwNodeAudio",
+      "title": "PwNodeAudio : QtObject",
+      "url": "https://quickshell.org/docs/v0.3.0/types/Quickshell.Services.Pipewire/PwNodeAudio/",
+      "variants": []
+    },
+    {
+      "description": "Tracks non-monitor link connections to a given node.",
+      "functions": [],
+      "import": "Quickshell.Services.Pipewire",
+      "markdown_path": "pages/Quickshell.Services.Pipewire/PwNodeLinkTracker.md",
+      "module": "Quickshell.Services.Pipewire",
+      "name": "PwNodeLinkTracker",
+      "properties": [
+        {
+          "description": "",
+          "name": "node",
+          "type": "PwNode"
+        },
+        {
+          "description": "",
+          "name": "linkGroups",
+          "type": "list < PwLinkGroup >"
+        }
+      ],
+      "qualified_name": "Quickshell.Services.Pipewire.PwNodeLinkTracker",
+      "title": "PwNodeLinkTracker : QtObject",
+      "url": "https://quickshell.org/docs/v0.3.0/types/Quickshell.Services.Pipewire/PwNodeLinkTracker/",
+      "variants": []
+    },
+    {
+      "description": "Tracks volume peaks for a node across all its channels.",
+      "functions": [],
+      "import": "Quickshell.Services.Pipewire",
+      "markdown_path": "pages/Quickshell.Services.Pipewire/PwNodePeakMonitor.md",
+      "module": "Quickshell.Services.Pipewire",
+      "name": "PwNodePeakMonitor",
+      "properties": [
+        {
+          "description": "",
+          "name": "peak",
+          "type": "real"
+        },
+        {
+          "description": "",
+          "name": "node",
+          "type": "PwNode"
+        },
+        {
+          "description": "",
+          "name": "enabled",
+          "type": "bool"
+        },
+        {
+          "description": "",
+          "name": "channels",
+          "type": "list < PwAudioChannel >"
+        },
+        {
+          "description": "",
+          "name": "peaks",
+          "type": "list < real >"
+        }
+      ],
+      "qualified_name": "Quickshell.Services.Pipewire.PwNodePeakMonitor",
+      "title": "PwNodePeakMonitor : QtObject",
+      "url": "https://quickshell.org/docs/v0.3.0/types/Quickshell.Services.Pipewire/PwNodePeakMonitor/",
+      "variants": []
+    },
+    {
+      "description": "Use bitwise comparisons to filter for audio, video, sink, source or stream nodes",
+      "functions": [
+        {
+          "args": " type ",
+          "description": ": string",
+          "name": "toString"
+        }
+      ],
+      "import": "Quickshell.Services.Pipewire",
+      "markdown_path": "pages/Quickshell.Services.Pipewire/PwNodeType.md",
+      "module": "Quickshell.Services.Pipewire",
+      "name": "PwNodeType",
+      "properties": [],
+      "qualified_name": "Quickshell.Services.Pipewire.PwNodeType",
+      "title": "PwNodeType : QtObject",
+      "url": "https://quickshell.org/docs/v0.3.0/types/Quickshell.Services.Pipewire/PwNodeType/",
+      "variants": []
+    },
+    {
+      "description": "PwObjectTracker binds every node given in its objects list.",
+      "functions": [],
+      "import": "Quickshell.Services.Pipewire",
+      "markdown_path": "pages/Quickshell.Services.Pipewire/PwObjectTracker.md",
+      "module": "Quickshell.Services.Pipewire",
+      "name": "PwObjectTracker",
+      "properties": [
+        {
+          "description": "",
+          "name": "objects",
+          "type": "list < QtObject >"
+        }
+      ],
+      "qualified_name": "Quickshell.Services.Pipewire.PwObjectTracker",
+      "title": "PwObjectTracker : QtObject",
+      "url": "https://quickshell.org/docs/v0.3.0/types/Quickshell.Services.Pipewire/PwObjectTracker/",
+      "variants": []
+    },
+    {
+      "description": "readonly",
+      "functions": [
+        {
+          "args": " ",
+          "description": ": void",
+          "name": "cancelAuthenticationRequest"
+        },
+        {
+          "args": " value ",
+          "description": ": void",
+          "name": "submit"
+        }
+      ],
+      "import": "Quickshell.Services.Polkit",
+      "markdown_path": "pages/Quickshell.Services.Polkit/AuthFlow.md",
+      "module": "Quickshell.Services.Polkit",
+      "name": "AuthFlow",
+      "properties": [
+        {
+          "description": "",
+          "name": "isCancelled",
+          "type": "bool"
+        },
+        {
+          "description": "",
+          "name": "isResponseRequired",
+          "type": "bool"
+        },
+        {
+          "description": "",
+          "name": "cookie",
+          "type": "string"
+        },
+        {
+          "description": "",
+          "name": "iconName",
+          "type": "string"
+        },
+        {
+          "description": "",
+          "name": "responseVisible",
+          "type": "bool"
+        },
+        {
+          "description": "",
+          "name": "isCompleted",
+          "type": "bool"
+        },
+        {
+          "description": "",
+          "name": "inputPrompt",
+          "type": "string"
+        },
+        {
+          "description": "",
+          "name": "isSuccessful",
+          "type": "bool"
+        },
+        {
+          "description": "",
+          "name": "actionId",
+          "type": "string"
+        },
+        {
+          "description": "",
+          "name": "supplementaryMessage",
+          "type": "string"
+        },
+        {
+          "description": "",
+          "name": "message",
+          "type": "string"
+        },
+        {
+          "description": "",
+          "name": "failed",
+          "type": "bool"
+        },
+        {
+          "description": "",
+          "name": "identities",
+          "type": "list"
+        },
+        {
+          "description": "",
+          "name": "selectedIdentity",
+          "type": "unknown"
+        },
+        {
+          "description": "",
+          "name": "supplementaryIsError",
+          "type": "bool"
+        }
+      ],
+      "qualified_name": "Quickshell.Services.Polkit.AuthFlow",
+      "title": "AuthFlow : QtObject",
+      "url": "https://quickshell.org/docs/v0.3.0/types/Quickshell.Services.Polkit/AuthFlow/",
+      "variants": []
+    },
+    {
+      "description": "readonly",
+      "functions": [],
+      "import": "Quickshell.Services.Polkit",
+      "markdown_path": "pages/Quickshell.Services.Polkit/PolkitAgent.md",
+      "module": "Quickshell.Services.Polkit",
+      "name": "PolkitAgent",
+      "properties": [
+        {
+          "description": "",
+          "name": "isRegistered",
+          "type": "bool"
+        },
+        {
+          "description": "",
+          "name": "path",
+          "type": "string"
+        },
+        {
+          "description": "",
+          "name": "flow",
+          "type": "AuthFlow"
+        },
+        {
+          "description": "",
+          "name": "isActive",
+          "type": "bool"
+        }
+      ],
+      "qualified_name": "Quickshell.Services.Polkit.PolkitAgent",
+      "title": "PolkitAgent : QtObject",
+      "url": "https://quickshell.org/docs/v0.3.0/types/Quickshell.Services.Polkit/PolkitAgent/",
+      "variants": []
+    },
+    {
+      "description": "See StatusNotifierItem.category .",
+      "functions": [],
+      "import": "Quickshell.Services.SystemTray",
+      "markdown_path": "pages/Quickshell.Services.SystemTray/Category.md",
+      "module": "Quickshell.Services.SystemTray",
+      "name": "Category",
+      "properties": [],
+      "qualified_name": "Quickshell.Services.SystemTray.Category",
+      "title": "Category : Category",
+      "url": "https://quickshell.org/docs/v0.3.0/types/Quickshell.Services.SystemTray/Category/",
+      "variants": [
+        "SystemServices",
+        "ApplicationStatus",
+        "Communications",
+        "Hardware"
+      ]
+    },
+    {
+      "description": "See StatusNotifierItem.status .",
+      "functions": [],
+      "import": "Quickshell.Services.SystemTray",
+      "markdown_path": "pages/Quickshell.Services.SystemTray/Status.md",
+      "module": "Quickshell.Services.SystemTray",
+      "name": "Status",
+      "properties": [],
+      "qualified_name": "Quickshell.Services.SystemTray.Status",
+      "title": "Status : Status",
+      "url": "https://quickshell.org/docs/v0.3.0/types/Quickshell.Services.SystemTray/Status/",
+      "variants": [
+        "Passive",
+        "Active",
+        "NeedsAttention"
+      ]
+    },
+    {
+      "description": "Referencing the SystemTray singleton will make quickshell start tracking system tray contents, which are updated as the tray changes, and can be accessed via the items property.",
+      "functions": [],
+      "import": "Quickshell.Services.SystemTray",
+      "markdown_path": "pages/Quickshell.Services.SystemTray/SystemTray.md",
+      "module": "Quickshell.Services.SystemTray",
+      "name": "SystemTray",
+      "properties": [
+        {
+          "description": "",
+          "name": "items",
+          "type": "ObjectModel < SystemTrayItem >"
+        }
+      ],
+      "qualified_name": "Quickshell.Services.SystemTray",
+      "title": "SystemTray : QtObject",
+      "url": "https://quickshell.org/docs/v0.3.0/types/Quickshell.Services.SystemTray/SystemTray/",
+      "variants": []
+    },
+    {
+      "description": "A system tray item, roughly conforming to the kde/freedesktop spec (there is no real spec, we just implemented whatever seemed to actually be used).",
+      "functions": [
+        {
+          "args": " ",
+          "description": ": void",
+          "name": "activate"
+        },
+        {
+          "args": " parentWindow, relativeX, relativeY ",
+          "description": ": void",
+          "name": "display"
+        },
+        {
+          "args": " delta, horizontal ",
+          "description": ": void",
+          "name": "scroll"
+        },
+        {
+          "args": " ",
+          "description": ": void",
+          "name": "secondaryActivate"
+        }
+      ],
+      "import": "Quickshell.Services.SystemTray",
+      "markdown_path": "pages/Quickshell.Services.SystemTray/SystemTrayItem.md",
+      "module": "Quickshell.Services.SystemTray",
+      "name": "SystemTrayItem",
+      "properties": [
+        {
+          "description": "",
+          "name": "status",
+          "type": "Status"
+        },
+        {
+          "description": "",
+          "name": "tooltipDescription",
+          "type": "string"
+        },
+        {
+          "description": "",
+          "name": "title",
+          "type": "string"
+        },
+        {
+          "description": "",
+          "name": "category",
+          "type": "Category"
+        },
+        {
+          "description": "",
+          "name": "tooltipTitle",
+          "type": "string"
+        },
+        {
+          "description": "",
+          "name": "icon",
+          "type": "string"
+        },
+        {
+          "description": "",
+          "name": "hasMenu",
+          "type": "bool"
+        },
+        {
+          "description": "",
+          "name": "onlyMenu",
+          "type": "bool"
+        },
+        {
+          "description": "",
+          "name": "menu",
+          "type": "unknown"
+        },
+        {
+          "description": "",
+          "name": "id",
+          "type": "string"
+        }
+      ],
+      "qualified_name": "Quickshell.Services.SystemTray.SystemTrayItem",
+      "title": "SystemTrayItem : QtObject",
+      "url": "https://quickshell.org/docs/v0.3.0/types/Quickshell.Services.SystemTray/SystemTrayItem/",
+      "variants": []
+    },
+    {
+      "description": "See PowerProfiles.degradationReason for more information.",
+      "functions": [
+        {
+          "args": " reason ",
+          "description": ": string",
+          "name": "toString"
+        }
+      ],
+      "import": "Quickshell.Services.UPower",
+      "markdown_path": "pages/Quickshell.Services.UPower/PerformanceDegradationReason.md",
+      "module": "Quickshell.Services.UPower",
+      "name": "PerformanceDegradationReason",
+      "properties": [],
+      "qualified_name": "Quickshell.Services.UPower.PerformanceDegradationReason",
+      "title": "PerformanceDegradationReason : QtObject",
+      "url": "https://quickshell.org/docs/v0.3.0/types/Quickshell.Services.UPower/PerformanceDegradationReason/",
+      "variants": [
+        "None",
+        "LapDetected",
+        "HighTemperature",
+        "toString"
+      ]
+    },
+    {
+      "description": "See PowerProfiles .",
+      "functions": [
+        {
+          "args": " profile ",
+          "description": ": string",
+          "name": "toString"
+        }
+      ],
+      "import": "Quickshell.Services.UPower",
+      "markdown_path": "pages/Quickshell.Services.UPower/PowerProfile.md",
+      "module": "Quickshell.Services.UPower",
+      "name": "PowerProfile",
+      "properties": [],
+      "qualified_name": "Quickshell.Services.UPower.PowerProfile",
+      "title": "PowerProfile : QtObject",
+      "url": "https://quickshell.org/docs/v0.3.0/types/Quickshell.Services.UPower/PowerProfile/",
+      "variants": [
+        "Performance",
+        "Balanced",
+        "PowerSaver",
+        "toString"
+      ]
+    },
+    {
+      "description": "An interface to the UPower power profiles daemon , which can be used to view and manage power profiles.",
+      "functions": [],
+      "import": "Quickshell.Services.UPower",
+      "markdown_path": "pages/Quickshell.Services.UPower/PowerProfiles.md",
+      "module": "Quickshell.Services.UPower",
+      "name": "PowerProfiles",
+      "properties": [
+        {
+          "description": "",
+          "name": "hasPerformanceProfile",
+          "type": "bool"
+        },
+        {
+          "description": "",
+          "name": "degradationReason",
+          "type": "PerformanceDegradationReason"
+        },
+        {
+          "description": "",
+          "name": "holds",
+          "type": "list"
+        },
+        {
+          "description": "",
+          "name": "profile",
+          "type": "PowerProfile"
+        }
+      ],
+      "qualified_name": "Quickshell.Services.UPower.PowerProfiles",
+      "title": "PowerProfiles : QtObject",
+      "url": "https://quickshell.org/docs/v0.3.0/types/Quickshell.Services.UPower/PowerProfiles/",
+      "variants": []
+    },
+    {
+      "description": "An interface to the UPower daemon , which can be used to view battery and power statistics for your computer and connected devices.",
+      "functions": [],
+      "import": "Quickshell.Services.UPower",
+      "markdown_path": "pages/Quickshell.Services.UPower/UPower.md",
+      "module": "Quickshell.Services.UPower",
+      "name": "UPower",
+      "properties": [
+        {
+          "description": "",
+          "name": "devices",
+          "type": "ObjectModel < UPowerDevice >"
+        },
+        {
+          "description": "",
+          "name": "displayDevice",
+          "type": "UPowerDevice"
+        },
+        {
+          "description": "",
+          "name": "onBattery",
+          "type": "bool"
+        }
+      ],
+      "qualified_name": "Quickshell.Services.UPower",
+      "title": "UPower : QtObject",
+      "url": "https://quickshell.org/docs/v0.3.0/types/Quickshell.Services.UPower/UPower/",
+      "variants": []
+    },
+    {
+      "description": "A device exposed through the UPower system service.",
+      "functions": [],
+      "import": "Quickshell.Services.UPower",
+      "markdown_path": "pages/Quickshell.Services.UPower/UPowerDevice.md",
+      "module": "Quickshell.Services.UPower",
+      "name": "UPowerDevice",
+      "properties": [
+        {
+          "description": "",
+          "name": "isLaptopBattery",
+          "type": "bool"
+        },
+        {
+          "description": "",
+          "name": "ready",
+          "type": "bool"
+        },
+        {
+          "description": "",
+          "name": "timeToEmpty",
+          "type": "real"
+        },
+        {
+          "description": "",
+          "name": "nativePath",
+          "type": "string"
+        },
+        {
+          "description": "",
+          "name": "type",
+          "type": "DeviceType"
+        },
+        {
+          "description": "",
+          "name": "powerSupply",
+          "type": "bool"
+        },
+        {
+          "description": "",
+          "name": "healthSupported",
+          "type": "bool"
+        },
+        {
+          "description": "",
+          "name": "timeToFull",
+          "type": "real"
+        },
+        {
+          "description": "",
+          "name": "energyCapacity",
+          "type": "real"
+        },
+        {
+          "description": "",
+          "name": "state",
+          "type": "UPowerDeviceState"
+        },
+        {
+          "description": "",
+          "name": "iconName",
+          "type": "string"
+        },
+        {
+          "description": "",
+          "name": "model",
+          "type": "string"
+        },
+        {
+          "description": "",
+          "name": "isPresent",
+          "type": "bool"
+        },
+        {
+          "description": "",
+          "name": "percentage",
+          "type": "real"
+        },
+        {
+          "description": "",
+          "name": "energy",
+          "type": "real"
+        },
+        {
+          "description": "",
+          "name": "changeRate",
+          "type": "real"
+        },
+        {
+          "description": "",
+          "name": "healthPercentage",
+          "type": "real"
+        }
+      ],
+      "qualified_name": "Quickshell.Services.UPower.UPowerDevice",
+      "title": "UPowerDevice : QtObject",
+      "url": "https://quickshell.org/docs/v0.3.0/types/Quickshell.Services.UPower/UPowerDevice/",
+      "variants": []
+    },
+    {
+      "description": "See UPowerDevice.state .",
+      "functions": [
+        {
+          "args": " status ",
+          "description": ": string",
+          "name": "toString"
+        }
+      ],
+      "import": "Quickshell.Services.UPower",
+      "markdown_path": "pages/Quickshell.Services.UPower/UPowerDeviceState.md",
+      "module": "Quickshell.Services.UPower",
+      "name": "UPowerDeviceState",
+      "properties": [],
+      "qualified_name": "Quickshell.Services.UPower.UPowerDeviceState",
+      "title": "UPowerDeviceState : QtObject",
+      "url": "https://quickshell.org/docs/v0.3.0/types/Quickshell.Services.UPower/UPowerDeviceState/",
+      "variants": [
+        "FullyCharged",
+        "PendingCharge",
+        "Discharging",
+        "PendingDischarge",
+        "Unknown",
+        "Charging",
+        "Empty",
+        "toString"
+      ]
+    },
+    {
+      "description": "See UPowerDevice.type .",
+      "functions": [
+        {
+          "args": " type ",
+          "description": ": string",
+          "name": "toString"
+        }
+      ],
+      "import": "Quickshell.Services.UPower",
+      "markdown_path": "pages/Quickshell.Services.UPower/UPowerDeviceType.md",
+      "module": "Quickshell.Services.UPower",
+      "name": "UPowerDeviceType",
+      "properties": [],
+      "qualified_name": "Quickshell.Services.UPower.UPowerDeviceType",
+      "title": "UPowerDeviceType : QtObject",
+      "url": "https://quickshell.org/docs/v0.3.0/types/Quickshell.Services.UPower/UPowerDeviceType/",
+      "variants": [
+        "OtherAudio",
+        "GamingInput",
+        "Pen",
+        "Headphones",
+        "RemoteControl",
+        "Pda",
+        "Video",
+        "Printer",
+        "Network",
+        "Keyboard",
+        "Ups",
+        "Monitor",
+        "Camera",
+        "Tablet",
+        "Computer",
+        "MediaPlayer",
+        "Wearable",
+        "BluetoothGeneric",
+        "Unknown",
+        "Mouse",
+        "Scanner",
+        "Touchpad",
+        "Toy",
+        "Speakers",
+        "LinePower",
+        "Phone",
+        "Modem",
+        "Battery",
+        "Headset",
+        "toString"
+      ]
+    },
+    {
+      "description": "Applies background blur behind a QsWindow or subclass, as an attached object, using the ext-background-effect-v1 Wayland protocol.",
+      "functions": [],
+      "import": "Quickshell.Wayland",
+      "markdown_path": "pages/Quickshell.Wayland/BackgroundEffect.md",
+      "module": "Quickshell.Wayland",
+      "name": "BackgroundEffect",
+      "properties": [
+        {
+          "description": "",
+          "name": "blurRegion",
+          "type": "Region"
+        }
+      ],
+      "qualified_name": "Quickshell.Wayland.BackgroundEffect",
+      "title": "BackgroundEffect : QtObject",
+      "url": "https://quickshell.org/docs/v0.3.0/types/Quickshell.Wayland/BackgroundEffect/",
+      "variants": []
+    },
+    {
+      "description": "If an idle daemon is running, it may perform actions such as locking the screen or putting the computer to sleep.",
+      "functions": [],
+      "import": "Quickshell.Wayland",
+      "markdown_path": "pages/Quickshell.Wayland/IdleInhibitor.md",
+      "module": "Quickshell.Wayland",
+      "name": "IdleInhibitor",
+      "properties": [
+        {
+          "description": "",
+          "name": "window",
+          "type": "QtObject"
+        },
+        {
+          "description": "",
+          "name": "enabled",
+          "type": "bool"
+        }
+      ],
+      "qualified_name": "Quickshell.Wayland.IdleInhibitor",
+      "title": "IdleInhibitor : QtObject",
+      "url": "https://quickshell.org/docs/v0.3.0/types/Quickshell.Wayland/IdleInhibitor/",
+      "variants": []
+    },
+    {
+      "description": "An idle monitor detects when the user stops providing input for a period of time.",
+      "functions": [],
+      "import": "Quickshell.Wayland",
+      "markdown_path": "pages/Quickshell.Wayland/IdleMonitor.md",
+      "module": "Quickshell.Wayland",
+      "name": "IdleMonitor",
+      "properties": [
+        {
+          "description": "",
+          "name": "respectInhibitors",
+          "type": "bool"
+        },
+        {
+          "description": "",
+          "name": "timeout",
+          "type": "real"
+        },
+        {
+          "description": "",
+          "name": "isIdle",
+          "type": "bool"
+        },
+        {
+          "description": "",
+          "name": "enabled",
+          "type": "bool"
+        }
+      ],
+      "qualified_name": "Quickshell.Wayland.IdleMonitor",
+      "title": "IdleMonitor : QtObject",
+      "url": "https://quickshell.org/docs/v0.3.0/types/Quickshell.Wayland/IdleMonitor/",
+      "variants": []
+    },
+    {
+      "description": "ScreencopyView displays live video streams or single captured frames from valid capture sources. See captureSource for details on which objects are accepted.",
+      "functions": [
+        {
+          "args": " ",
+          "description": ": void",
+          "name": "captureFrame"
+        }
+      ],
+      "import": "Quickshell.Wayland",
+      "markdown_path": "pages/Quickshell.Wayland/ScreencopyView.md",
+      "module": "Quickshell.Wayland",
+      "name": "ScreencopyView",
+      "properties": [
+        {
+          "description": "",
+          "name": "captureSource",
+          "type": "QtObject"
+        },
+        {
+          "description": "",
+          "name": "hasContent",
+          "type": "bool"
+        },
+        {
+          "description": "",
+          "name": "live",
+          "type": "bool"
+        },
+        {
+          "description": "",
+          "name": "constraintSize",
+          "type": "unknown"
+        },
+        {
+          "description": "",
+          "name": "paintCursor",
+          "type": "bool"
+        },
+        {
+          "description": "",
+          "name": "sourceSize",
+          "type": "size"
+        }
+      ],
+      "qualified_name": "Quickshell.Wayland.ScreencopyView",
+      "title": "ScreencopyView : Item",
+      "url": "https://quickshell.org/docs/v0.3.0/types/Quickshell.Wayland/ScreencopyView/",
+      "variants": []
+    },
+    {
+      "description": "A shortcuts inhibitor prevents the compositor from processing its own keyboard shortcuts for the focused surface. This allows applications to receive key events for shortcuts that would normally be handled by the compositor.",
+      "functions": [],
+      "import": "Quickshell.Wayland",
+      "markdown_path": "pages/Quickshell.Wayland/ShortcutInhibitor.md",
+      "module": "Quickshell.Wayland",
+      "name": "ShortcutInhibitor",
+      "properties": [
+        {
+          "description": "",
+          "name": "window",
+          "type": "QtObject"
+        },
+        {
+          "description": "",
+          "name": "active",
+          "type": "bool"
+        },
+        {
+          "description": "",
+          "name": "enabled",
+          "type": "bool"
+        }
+      ],
+      "qualified_name": "Quickshell.Wayland.ShortcutInhibitor",
+      "title": "ShortcutInhibitor : QtObject",
+      "url": "https://quickshell.org/docs/v0.3.0/types/Quickshell.Wayland/ShortcutInhibitor/",
+      "variants": []
+    },
+    {
+      "description": "A window/toplevel from another application, retrievable from the ToplevelManager .",
+      "functions": [
+        {
+          "args": " ",
+          "description": ": void",
+          "name": "activate"
+        },
+        {
+          "args": " ",
+          "description": ": void",
+          "name": "close"
+        },
+        {
+          "args": " screen ",
+          "description": ": void",
+          "name": "fullscreenOn"
+        },
+        {
+          "args": " window, rect ",
+          "description": ": void",
+          "name": "setRectangle"
+        },
+        {
+          "args": " ",
+          "description": ": void",
+          "name": "unsetRectangle"
+        }
+      ],
+      "import": "Quickshell.Wayland",
+      "markdown_path": "pages/Quickshell.Wayland/Toplevel.md",
+      "module": "Quickshell.Wayland",
+      "name": "Toplevel",
+      "properties": [
+        {
+          "description": "",
+          "name": "maximized",
+          "type": "bool"
+        },
+        {
+          "description": "",
+          "name": "minimized",
+          "type": "bool"
+        },
+        {
+          "description": "",
+          "name": "appId",
+          "type": "string"
+        },
+        {
+          "description": "",
+          "name": "fullscreen",
+          "type": "bool"
+        },
+        {
+          "description": "",
+          "name": "activated",
+          "type": "bool"
+        },
+        {
+          "description": "",
+          "name": "title",
+          "type": "string"
+        },
+        {
+          "description": "",
+          "name": "parent",
+          "type": "Toplevel"
+        },
+        {
+          "description": "",
+          "name": "screens",
+          "type": "list < ShellScreen >"
+        }
+      ],
+      "qualified_name": "Quickshell.Wayland.Toplevel",
+      "title": "Toplevel : QtObject",
+      "url": "https://quickshell.org/docs/v0.3.0/types/Quickshell.Wayland/Toplevel/",
+      "variants": []
+    },
+    {
+      "description": "Exposes a list of windows from other applications as Toplevel s via the zwlr-foreign-toplevel-management-v1 wayland protocol.",
+      "functions": [],
+      "import": "Quickshell.Wayland",
+      "markdown_path": "pages/Quickshell.Wayland/ToplevelManager.md",
+      "module": "Quickshell.Wayland",
+      "name": "ToplevelManager",
+      "properties": [
+        {
+          "description": "",
+          "name": "activeToplevel",
+          "type": "Toplevel"
+        },
+        {
+          "description": "",
+          "name": "toplevels",
+          "type": "ObjectModel < Toplevel >"
+        }
+      ],
+      "qualified_name": "Quickshell.Wayland.ToplevelManager",
+      "title": "ToplevelManager : QtObject",
+      "url": "https://quickshell.org/docs/v0.3.0/types/Quickshell.Wayland/ToplevelManager/",
+      "variants": []
+    },
+    {
+      "description": "Wayland session lock implemented using the ext_session_lock_v1 protocol.",
+      "functions": [],
+      "import": "Quickshell.Wayland",
+      "markdown_path": "pages/Quickshell.Wayland/WlSessionLock.md",
+      "module": "Quickshell.Wayland",
+      "name": "WlSessionLock",
+      "properties": [
+        {
+          "description": "",
+          "name": "surface",
+          "type": "Component"
+        },
+        {
+          "description": "",
+          "name": "locked",
+          "type": "bool"
+        },
+        {
+          "description": "",
+          "name": "secure",
+          "type": "bool"
+        }
+      ],
+      "qualified_name": "Quickshell.Wayland.WlSessionLock",
+      "title": "WlSessionLock : Reloadable",
+      "url": "https://quickshell.org/docs/v0.3.0/types/Quickshell.Wayland/WlSessionLock/",
+      "variants": []
+    },
+    {
+      "description": "Surface displayed by a WlSessionLock when it is locked.",
+      "functions": [],
+      "import": "Quickshell.Wayland",
+      "markdown_path": "pages/Quickshell.Wayland/WlSessionLockSurface.md",
+      "module": "Quickshell.Wayland",
+      "name": "WlSessionLockSurface",
+      "properties": [
+        {
+          "description": "",
+          "name": "visible",
+          "type": "bool"
+        },
+        {
+          "description": "",
+          "name": "color",
+          "type": "color"
+        },
+        {
+          "description": "",
+          "name": "height",
+          "type": "int"
+        },
+        {
+          "description": "",
+          "name": "data",
+          "type": "list < QtObject >"
+        },
+        {
+          "description": "",
+          "name": "contentItem",
+          "type": "Item"
+        },
+        {
+          "description": "",
+          "name": "screen",
+          "type": "ShellScreen"
+        },
+        {
+          "description": "",
+          "name": "width",
+          "type": "int"
+        }
+      ],
+      "qualified_name": "Quickshell.Wayland.WlSessionLockSurface",
+      "title": "WlSessionLockSurface : Reloadable",
+      "url": "https://quickshell.org/docs/v0.3.0/types/Quickshell.Wayland/WlSessionLockSurface/",
+      "variants": []
+    },
+    {
+      "description": "See WlrLayershell.keyboardFocus .",
+      "functions": [],
+      "import": "Quickshell.Wayland",
+      "markdown_path": "pages/Quickshell.Wayland/WlrKeyboardFocus.md",
+      "module": "Quickshell.Wayland",
+      "name": "WlrKeyboardFocus",
+      "properties": [],
+      "qualified_name": "Quickshell.Wayland.WlrKeyboardFocus",
+      "title": "WlrKeyboardFocus : WlrKeyboardFocus",
+      "url": "https://quickshell.org/docs/v0.3.0/types/Quickshell.Wayland/WlrKeyboardFocus/",
+      "variants": [
+        "Exclusive",
+        "OnDemand",
+        "None"
+      ]
+    },
+    {
+      "description": "See WlrLayershell.layer .",
+      "functions": [],
+      "import": "Quickshell.Wayland",
+      "markdown_path": "pages/Quickshell.Wayland/WlrLayer.md",
+      "module": "Quickshell.Wayland",
+      "name": "WlrLayer",
+      "properties": [],
+      "qualified_name": "Quickshell.Wayland.WlrLayer",
+      "title": "WlrLayer : WlrLayer",
+      "url": "https://quickshell.org/docs/v0.3.0/types/Quickshell.Wayland/WlrLayer/",
+      "variants": [
+        "Background",
+        "Bottom",
+        "Top",
+        "Overlay"
+      ]
+    },
+    {
+      "description": "Decorationless window that can be attached to the screen edges using the zwlr_layer_shell_v1 protocol.",
+      "functions": [],
+      "import": "Quickshell.Wayland",
+      "markdown_path": "pages/Quickshell.Wayland/WlrLayershell.md",
+      "module": "Quickshell.Wayland",
+      "name": "WlrLayershell",
+      "properties": [
+        {
+          "description": "",
+          "name": "keyboardFocus",
+          "type": "WlrKeyboardFocus"
+        },
+        {
+          "description": "",
+          "name": "layer",
+          "type": "WlrLayer"
+        },
+        {
+          "description": "",
+          "name": "namespace",
+          "type": "string"
+        }
+      ],
+      "qualified_name": "Quickshell.Wayland.WlrLayershell",
+      "title": "WlrLayershell : PanelWindow",
+      "url": "https://quickshell.org/docs/v0.3.0/types/Quickshell.Wayland/WlrLayershell/",
+      "variants": []
+    },
+    {
+      "description": "WARNING",
+      "functions": [],
+      "import": "Quickshell.Widgets",
+      "markdown_path": "pages/Quickshell.Widgets/ClippingRectangle.md",
+      "module": "Quickshell.Widgets",
+      "name": "ClippingRectangle",
+      "properties": [
+        {
+          "description": "",
+          "name": "antialiasing",
+          "type": "bool"
+        },
+        {
+          "description": "",
+          "name": "topRightRadius",
+          "type": "real"
+        },
+        {
+          "description": "",
+          "name": "color",
+          "type": "color"
+        },
+        {
+          "description": "",
+          "name": "contentItem",
+          "type": "unknown"
+        },
+        {
+          "description": "",
+          "name": "bottomRightRadius",
+          "type": "real"
+        },
+        {
+          "description": "",
+          "name": "border",
+          "type": "unknown"
+        },
+        {
+          "description": "",
+          "name": "children",
+          "type": "unknown"
+        },
+        {
+          "description": "",
+          "name": "bottomLeftRadius",
+          "type": "real"
+        },
+        {
+          "description": "",
+          "name": "contentInsideBorder",
+          "type": "bool"
+        },
+        {
+          "description": "",
+          "name": "contentUnderBorder",
+          "type": "bool"
+        },
+        {
+          "description": "",
+          "name": "data",
+          "type": "unknown"
+        },
+        {
+          "description": "",
+          "name": "radius",
+          "type": "real"
+        },
+        {
+          "description": "",
+          "name": "topLeftRadius",
+          "type": "real"
+        }
+      ],
+      "qualified_name": "Quickshell.Widgets.ClippingRectangle",
+      "title": "ClippingRectangle : Item",
+      "url": "https://quickshell.org/docs/v0.3.0/types/Quickshell.Widgets/ClippingRectangle/",
+      "variants": []
+    },
+    {
+      "description": "This component is useful for adding a clipping border or background rectangle to a child item. If you don\u2019t need clipping, use WrapperRectangle .",
+      "functions": [],
+      "import": "Quickshell.Widgets",
+      "markdown_path": "pages/Quickshell.Widgets/ClippingWrapperRectangle.md",
+      "module": "Quickshell.Widgets",
+      "name": "ClippingWrapperRectangle",
+      "properties": [
+        {
+          "description": "",
+          "name": "extraMargin",
+          "type": "real"
+        },
+        {
+          "description": "",
+          "name": "implicitHeight",
+          "type": "real"
+        },
+        {
+          "description": "",
+          "name": "bottomMargin",
+          "type": "real"
+        },
+        {
+          "description": "",
+          "name": "leftMargin",
+          "type": "real"
+        },
+        {
+          "description": "",
+          "name": "margin",
+          "type": "real"
+        },
+        {
+          "description": "",
+          "name": "resizeChild",
+          "type": "bool"
+        },
+        {
+          "description": "",
+          "name": "rightMargin",
+          "type": "real"
+        },
+        {
+          "description": "",
+          "name": "topMargin",
+          "type": "real"
+        },
+        {
+          "description": "",
+          "name": "child",
+          "type": "unknown"
+        },
+        {
+          "description": "",
+          "name": "implicitWidth",
+          "type": "real"
+        }
+      ],
+      "qualified_name": "Quickshell.Widgets.ClippingWrapperRectangle",
+      "title": "ClippingWrapperRectangle : ClippingWrapperRectangle",
+      "url": "https://quickshell.org/docs/v0.3.0/types/Quickshell.Widgets/ClippingWrapperRectangle/",
+      "variants": []
+    },
+    {
+      "description": "This is a specialization of Image configured for icon-style images, designed to make it easier to use correctly. If you need more control, use Image directly.",
+      "functions": [],
+      "import": "Quickshell.Widgets",
+      "markdown_path": "pages/Quickshell.Widgets/IconImage.md",
+      "module": "Quickshell.Widgets",
+      "name": "IconImage",
+      "properties": [
+        {
+          "description": "",
+          "name": "backer",
+          "type": "Image"
+        },
+        {
+          "description": "",
+          "name": "source",
+          "type": "string"
+        },
+        {
+          "description": "",
+          "name": "actualSize",
+          "type": "real"
+        },
+        {
+          "description": "",
+          "name": "mipmap",
+          "type": "bool"
+        },
+        {
+          "description": "",
+          "name": "status",
+          "type": "unknown"
+        },
+        {
+          "description": "",
+          "name": "implicitSize",
+          "type": "real"
+        },
+        {
+          "description": "",
+          "name": "asynchronous",
+          "type": "bool"
+        }
+      ],
+      "qualified_name": "Quickshell.Widgets.IconImage",
+      "title": "IconImage : Item",
+      "url": "https://quickshell.org/docs/v0.3.0/types/Quickshell.Widgets/IconImage/",
+      "variants": []
+    },
+    {
+      "description": "NOTE",
+      "functions": [],
+      "import": "Quickshell.Widgets",
+      "markdown_path": "pages/Quickshell.Widgets/MarginWrapperManager.md",
+      "module": "Quickshell.Widgets",
+      "name": "MarginWrapperManager",
+      "properties": [
+        {
+          "description": "",
+          "name": "bottomMargin",
+          "type": "real"
+        },
+        {
+          "description": "",
+          "name": "implicitHeight",
+          "type": "real"
+        },
+        {
+          "description": "",
+          "name": "leftMargin",
+          "type": "real"
+        },
+        {
+          "description": "",
+          "name": "rightMargin",
+          "type": "real"
+        },
+        {
+          "description": "",
+          "name": "implicitWidth",
+          "type": "real"
+        },
+        {
+          "description": "",
+          "name": "topMargin",
+          "type": "real"
+        },
+        {
+          "description": "",
+          "name": "margin",
+          "type": "real"
+        },
+        {
+          "description": "",
+          "name": "resizeChild",
+          "type": "bool"
+        },
+        {
+          "description": "",
+          "name": "extraMargin",
+          "type": "real"
+        }
+      ],
+      "qualified_name": "Quickshell.Widgets.MarginWrapperManager",
+      "title": "MarginWrapperManager : WrapperManager",
+      "url": "https://quickshell.org/docs/v0.3.0/types/Quickshell.Widgets/MarginWrapperManager/",
+      "variants": []
+    },
+    {
+      "description": "This component is useful when you need to wrap a single component in an item, or give a single component a margin. See QtQuick.Layouts for positioning multiple items.",
+      "functions": [],
+      "import": "Quickshell.Widgets",
+      "markdown_path": "pages/Quickshell.Widgets/WrapperItem.md",
+      "module": "Quickshell.Widgets",
+      "name": "WrapperItem",
+      "properties": [
+        {
+          "description": "",
+          "name": "implicitHeight",
+          "type": "real"
+        },
+        {
+          "description": "",
+          "name": "topMargin",
+          "type": "real"
+        },
+        {
+          "description": "",
+          "name": "implicitWidth",
+          "type": "real"
+        },
+        {
+          "description": "",
+          "name": "leftMargin",
+          "type": "real"
+        },
+        {
+          "description": "",
+          "name": "resizeChild",
+          "type": "bool"
+        },
+        {
+          "description": "",
+          "name": "margin",
+          "type": "real"
+        },
+        {
+          "description": "",
+          "name": "bottomMargin",
+          "type": "real"
+        },
+        {
+          "description": "",
+          "name": "rightMargin",
+          "type": "real"
+        },
+        {
+          "description": "",
+          "name": "child",
+          "type": "Item"
+        },
+        {
+          "description": "",
+          "name": "extraMargin",
+          "type": "real"
+        }
+      ],
+      "qualified_name": "Quickshell.Widgets.WrapperItem",
+      "title": "WrapperItem : Item",
+      "url": "https://quickshell.org/docs/v0.3.0/types/Quickshell.Widgets/WrapperItem/",
+      "variants": []
+    },
+    {
+      "description": "WrapperManager determines which child of an Item should be its visual child, and exposes it for further operations. See MarginWrapperManager for a subclass that implements automatic sizing and margins.",
+      "functions": [],
+      "import": "Quickshell.Widgets",
+      "markdown_path": "pages/Quickshell.Widgets/WrapperManager.md",
+      "module": "Quickshell.Widgets",
+      "name": "WrapperManager",
+      "properties": [
+        {
+          "description": "",
+          "name": "wrapper",
+          "type": "Item"
+        },
+        {
+          "description": "",
+          "name": "child",
+          "type": "Item"
+        }
+      ],
+      "qualified_name": "Quickshell.Widgets.WrapperManager",
+      "title": "WrapperManager : QtObject",
+      "url": "https://quickshell.org/docs/v0.3.0/types/Quickshell.Widgets/WrapperManager/",
+      "variants": []
+    },
+    {
+      "description": "This component is useful for wrapping a single component in a mouse area. It works the same as WrapperItem , but with a MouseArea .",
+      "functions": [],
+      "import": "Quickshell.Widgets",
+      "markdown_path": "pages/Quickshell.Widgets/WrapperMouseArea.md",
+      "module": "Quickshell.Widgets",
+      "name": "WrapperMouseArea",
+      "properties": [
+        {
+          "description": "",
+          "name": "topMargin",
+          "type": "real"
+        },
+        {
+          "description": "",
+          "name": "child",
+          "type": "Item"
+        },
+        {
+          "description": "",
+          "name": "leftMargin",
+          "type": "real"
+        },
+        {
+          "description": "",
+          "name": "implicitHeight",
+          "type": "real"
+        },
+        {
+          "description": "",
+          "name": "implicitWidth",
+          "type": "real"
+        },
+        {
+          "description": "",
+          "name": "rightMargin",
+          "type": "real"
+        },
+        {
+          "description": "",
+          "name": "margin",
+          "type": "real"
+        },
+        {
+          "description": "",
+          "name": "extraMargin",
+          "type": "real"
+        },
+        {
+          "description": "",
+          "name": "resizeChild",
+          "type": "bool"
+        },
+        {
+          "description": "",
+          "name": "bottomMargin",
+          "type": "real"
+        }
+      ],
+      "qualified_name": "Quickshell.Widgets.WrapperMouseArea",
+      "title": "WrapperMouseArea : WrapperMouseArea",
+      "url": "https://quickshell.org/docs/v0.3.0/types/Quickshell.Widgets/WrapperMouseArea/",
+      "variants": []
+    },
+    {
+      "description": "This component is useful for adding a border or background rectangle to a child item. If you need to clip the child item to the rectangle\u2019s border, see ClippingWrapperRectangle .",
+      "functions": [],
+      "import": "Quickshell.Widgets",
+      "markdown_path": "pages/Quickshell.Widgets/WrapperRectangle.md",
+      "module": "Quickshell.Widgets",
+      "name": "WrapperRectangle",
+      "properties": [
+        {
+          "description": "",
+          "name": "resizeChild",
+          "type": "bool"
+        },
+        {
+          "description": "",
+          "name": "topMargin",
+          "type": "real"
+        },
+        {
+          "description": "",
+          "name": "sets",
+          "type": "unknown"
+        },
+        {
+          "description": "",
+          "name": "rightMargin",
+          "type": "real"
+        },
+        {
+          "description": "",
+          "name": "implicitHeight",
+          "type": "real"
+        },
+        {
+          "description": "",
+          "name": "bottomMargin",
+          "type": "real"
+        },
+        {
+          "description": "",
+          "name": "extraMargin",
+          "type": "real"
+        },
+        {
+          "description": "",
+          "name": "margin",
+          "type": "real"
+        },
+        {
+          "description": "",
+          "name": "child",
+          "type": "unknown"
+        },
+        {
+          "description": "",
+          "name": "contentInsideBorder",
+          "type": "bool"
+        },
+        {
+          "description": "",
+          "name": "implicitWidth",
+          "type": "real"
+        },
+        {
+          "description": "",
+          "name": "leftMargin",
+          "type": "real"
+        }
+      ],
+      "qualified_name": "Quickshell.Widgets.WrapperRectangle",
+      "title": "WrapperRectangle : Rectangle",
+      "url": "https://quickshell.org/docs/v0.3.0/types/Quickshell.Widgets/WrapperRectangle/",
+      "variants": []
+    },
+    {
+      "description": "A ScreenProjection is a special type of WindowsetProjection which aggregates all windowsets across all projections covering a specific screen.",
+      "functions": [],
+      "import": "Quickshell.WindowManager",
+      "markdown_path": "pages/Quickshell.WindowManager/ScreenProjection.md",
+      "module": "Quickshell.WindowManager",
+      "name": "ScreenProjection",
+      "properties": [],
+      "qualified_name": "Quickshell.WindowManager.ScreenProjection",
+      "title": "ScreenProjection : WindowsetProjection",
+      "url": "https://quickshell.org/docs/v0.3.0/types/Quickshell.WindowManager/ScreenProjection/",
+      "variants": []
+    },
+    {
+      "description": "Window management interfaces exposed by the window manager.",
+      "functions": [
+        {
+          "args": " screen ",
+          "description": ": ScreenProjection",
+          "name": "screenProjection"
+        }
+      ],
+      "import": "Quickshell.WindowManager",
+      "markdown_path": "pages/Quickshell.WindowManager/WindowManager.md",
+      "module": "Quickshell.WindowManager",
+      "name": "WindowManager",
+      "properties": [
+        {
+          "description": "",
+          "name": "windowsetProjections",
+          "type": "list < WindowsetProjection >"
+        },
+        {
+          "description": "",
+          "name": "windowsets",
+          "type": "list < Windowset >"
+        }
+      ],
+      "qualified_name": "Quickshell.WindowManager",
+      "title": "WindowManager : QtObject",
+      "url": "https://quickshell.org/docs/v0.3.0/types/Quickshell.WindowManager/WindowManager/",
+      "variants": []
+    },
+    {
+      "description": "A Windowset is a generic type that encompasses both \u201cWorkspaces\u201d and \u201cTags\u201d in window managers. Because the definition encompasses both you may not necessarily need all features.",
+      "functions": [
+        {
+          "args": " ",
+          "description": ": void",
+          "name": "activate"
+        },
+        {
+          "args": " ",
+          "description": ": void",
+          "name": "deactivate"
+        },
+        {
+          "args": " ",
+          "description": ": void",
+          "name": "remove"
+        },
+        {
+          "args": " projection ",
+          "description": ": void",
+          "name": "setProjection"
+        }
+      ],
+      "import": "Quickshell.WindowManager",
+      "markdown_path": "pages/Quickshell.WindowManager/Windowset.md",
+      "module": "Quickshell.WindowManager",
+      "name": "Windowset",
+      "properties": [
+        {
+          "description": "",
+          "name": "coordinates",
+          "type": "list < int >"
+        },
+        {
+          "description": "",
+          "name": "shouldDisplay",
+          "type": "bool"
+        },
+        {
+          "description": "",
+          "name": "active",
+          "type": "bool"
+        },
+        {
+          "description": "",
+          "name": "urgent",
+          "type": "bool"
+        },
+        {
+          "description": "",
+          "name": "name",
+          "type": "string"
+        },
+        {
+          "description": "",
+          "name": "canSetProjection",
+          "type": "bool"
+        },
+        {
+          "description": "",
+          "name": "canDeactivate",
+          "type": "bool"
+        },
+        {
+          "description": "",
+          "name": "id",
+          "type": "string"
+        },
+        {
+          "description": "",
+          "name": "projection",
+          "type": "WindowsetProjection"
+        },
+        {
+          "description": "",
+          "name": "canActivate",
+          "type": "bool"
+        },
+        {
+          "description": "",
+          "name": "canRemove",
+          "type": "bool"
+        }
+      ],
+      "qualified_name": "Quickshell.WindowManager.Windowset",
+      "title": "Windowset : QtObject",
+      "url": "https://quickshell.org/docs/v0.3.0/types/Quickshell.WindowManager/Windowset/",
+      "variants": []
+    },
+    {
+      "description": "A WindowsetProjection represents a space that can be occupied by one or more Windowset s. The space is one or more screens. Multiple projections may occupy the same screens.",
+      "functions": [],
+      "import": "Quickshell.WindowManager",
+      "markdown_path": "pages/Quickshell.WindowManager/WindowsetProjection.md",
+      "module": "Quickshell.WindowManager",
+      "name": "WindowsetProjection",
+      "properties": [
+        {
+          "description": "",
+          "name": "windowsets",
+          "type": "list < Windowset >"
+        },
+        {
+          "description": "",
+          "name": "screens",
+          "type": "list < ShellScreen >"
+        }
+      ],
+      "qualified_name": "Quickshell.WindowManager.WindowsetProjection",
+      "title": "WindowsetProjection : QtObject",
+      "url": "https://quickshell.org/docs/v0.3.0/types/Quickshell.WindowManager/WindowsetProjection/",
+      "variants": []
+    },
+    {
+      "description": "Component loader that allows setting initial properties, primarily useful for escaping cyclic dependency errors.",
+      "functions": [],
+      "import": "Quickshell",
+      "markdown_path": "pages/Quickshell/BoundComponent.md",
+      "module": "Quickshell",
+      "name": "BoundComponent",
+      "properties": [
+        {
+          "description": "",
+          "name": "sourceComponent",
+          "type": "Component"
+        },
+        {
+          "description": "",
+          "name": "source",
+          "type": "string"
+        },
+        {
+          "description": "",
+          "name": "implicitHeight",
+          "type": "real"
+        },
+        {
+          "description": "",
+          "name": "item",
+          "type": "QtObject"
+        },
+        {
+          "description": "",
+          "name": "bindValues",
+          "type": "bool"
+        },
+        {
+          "description": "",
+          "name": "implicitWidth",
+          "type": "real"
+        }
+      ],
+      "qualified_name": "Quickshell.BoundComponent",
+      "title": "BoundComponent : Item",
+      "url": "https://quickshell.org/docs/v0.3.0/types/Quickshell/BoundComponent/",
+      "variants": []
+    },
+    {
+      "description": "A color quantization utility used for getting prevalent colors in an image, by averaging out the image\u2019s color data recursively.",
+      "functions": [],
+      "import": "Quickshell",
+      "markdown_path": "pages/Quickshell/ColorQuantizer.md",
+      "module": "Quickshell",
+      "name": "ColorQuantizer",
+      "properties": [
+        {
+          "description": "",
+          "name": "depth",
+          "type": "real"
+        },
+        {
+          "description": "",
+          "name": "imageRect",
+          "type": "rect"
+        },
+        {
+          "description": "",
+          "name": "source",
+          "type": "unknown"
+        },
+        {
+          "description": "",
+          "name": "colors",
+          "type": "list < color >"
+        },
+        {
+          "description": "",
+          "name": "rescaleSize",
+          "type": "real"
+        }
+      ],
+      "qualified_name": "Quickshell.ColorQuantizer",
+      "title": "ColorQuantizer : QtObject",
+      "url": "https://quickshell.org/docs/v0.3.0/types/Quickshell/ColorQuantizer/",
+      "variants": []
+    },
+    {
+      "description": "An action of a DesktopEntry .",
+      "functions": [
+        {
+          "args": " ",
+          "description": ": void",
+          "name": "execute"
+        }
+      ],
+      "import": "Quickshell",
+      "markdown_path": "pages/Quickshell/DesktopAction.md",
+      "module": "Quickshell",
+      "name": "DesktopAction",
+      "properties": [
+        {
+          "description": "",
+          "name": "name",
+          "type": "string"
+        },
+        {
+          "description": "",
+          "name": "icon",
+          "type": "string"
+        },
+        {
+          "description": "",
+          "name": "execString",
+          "type": "string"
+        },
+        {
+          "description": "",
+          "name": "command",
+          "type": "list < string >"
+        },
+        {
+          "description": "",
+          "name": "id",
+          "type": "string"
+        }
+      ],
+      "qualified_name": "Quickshell.DesktopAction",
+      "title": "DesktopAction : QtObject",
+      "url": "https://quickshell.org/docs/v0.3.0/types/Quickshell/DesktopAction/",
+      "variants": []
+    },
+    {
+      "description": "Index of desktop entries according to the desktop entry specification .",
+      "functions": [
+        {
+          "args": " id ",
+          "description": ": DesktopEntry",
+          "name": "byId"
+        },
+        {
+          "args": " name ",
+          "description": ": DesktopEntry",
+          "name": "heuristicLookup"
+        }
+      ],
+      "import": "Quickshell",
+      "markdown_path": "pages/Quickshell/DesktopEntries.md",
+      "module": "Quickshell",
+      "name": "DesktopEntries",
+      "properties": [
+        {
+          "description": "",
+          "name": "applications",
+          "type": "ObjectModel < DesktopEntry >"
+        }
+      ],
+      "qualified_name": "Quickshell.DesktopEntries",
+      "title": "DesktopEntries : QtObject",
+      "url": "https://quickshell.org/docs/v0.3.0/types/Quickshell/DesktopEntries/",
+      "variants": []
+    },
+    {
+      "description": "A desktop entry. See DesktopEntries for details.",
+      "functions": [
+        {
+          "args": " ",
+          "description": ": void",
+          "name": "execute"
+        }
+      ],
+      "import": "Quickshell",
+      "markdown_path": "pages/Quickshell/DesktopEntry.md",
+      "module": "Quickshell",
+      "name": "DesktopEntry",
+      "properties": [
+        {
+          "description": "",
+          "name": "icon",
+          "type": "string"
+        },
+        {
+          "description": "",
+          "name": "noDisplay",
+          "type": "bool"
+        },
+        {
+          "description": "",
+          "name": "command",
+          "type": "list < string >"
+        },
+        {
+          "description": "",
+          "name": "categories",
+          "type": "list < string >"
+        },
+        {
+          "description": "",
+          "name": "name",
+          "type": "string"
+        },
+        {
+          "description": "",
+          "name": "runInTerminal",
+          "type": "bool"
+        },
+        {
+          "description": "",
+          "name": "actions",
+          "type": "list < DesktopAction >"
+        },
+        {
+          "description": "",
+          "name": "keywords",
+          "type": "list < string >"
+        },
+        {
+          "description": "",
+          "name": "id",
+          "type": "string"
+        },
+        {
+          "description": "",
+          "name": "startupClass",
+          "type": "string"
+        },
+        {
+          "description": "",
+          "name": "execString",
+          "type": "string"
+        },
+        {
+          "description": "",
+          "name": "genericName",
+          "type": "string"
+        },
+        {
+          "description": "",
+          "name": "comment",
+          "type": "string"
+        },
+        {
+          "description": "",
+          "name": "workingDirectory",
+          "type": "string"
+        }
+      ],
+      "qualified_name": "Quickshell.DesktopEntry",
+      "title": "DesktopEntry : QtObject",
+      "url": "https://quickshell.org/docs/v0.3.0/types/Quickshell/DesktopEntry/",
+      "variants": []
+    },
+    {
+      "description": "Directly accessible easing curve as used in property animations.",
+      "functions": [
+        {
+          "args": " x, a, b ",
+          "description": ": real",
+          "name": "interpolate"
+        },
+        {
+          "args": " x, a, b ",
+          "description": ": point",
+          "name": "interpolate"
+        },
+        {
+          "args": " x, a, b ",
+          "description": ": rect",
+          "name": "interpolate"
+        },
+        {
+          "args": " x ",
+          "description": ": real",
+          "name": "valueAt"
+        }
+      ],
+      "import": "Quickshell",
+      "markdown_path": "pages/Quickshell/EasingCurve.md",
+      "module": "Quickshell",
+      "name": "EasingCurve",
+      "properties": [
+        {
+          "description": "",
+          "name": "curve",
+          "type": "EasingCurve"
+        }
+      ],
+      "qualified_name": "Quickshell.EasingCurve",
+      "title": "EasingCurve : QtObject",
+      "url": "https://quickshell.org/docs/v0.3.0/types/Quickshell/EasingCurve/",
+      "variants": []
+    },
+    {
+      "description": "Edge flags can be combined with the | operator.",
+      "functions": [],
+      "import": "Quickshell",
+      "markdown_path": "pages/Quickshell/Edges.md",
+      "module": "Quickshell",
+      "name": "Edges",
+      "properties": [],
+      "qualified_name": "Quickshell.Edges",
+      "title": "Edges : Edges",
+      "url": "https://quickshell.org/docs/v0.3.0/types/Quickshell/Edges/",
+      "variants": [
+        "Left",
+        "Top",
+        "None",
+        "Bottom",
+        "Right"
+      ]
+    },
+    {
+      "description": "The ElapsedTimer measures time since its last restart, and is useful for determining the time between events that don\u2019t supply it.",
+      "functions": [
+        {
+          "args": " ",
+          "description": ": real",
+          "name": "elapsed"
+        },
+        {
+          "args": " ",
+          "description": ": int",
+          "name": "elapsedMs"
+        },
+        {
+          "args": " ",
+          "description": ": int",
+          "name": "elapsedNs"
+        },
+        {
+          "args": " ",
+          "description": ": real",
+          "name": "restart"
+        },
+        {
+          "args": " ",
+          "description": ": int",
+          "name": "restartMs"
+        },
+        {
+          "args": " ",
+          "description": ": int",
+          "name": "restartNs"
+        }
+      ],
+      "import": "Quickshell",
+      "markdown_path": "pages/Quickshell/ElapsedTimer.md",
+      "module": "Quickshell",
+      "name": "ElapsedTimer",
+      "properties": [],
+      "qualified_name": "Quickshell.ElapsedTimer",
+      "title": "ElapsedTimer : QtObject",
+      "url": "https://quickshell.org/docs/v0.3.0/types/Quickshell/ElapsedTimer/",
+      "variants": []
+    },
+    {
+      "description": "See PanelWindow.exclusionMode .",
+      "functions": [],
+      "import": "Quickshell",
+      "markdown_path": "pages/Quickshell/ExclusionMode.md",
+      "module": "Quickshell",
+      "name": "ExclusionMode",
+      "properties": [],
+      "qualified_name": "Quickshell.ExclusionMode",
+      "title": "ExclusionMode : ExclusionMode",
+      "url": "https://quickshell.org/docs/v0.3.0/types/Quickshell/ExclusionMode/",
+      "variants": [
+        "Normal",
+        "Ignore",
+        "Auto"
+      ]
+    },
+    {
+      "description": "Standard toplevel operating system window that looks like any other application.",
+      "functions": [
+        {
+          "args": " ",
+          "description": ": bool",
+          "name": "startSystemMove"
+        },
+        {
+          "args": " edges ",
+          "description": ": bool",
+          "name": "startSystemResize"
+        }
+      ],
+      "import": "Quickshell",
+      "markdown_path": "pages/Quickshell/FloatingWindow.md",
+      "module": "Quickshell",
+      "name": "FloatingWindow",
+      "properties": [
+        {
+          "description": "",
+          "name": "maximized",
+          "type": "bool"
+        },
+        {
+          "description": "",
+          "name": "maximumSize",
+          "type": "size"
+        },
+        {
+          "description": "",
+          "name": "fullscreen",
+          "type": "bool"
+        },
+        {
+          "description": "",
+          "name": "parentWindow",
+          "type": "QtObject"
+        },
+        {
+          "description": "",
+          "name": "minimized",
+          "type": "bool"
+        },
+        {
+          "description": "",
+          "name": "minimumSize",
+          "type": "size"
+        },
+        {
+          "description": "",
+          "name": "title",
+          "type": "string"
+        }
+      ],
+      "qualified_name": "Quickshell.FloatingWindow",
+      "title": "FloatingWindow : QsWindow",
+      "url": "https://quickshell.org/docs/v0.3.0/types/Quickshell/FloatingWindow/",
+      "variants": []
+    },
+    {
+      "description": "See Region.intersection .",
+      "functions": [],
+      "import": "Quickshell",
+      "markdown_path": "pages/Quickshell/Intersection.md",
+      "module": "Quickshell",
+      "name": "Intersection",
+      "properties": [],
+      "qualified_name": "Quickshell.Intersection",
+      "title": "Intersection : Intersection",
+      "url": "https://quickshell.org/docs/v0.3.0/types/Quickshell/Intersection/",
+      "variants": [
+        "Intersect",
+        "Xor",
+        "Combine",
+        "Subtract"
+      ]
+    },
+    {
+      "description": "The LazyLoader can be used to prepare components that don\u2019t need to be created immediately, such as windows that aren\u2019t visible until triggered by another action. It works on creating the component in the gaps between frame rendering to prevent blocking the interface thread. It can also be used to preserve memory by loading components only when you need them and unloading them afterward.",
+      "functions": [],
+      "import": "Quickshell",
+      "markdown_path": "pages/Quickshell/LazyLoader.md",
+      "module": "Quickshell",
+      "name": "LazyLoader",
+      "properties": [
+        {
+          "description": "",
+          "name": "active",
+          "type": "bool"
+        },
+        {
+          "description": "",
+          "name": "activeAsync",
+          "type": "bool"
+        },
+        {
+          "description": "",
+          "name": "item",
+          "type": "QtObject"
+        },
+        {
+          "description": "",
+          "name": "loading",
+          "type": "bool"
+        },
+        {
+          "description": "",
+          "name": "source",
+          "type": "string"
+        },
+        {
+          "description": "",
+          "name": "component",
+          "type": "Component"
+        }
+      ],
+      "qualified_name": "Quickshell.LazyLoader",
+      "title": "LazyLoader : Reloadable",
+      "url": "https://quickshell.org/docs/v0.3.0/types/Quickshell/LazyLoader/",
+      "variants": []
+    },
+    {
+      "description": "Typed view into a list of objects.",
+      "functions": [
+        {
+          "args": " ",
+          "description": ": int",
+          "name": "indexOf"
+        }
+      ],
+      "import": "Quickshell",
+      "markdown_path": "pages/Quickshell/ObjectModel.md",
+      "module": "Quickshell",
+      "name": "ObjectModel",
+      "properties": [
+        {
+          "description": "",
+          "name": "values",
+          "type": "list < QtObject >"
+        }
+      ],
+      "qualified_name": "Quickshell.ObjectModel",
+      "title": "ObjectModel : ObjectModel",
+      "url": "https://quickshell.org/docs/v0.3.0/types/Quickshell/ObjectModel/",
+      "variants": []
+    },
+    {
+      "description": "Decorationless window attached to screen edges by anchors.",
+      "functions": [],
+      "import": "Quickshell",
+      "markdown_path": "pages/Quickshell/PanelWindow.md",
+      "module": "Quickshell",
+      "name": "PanelWindow",
+      "properties": [
+        {
+          "description": "",
+          "name": "focusable",
+          "type": "bool"
+        },
+        {
+          "description": "",
+          "name": "margins",
+          "type": "[[right,top,left,bottom] ](#)"
+        },
+        {
+          "description": "",
+          "name": "anchors",
+          "type": "[[bottom,top,right,left] ](#)"
+        },
+        {
+          "description": "",
+          "name": "exclusiveZone",
+          "type": "int"
+        },
+        {
+          "description": "",
+          "name": "aboveWindows",
+          "type": "bool"
+        },
+        {
+          "description": "",
+          "name": "exclusionMode",
+          "type": "ExclusionMode"
+        }
+      ],
+      "qualified_name": "Quickshell.PanelWindow",
+      "title": "PanelWindow : QsWindow",
+      "url": "https://quickshell.org/docs/v0.3.0/types/Quickshell/PanelWindow/",
+      "variants": []
+    },
+    {
+      "description": "PersistentProperties holds properties declated in it across a reload, which is often useful for things like keeping expandable popups open and styling them.",
+      "functions": [],
+      "import": "Quickshell",
+      "markdown_path": "pages/Quickshell/PersistentProperties.md",
+      "module": "Quickshell",
+      "name": "PersistentProperties",
+      "properties": [],
+      "qualified_name": "Quickshell.PersistentProperties",
+      "title": "PersistentProperties : Reloadable",
+      "url": "https://quickshell.org/docs/v0.3.0/types/Quickshell/PersistentProperties/",
+      "variants": []
+    },
+    {
+      "description": "Adjustment strategy for popups. See PopupAnchor.adjustment .",
+      "functions": [],
+      "import": "Quickshell",
+      "markdown_path": "pages/Quickshell/PopupAdjustment.md",
+      "module": "Quickshell",
+      "name": "PopupAdjustment",
+      "properties": [],
+      "qualified_name": "Quickshell.PopupAdjustment",
+      "title": "PopupAdjustment : PopupAdjustment",
+      "url": "https://quickshell.org/docs/v0.3.0/types/Quickshell/PopupAdjustment/",
+      "variants": [
+        "Slide",
+        "SlideX",
+        "SlideY",
+        "FlipY",
+        "ResizeY",
+        "Resize",
+        "All",
+        "None",
+        "Flip",
+        "FlipX",
+        "ResizeX"
+      ]
+    },
+    {
+      "description": "Anchorpoint or positioner for popup windows.",
+      "functions": [
+        {
+          "args": " ",
+          "description": ": void",
+          "name": "updateAnchor"
+        }
+      ],
+      "import": "Quickshell",
+      "markdown_path": "pages/Quickshell/PopupAnchor.md",
+      "module": "Quickshell",
+      "name": "PopupAnchor",
+      "properties": [
+        {
+          "description": "",
+          "name": "edges",
+          "type": "Edges"
+        },
+        {
+          "description": "",
+          "name": "gravity",
+          "type": "Edges"
+        },
+        {
+          "description": "",
+          "name": "adjustment",
+          "type": "PopupAdjustment"
+        },
+        {
+          "description": "",
+          "name": "item",
+          "type": "Item"
+        },
+        {
+          "description": "",
+          "name": "rect",
+          "type": "[[y,h,w,width,x,height] ](#)"
+        },
+        {
+          "description": "",
+          "name": "window",
+          "type": "QtObject"
+        },
+        {
+          "description": "",
+          "name": "margins",
+          "type": "[[bottom,right,left,top] ](#)"
+        }
+      ],
+      "qualified_name": "Quickshell.PopupAnchor",
+      "title": "PopupAnchor : QtObject",
+      "url": "https://quickshell.org/docs/v0.3.0/types/Quickshell/PopupAnchor/",
+      "variants": []
+    },
+    {
+      "description": "Popup window that can display in a position relative to a floating or panel window.",
+      "functions": [],
+      "import": "Quickshell",
+      "markdown_path": "pages/Quickshell/PopupWindow.md",
+      "module": "Quickshell",
+      "name": "PopupWindow",
+      "properties": [
+        {
+          "description": "",
+          "name": "parentWindow",
+          "type": "QtObject"
+        },
+        {
+          "description": "",
+          "name": "relativeY",
+          "type": "int"
+        },
+        {
+          "description": "",
+          "name": "screen",
+          "type": "ShellScreen"
+        },
+        {
+          "description": "",
+          "name": "visible",
+          "type": "bool"
+        },
+        {
+          "description": "",
+          "name": "grabFocus",
+          "type": "bool"
+        },
+        {
+          "description": "",
+          "name": "relativeX",
+          "type": "int"
+        },
+        {
+          "description": "",
+          "name": "anchor",
+          "type": "PopupAnchor"
+        }
+      ],
+      "qualified_name": "Quickshell.PopupWindow",
+      "title": "PopupWindow : QsWindow",
+      "url": "https://quickshell.org/docs/v0.3.0/types/Quickshell/PopupWindow/",
+      "variants": []
+    },
+    {
+      "description": "Display anchor for platform menus.",
+      "functions": [
+        {
+          "args": " ",
+          "description": ": void",
+          "name": "close"
+        },
+        {
+          "args": " ",
+          "description": ": void",
+          "name": "open"
+        }
+      ],
+      "import": "Quickshell",
+      "markdown_path": "pages/Quickshell/QsMenuAnchor.md",
+      "module": "Quickshell",
+      "name": "QsMenuAnchor",
+      "properties": [
+        {
+          "description": "",
+          "name": "anchor",
+          "type": "PopupAnchor"
+        },
+        {
+          "description": "",
+          "name": "visible",
+          "type": "bool"
+        },
+        {
+          "description": "",
+          "name": "menu",
+          "type": "QsMenuHandle"
+        }
+      ],
+      "qualified_name": "Quickshell.QsMenuAnchor",
+      "title": "QsMenuAnchor : QtObject",
+      "url": "https://quickshell.org/docs/v0.3.0/types/Quickshell/QsMenuAnchor/",
+      "variants": []
+    },
+    {
+      "description": "See QsMenuEntry.buttonType .",
+      "functions": [
+        {
+          "args": " value ",
+          "description": ": string",
+          "name": "toString"
+        }
+      ],
+      "import": "Quickshell",
+      "markdown_path": "pages/Quickshell/QsMenuButtonType.md",
+      "module": "Quickshell",
+      "name": "QsMenuButtonType",
+      "properties": [],
+      "qualified_name": "Quickshell.QsMenuButtonType",
+      "title": "QsMenuButtonType : QtObject",
+      "url": "https://quickshell.org/docs/v0.3.0/types/Quickshell/QsMenuButtonType/",
+      "variants": [
+        "CheckBox",
+        "None",
+        "RadioButton",
+        "toString"
+      ]
+    },
+    {
+      "description": "readonly",
+      "functions": [
+        {
+          "args": " parentWindow, relativeX, relativeY ",
+          "description": ": void",
+          "name": "display"
+        }
+      ],
+      "import": "Quickshell",
+      "markdown_path": "pages/Quickshell/QsMenuEntry.md",
+      "module": "Quickshell",
+      "name": "QsMenuEntry",
+      "properties": [
+        {
+          "description": "",
+          "name": "buttonType",
+          "type": "QsMenuButtonType"
+        },
+        {
+          "description": "",
+          "name": "isSeparator",
+          "type": "bool"
+        },
+        {
+          "description": "",
+          "name": "enabled",
+          "type": "bool"
+        },
+        {
+          "description": "",
+          "name": "text",
+          "type": "string"
+        },
+        {
+          "description": "",
+          "name": "checkState",
+          "type": "unknown"
+        },
+        {
+          "description": "",
+          "name": "icon",
+          "type": "string"
+        },
+        {
+          "description": "",
+          "name": "hasChildren",
+          "type": "bool"
+        }
+      ],
+      "qualified_name": "Quickshell.QsMenuEntry",
+      "title": "QsMenuEntry : QsMenuHandle",
+      "url": "https://quickshell.org/docs/v0.3.0/types/Quickshell/QsMenuEntry/",
+      "variants": []
+    },
+    {
+      "description": "See QsMenuOpener .",
+      "functions": [],
+      "import": "Quickshell",
+      "markdown_path": "pages/Quickshell/QsMenuHandle.md",
+      "module": "Quickshell",
+      "name": "QsMenuHandle",
+      "properties": [],
+      "qualified_name": "Quickshell.QsMenuHandle",
+      "title": "QsMenuHandle : QtObject",
+      "url": "https://quickshell.org/docs/v0.3.0/types/Quickshell/QsMenuHandle/",
+      "variants": []
+    },
+    {
+      "description": "Provides access to children of a QsMenuEntry",
+      "functions": [],
+      "import": "Quickshell",
+      "markdown_path": "pages/Quickshell/QsMenuOpener.md",
+      "module": "Quickshell",
+      "name": "QsMenuOpener",
+      "properties": [
+        {
+          "description": "",
+          "name": "menu",
+          "type": "QsMenuHandle"
+        },
+        {
+          "description": "",
+          "name": "children",
+          "type": "ObjectModel < QsMenuEntry >"
+        }
+      ],
+      "qualified_name": "Quickshell.QsMenuOpener",
+      "title": "QsMenuOpener : QtObject",
+      "url": "https://quickshell.org/docs/v0.3.0/types/Quickshell/QsMenuOpener/",
+      "variants": []
+    },
+    {
+      "description": "Base class of Quickshell windows",
+      "functions": [
+        {
+          "args": " item ",
+          "description": ": point",
+          "name": "itemPosition"
+        },
+        {
+          "args": " item ",
+          "description": ": rect",
+          "name": "itemRect"
+        },
+        {
+          "args": " item, point ",
+          "description": ": point",
+          "name": "mapFromItem"
+        },
+        {
+          "args": " item, x, y ",
+          "description": ": point",
+          "name": "mapFromItem"
+        },
+        {
+          "args": " item, rect ",
+          "description": ": rect",
+          "name": "mapFromItem"
+        },
+        {
+          "args": " item, x, y, width, height ",
+          "description": ": rect",
+          "name": "mapFromItem"
+        }
+      ],
+      "import": "Quickshell",
+      "markdown_path": "pages/Quickshell/QsWindow.md",
+      "module": "Quickshell",
+      "name": "QsWindow",
+      "properties": [
+        {
+          "description": "",
+          "name": "backingWindowVisible",
+          "type": "bool"
+        },
+        {
+          "description": "",
+          "name": "height",
+          "type": "int"
+        },
+        {
+          "description": "",
+          "name": "visible",
+          "type": "bool"
+        },
+        {
+          "description": "",
+          "name": "implicitWidth",
+          "type": "int"
+        },
+        {
+          "description": "",
+          "name": "implicitHeight",
+          "type": "int"
+        },
+        {
+          "description": "",
+          "name": "contentItem",
+          "type": "Item"
+        },
+        {
+          "description": "",
+          "name": "mask",
+          "type": "Region"
+        },
+        {
+          "description": "",
+          "name": "devicePixelRatio",
+          "type": "real"
+        },
+        {
+          "description": "",
+          "name": "data",
+          "type": "list < QtObject >"
+        },
+        {
+          "description": "",
+          "name": "surfaceFormat",
+          "type": "[[opaque] ](#)"
+        },
+        {
+          "description": "",
+          "name": "screen",
+          "type": "ShellScreen"
+        },
+        {
+          "description": "",
+          "name": "updatesEnabled",
+          "type": "bool"
+        },
+        {
+          "description": "",
+          "name": "width",
+          "type": "int"
+        },
+        {
+          "description": "",
+          "name": "windowTransform",
+          "type": "QtObject"
+        },
+        {
+          "description": "",
+          "name": "color",
+          "type": "color"
+        }
+      ],
+      "qualified_name": "Quickshell.QsWindow",
+      "title": "QsWindow : Reloadable",
+      "url": "https://quickshell.org/docs/v0.3.0/types/Quickshell/QsWindow/",
+      "variants": []
+    },
+    {
+      "description": "readonly",
+      "functions": [
+        {
+          "args": " path ",
+          "description": ": string",
+          "name": "cachePath"
+        },
+        {
+          "args": " path ",
+          "description": ": string",
+          "name": "configPath"
+        },
+        {
+          "args": " path ",
+          "description": ": string",
+          "name": "dataPath"
+        },
+        {
+          "args": " variable ",
+          "description": ": variant",
+          "name": "env"
+        },
+        {
+          "args": " context ",
+          "description": ": void",
+          "name": "execDetached"
+        },
+        {
+          "args": "",
+          "description": ": A list containing the command and all its arguments. See Process.command .",
+          "name": "command"
+        },
+        {
+          "args": "",
+          "description": ": Changes to make to the process environment. See Process.environment .",
+          "name": "environment"
+        },
+        {
+          "args": "",
+          "description": ": Removes all variables from the environment if true.",
+          "name": "clearEnvironment"
+        },
+        {
+          "args": "",
+          "description": ": The working directory the command should run in.",
+          "name": "workingDirectory"
+        },
+        {
+          "args": " major, minor ",
+          "description": ": bool",
+          "name": "hasQtVersion"
+        },
+        {
+          "args": " icon ",
+          "description": ": bool",
+          "name": "hasThemeIcon"
+        },
+        {
+          "args": " major, minor, features ",
+          "description": ": bool",
+          "name": "hasVersion"
+        },
+        {
+          "args": " major, minor ",
+          "description": ": bool",
+          "name": "hasVersion"
+        },
+        {
+          "args": " icon ",
+          "description": ": string",
+          "name": "iconPath"
+        },
+        {
+          "args": " icon, check ",
+          "description": ": string",
+          "name": "iconPath"
+        },
+        {
+          "args": " icon, fallback ",
+          "description": ": string",
+          "name": "iconPath"
+        },
+        {
+          "args": " ",
+          "description": ": void",
+          "name": "inhibitReloadPopup"
+        },
+        {
+          "args": " hard ",
+          "description": ": void",
+          "name": "reload"
+        },
+        {
+          "args": " path ",
+          "description": ": string",
+          "name": "shellPath"
+        },
+        {
+          "args": " path ",
+          "description": ": string",
+          "name": "statePath"
+        }
+      ],
+      "import": "Quickshell",
+      "markdown_path": "pages/Quickshell/Quickshell.md",
+      "module": "Quickshell",
+      "name": "Quickshell",
+      "properties": [
+        {
+          "description": "",
+          "name": "cacheDir",
+          "type": "string"
+        },
+        {
+          "description": "",
+          "name": "processId",
+          "type": "int"
+        },
+        {
+          "description": "",
+          "name": "stateDir",
+          "type": "string"
+        },
+        {
+          "description": "",
+          "name": "clipboardText",
+          "type": "string"
+        },
+        {
+          "description": "",
+          "name": "screens",
+          "type": "list < ShellScreen >"
+        },
+        {
+          "description": "",
+          "name": "dataDir",
+          "type": "string"
+        },
+        {
+          "description": "",
+          "name": "shellDir",
+          "type": "string"
+        },
+        {
+          "description": "",
+          "name": "shellRoot",
+          "type": "string"
+        },
+        {
+          "description": "",
+          "name": "workingDirectory",
+          "type": "string"
+        },
+        {
+          "description": "",
+          "name": "configDir",
+          "type": "string"
+        },
+        {
+          "description": "",
+          "name": "watchFiles",
+          "type": "bool"
+        }
+      ],
+      "qualified_name": "Quickshell",
+      "title": "Quickshell : QtObject",
+      "url": "https://quickshell.org/docs/v0.3.0/types/Quickshell/Quickshell/",
+      "variants": []
+    },
+    {
+      "description": "Accessor for some options under the Quickshell type.",
+      "functions": [],
+      "import": "Quickshell",
+      "markdown_path": "pages/Quickshell/QuickshellSettings.md",
+      "module": "Quickshell",
+      "name": "QuickshellSettings",
+      "properties": [
+        {
+          "description": "",
+          "name": "workingDirectory",
+          "type": "string"
+        },
+        {
+          "description": "",
+          "name": "watchFiles",
+          "type": "bool"
+        }
+      ],
+      "qualified_name": "Quickshell.QuickshellSettings",
+      "title": "QuickshellSettings : QtObject",
+      "url": "https://quickshell.org/docs/v0.3.0/types/Quickshell/QuickshellSettings/",
+      "variants": []
+    },
+    {
+      "description": "See QsWindow.mask .",
+      "functions": [],
+      "import": "Quickshell",
+      "markdown_path": "pages/Quickshell/Region.md",
+      "module": "Quickshell",
+      "name": "Region",
+      "properties": [
+        {
+          "description": "",
+          "name": "x",
+          "type": "int"
+        },
+        {
+          "description": "",
+          "name": "radius",
+          "type": "int"
+        },
+        {
+          "description": "",
+          "name": "item",
+          "type": "Item"
+        },
+        {
+          "description": "",
+          "name": "regions",
+          "type": "list < Region >"
+        },
+        {
+          "description": "",
+          "name": "shape",
+          "type": "RegionShape"
+        },
+        {
+          "description": "",
+          "name": "height",
+          "type": "int"
+        },
+        {
+          "description": "",
+          "name": "intersection",
+          "type": "Intersection"
+        },
+        {
+          "description": "",
+          "name": "bottomLeftRadius",
+          "type": "int"
+        },
+        {
+          "description": "",
+          "name": "topLeftRadius",
+          "type": "int"
+        },
+        {
+          "description": "",
+          "name": "width",
+          "type": "int"
+        },
+        {
+          "description": "",
+          "name": "topRightRadius",
+          "type": "int"
+        },
+        {
+          "description": "",
+          "name": "bottomRightRadius",
+          "type": "int"
+        },
+        {
+          "description": "",
+          "name": "y",
+          "type": "int"
+        }
+      ],
+      "qualified_name": "Quickshell.Region",
+      "title": "Region : QtObject",
+      "url": "https://quickshell.org/docs/v0.3.0/types/Quickshell/Region/",
+      "variants": []
+    },
+    {
+      "description": "See Region.shape .",
+      "functions": [],
+      "import": "Quickshell",
+      "markdown_path": "pages/Quickshell/RegionShape.md",
+      "module": "Quickshell",
+      "name": "RegionShape",
+      "properties": [],
+      "qualified_name": "Quickshell.RegionShape",
+      "title": "RegionShape : RegionShape",
+      "url": "https://quickshell.org/docs/v0.3.0/types/Quickshell/RegionShape/",
+      "variants": [
+        "Ellipse",
+        "Rect"
+      ]
+    },
+    {
+      "description": "Reloadables will attempt to take specific state from previous config revisions if possible. Some examples are ProxyWindowBase and PersistentProperties",
+      "functions": [],
+      "import": "Quickshell",
+      "markdown_path": "pages/Quickshell/Reloadable.md",
+      "module": "Quickshell",
+      "name": "Reloadable",
+      "properties": [
+        {
+          "description": "",
+          "name": "reloadableId",
+          "type": "string"
+        }
+      ],
+      "qualified_name": "Quickshell.Reloadable",
+      "title": "Reloadable : QtObject",
+      "url": "https://quickshell.org/docs/v0.3.0/types/Quickshell/Reloadable/",
+      "variants": []
+    },
+    {
+      "description": "Retainable works as an attached property that allows objects to be kept around (retained) after they would normally be destroyed, which is especially useful for things like exit transitions.",
+      "functions": [
+        {
+          "args": " ",
+          "description": ": void",
+          "name": "forceUnlock"
+        },
+        {
+          "args": " ",
+          "description": ": void",
+          "name": "lock"
+        },
+        {
+          "args": " ",
+          "description": ": void",
+          "name": "unlock"
+        }
+      ],
+      "import": "Quickshell",
+      "markdown_path": "pages/Quickshell/Retainable.md",
+      "module": "Quickshell",
+      "name": "Retainable",
+      "properties": [
+        {
+          "description": "",
+          "name": "retained",
+          "type": "bool"
+        }
+      ],
+      "qualified_name": "Quickshell.Retainable",
+      "title": "Retainable : QtObject",
+      "url": "https://quickshell.org/docs/v0.3.0/types/Quickshell/Retainable/",
+      "variants": []
+    },
+    {
+      "description": "A RetainableLock provides extra safety and ease of use for locking Retainable objects. A retainable object can be locked by multiple locks at once, and each lock re-exposes relevant properties of the retained objects.",
+      "functions": [],
+      "import": "Quickshell",
+      "markdown_path": "pages/Quickshell/RetainableLock.md",
+      "module": "Quickshell",
+      "name": "RetainableLock",
+      "properties": [
+        {
+          "description": "",
+          "name": "object",
+          "type": "QtObject"
+        },
+        {
+          "description": "",
+          "name": "locked",
+          "type": "bool"
+        },
+        {
+          "description": "",
+          "name": "retained",
+          "type": "bool"
+        }
+      ],
+      "qualified_name": "Quickshell.RetainableLock",
+      "title": "RetainableLock : QtObject",
+      "url": "https://quickshell.org/docs/v0.3.0/types/Quickshell/RetainableLock/",
+      "variants": []
+    },
+    {
+      "description": "Convenience type equivalent to setting Reloadable.reloadableId for all children.",
+      "functions": [],
+      "import": "Quickshell",
+      "markdown_path": "pages/Quickshell/Scope.md",
+      "module": "Quickshell",
+      "name": "Scope",
+      "properties": [
+        {
+          "description": "",
+          "name": "children",
+          "type": "list < QtObject >"
+        }
+      ],
+      "qualified_name": "Quickshell.Scope",
+      "title": "Scope : Reloadable",
+      "url": "https://quickshell.org/docs/v0.3.0/types/Quickshell/Scope/",
+      "variants": []
+    },
+    {
+      "description": "ScriptModel is a QML Data Model that generates model operations based on changes to a javascript expression attached to values .",
+      "functions": [],
+      "import": "Quickshell",
+      "markdown_path": "pages/Quickshell/ScriptModel.md",
+      "module": "Quickshell",
+      "name": "ScriptModel",
+      "properties": [
+        {
+          "description": "",
+          "name": "values",
+          "type": "unknown"
+        },
+        {
+          "description": "",
+          "name": "objectProp",
+          "type": "string"
+        }
+      ],
+      "qualified_name": "Quickshell.ScriptModel",
+      "title": "ScriptModel : ScriptModel",
+      "url": "https://quickshell.org/docs/v0.3.0/types/Quickshell/ScriptModel/",
+      "variants": []
+    },
+    {
+      "description": "Optional root config element, allowing some settings to be specified inline.",
+      "functions": [],
+      "import": "Quickshell",
+      "markdown_path": "pages/Quickshell/ShellRoot.md",
+      "module": "Quickshell",
+      "name": "ShellRoot",
+      "properties": [
+        {
+          "description": "",
+          "name": "settings",
+          "type": "QuickshellSettings"
+        }
+      ],
+      "qualified_name": "Quickshell.ShellRoot",
+      "title": "ShellRoot : Scope",
+      "url": "https://quickshell.org/docs/v0.3.0/types/Quickshell/ShellRoot/",
+      "variants": []
+    },
+    {
+      "description": "Monitor object useful for setting the monitor for a QsWindow or querying information about the monitor.",
+      "functions": [
+        {
+          "args": " ",
+          "description": ": string",
+          "name": "toString"
+        }
+      ],
+      "import": "Quickshell",
+      "markdown_path": "pages/Quickshell/ShellScreen.md",
+      "module": "Quickshell",
+      "name": "ShellScreen",
+      "properties": [
+        {
+          "description": "",
+          "name": "y",
+          "type": "int"
+        },
+        {
+          "description": "",
+          "name": "logicalPixelDensity",
+          "type": "real"
+        },
+        {
+          "description": "",
+          "name": "name",
+          "type": "string"
+        },
+        {
+          "description": "",
+          "name": "primaryOrientation",
+          "type": "unknown"
+        },
+        {
+          "description": "",
+          "name": "height",
+          "type": "int"
+        },
+        {
+          "description": "",
+          "name": "orientation",
+          "type": "unknown"
+        },
+        {
+          "description": "",
+          "name": "model",
+          "type": "string"
+        },
+        {
+          "description": "",
+          "name": "devicePixelRatio",
+          "type": "real"
+        },
+        {
+          "description": "",
+          "name": "physicalPixelDensity",
+          "type": "real"
+        },
+        {
+          "description": "",
+          "name": "serialNumber",
+          "type": "string"
+        },
+        {
+          "description": "",
+          "name": "x",
+          "type": "int"
+        },
+        {
+          "description": "",
+          "name": "width",
+          "type": "int"
+        }
+      ],
+      "qualified_name": "Quickshell.ShellScreen",
+      "title": "ShellScreen : QtObject",
+      "url": "https://quickshell.org/docs/v0.3.0/types/Quickshell/ShellScreen/",
+      "variants": []
+    },
+    {
+      "description": "All singletons should inherit from this type.",
+      "functions": [],
+      "import": "Quickshell",
+      "markdown_path": "pages/Quickshell/Singleton.md",
+      "module": "Quickshell",
+      "name": "Singleton",
+      "properties": [],
+      "qualified_name": "Quickshell.Singleton",
+      "title": "Singleton : Scope",
+      "url": "https://quickshell.org/docs/v0.3.0/types/Quickshell/Singleton/",
+      "variants": []
+    },
+    {
+      "description": "SystemClock is a view into the system\u2019s clock. It updates at hour, minute, or second intervals depending on precision .",
+      "functions": [],
+      "import": "Quickshell",
+      "markdown_path": "pages/Quickshell/SystemClock.md",
+      "module": "Quickshell",
+      "name": "SystemClock",
+      "properties": [
+        {
+          "description": "",
+          "name": "precision",
+          "type": "SystemClock"
+        },
+        {
+          "description": "",
+          "name": "hours",
+          "type": "int"
+        },
+        {
+          "description": "",
+          "name": "date",
+          "type": "date"
+        },
+        {
+          "description": "",
+          "name": "minutes",
+          "type": "int"
+        },
+        {
+          "description": "",
+          "name": "seconds",
+          "type": "int"
+        },
+        {
+          "description": "",
+          "name": "enabled",
+          "type": "bool"
+        }
+      ],
+      "qualified_name": "Quickshell.SystemClock",
+      "title": "SystemClock : QtObject",
+      "url": "https://quickshell.org/docs/v0.3.0/types/Quickshell/SystemClock/",
+      "variants": [
+        "Seconds",
+        "Hours",
+        "Minutes",
+        "precision",
+        "hours",
+        "date",
+        "minutes",
+        "seconds",
+        "enabled"
+      ]
+    },
+    {
+      "description": "The TransformWatcher monitors all properties that affect the geometry of two Item s relative to eachother.",
+      "functions": [],
+      "import": "Quickshell",
+      "markdown_path": "pages/Quickshell/TransformWatcher.md",
+      "module": "Quickshell",
+      "name": "TransformWatcher",
+      "properties": [
+        {
+          "description": "",
+          "name": "a",
+          "type": "Item"
+        },
+        {
+          "description": "",
+          "name": "b",
+          "type": "Item"
+        },
+        {
+          "description": "",
+          "name": "commonParent",
+          "type": "Item"
+        },
+        {
+          "description": "",
+          "name": "transform",
+          "type": "QtObject"
+        }
+      ],
+      "qualified_name": "Quickshell.TransformWatcher",
+      "title": "TransformWatcher : QtObject",
+      "url": "https://quickshell.org/docs/v0.3.0/types/Quickshell/TransformWatcher/",
+      "variants": []
+    },
+    {
+      "description": "Creates and destroys instances of the given component when the given property changes.",
+      "functions": [],
+      "import": "Quickshell",
+      "markdown_path": "pages/Quickshell/Variants.md",
+      "module": "Quickshell",
+      "name": "Variants",
+      "properties": [
+        {
+          "description": "",
+          "name": "model",
+          "type": "list < variant >"
+        },
+        {
+          "description": "",
+          "name": "delegate",
+          "type": "Component"
+        },
+        {
+          "description": "",
+          "name": "instances",
+          "type": "list < QtObject >"
+        }
+      ],
+      "qualified_name": "Quickshell.Variants",
+      "title": "Variants : Reloadable",
+      "url": "https://quickshell.org/docs/v0.3.0/types/Quickshell/Variants/",
+      "variants": []
+    }
+  ],
+  "version": "v0.3.0"
+}

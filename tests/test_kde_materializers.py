@@ -3,10 +3,14 @@ from __future__ import annotations
 
 import importlib.util
 import re
-import tempfile
 import unittest
 from pathlib import Path
 from unittest.mock import patch
+
+try:
+    from tests.kde_test_helpers import patched_home
+except ModuleNotFoundError:
+    from kde_test_helpers import patched_home
 
 ROOT = Path(__file__).resolve().parent.parent
 RICER_PY = ROOT / "scripts" / "ricer.py"
@@ -71,6 +75,37 @@ class TestMaterializeKvantumFallback(unittest.TestCase):
         self.assertEqual(result[0]["action"], "dry-run")
         self.assertTrue(result[0]["will_generate"])
 
+    def test_dry_run_custom_missing_theme_flags_will_generate(self):
+        """Workflow-generated KDE theme names need not use the hermes- prefix."""
+        with patched_home("materializers.kde_extras.HOME"):
+            result = ricer.materialize_kvantum(
+                {"kvantum_theme": "BonfireBlackiron", "palette": _MINIMAL_PALETTE},
+                backup_ts="20260427T000000", dry_run=True,
+            )
+        self.assertEqual(len(result), 1)
+        self.assertEqual(result[0]["action"], "dry-run")
+        self.assertTrue(result[0]["will_generate"])
+
+    def test_custom_missing_theme_generates_theme_files(self):
+        with patched_home("materializers.kde_extras.HOME") as home:
+            base_svg = home / "base.svg"
+            base_svg.write_text('<svg><rect fill="#1e1e1e"/></svg>', encoding="utf-8")
+            with (
+                patch("materializers.kde_extras.backup_file", return_value=None),
+                patch("materializers.kde_extras._get_kwrite", return_value=None),
+                patch("materializers.kde_extras.cmd_exists", return_value=False),
+                patch("materializers.kde_extras._find_base_svg", return_value=base_svg),
+            ):
+                result = ricer.materialize_kvantum(
+                    {"kvantum_theme": "BonfireBlackiron", "palette": _MINIMAL_PALETTE},
+                    backup_ts="20260427T000000",
+                )
+
+            theme_dir = home / ".config" / "Kvantum" / "BonfireBlackiron"
+            self.assertTrue((theme_dir / "BonfireBlackiron.kvconfig").exists())
+            self.assertTrue((theme_dir / "BonfireBlackiron.svg").exists())
+            self.assertTrue(result[-1]["generated"])
+
     def test_hermes_kvconfig_includes_explicit_menu_sections(self):
         """Generated Kvantum themes must style Qt context menus explicitly."""
         from materializers.kde_extras import _build_hermes_kvconfig
@@ -107,12 +142,11 @@ class TestMaterializeKvantumFallback(unittest.TestCase):
             return None
 
         # materialize_kvantum lives in materializers.kde_extras — patch there.
-        with (
-            patch("materializers.kde_extras.run_cmd", side_effect=fake_run_cmd),
-            patch("materializers.kde_extras.backup_file", side_effect=fake_backup),
-            patch("materializers.kde_extras._get_kwrite", return_value="kwriteconfig6"),
-            patch("materializers.kde_extras.cmd_exists", return_value=False),
-        ):
+        with patched_home("materializers.kde_extras.HOME"), \
+             patch("materializers.kde_extras.run_cmd", side_effect=fake_run_cmd), \
+             patch("materializers.kde_extras.backup_file", side_effect=fake_backup), \
+             patch("materializers.kde_extras._get_kwrite", return_value="kwriteconfig6"), \
+             patch("materializers.kde_extras.cmd_exists", return_value=False):
             ricer.materialize_kvantum(
                 {"kvantum_theme": "KvDark"}, backup_ts="20260427T000000"
             )
@@ -268,8 +302,7 @@ class TestMaterializeKde(unittest.TestCase):
             design = dict(_MINIMAL_DESIGN)
         calls = []
         with (
-            tempfile.TemporaryDirectory() as tmp,
-            patch(f"{self._KDE}.HOME", Path(tmp)),
+            patched_home(f"{self._KDE}.HOME"),
             patch(f"{self._KDE}.snapshot_kde_state",
                   return_value={**_NULL_STATE, "active_colorscheme": snap_scheme}),
             patch(f"{self._KDE}.run_cmd", side_effect=lambda cmd, **kw: calls.append(list(cmd)) or (0, apply_output, "")),
@@ -284,15 +317,14 @@ class TestMaterializeKde(unittest.TestCase):
         if design is None:
             design = dict(_MINIMAL_DESIGN)
         with (
-            tempfile.TemporaryDirectory() as tmp,
-            patch(f"{self._KDE}.HOME", Path(tmp)),
+            patched_home(f"{self._KDE}.HOME") as home,
             patch(f"{self._KDE}.snapshot_kde_state", return_value=_NULL_STATE),
             patch(f"{self._KDE}.run_cmd", return_value=(0, "", "")),
             patch(f"{self._KDE}.backup_file", return_value=None),
             patch(f"{self._KDE}.cmd_exists", return_value=False),
         ):
             ricer.materialize_kde(design, backup_ts="ts")
-            files = list((Path(tmp) / ".local" / "share" / "color-schemes").glob("*.colors"))
+            files = list((home / ".local" / "share" / "color-schemes").glob("*.colors"))
             return files[0].read_text(encoding="utf-8") if files else ""
 
     def test_generated_colors_file_uses_decimal_rgb_not_hex(self):
@@ -349,8 +381,7 @@ class TestMaterializeKvantumAdditional(unittest.TestCase):
     def _run(self):
         calls = []
         with (
-            tempfile.TemporaryDirectory() as tmp,
-            patch(f"{self._KE}.HOME", Path(tmp)),
+            patched_home(f"{self._KE}.HOME"),
             patch(f"{self._KE}.run_cmd", side_effect=lambda cmd, **kw: calls.append(list(cmd)) or (0, "", "")),
             patch(f"{self._KE}.backup_file", return_value=None),
             patch(f"{self._KE}._get_kwrite", return_value="kwriteconfig6"),
@@ -372,8 +403,7 @@ class TestMaterializeKvantumAdditional(unittest.TestCase):
         """Kvantum materializer must backup kvantum.kvconfig but never kdeglobals."""
         backed = []
         with (
-            tempfile.TemporaryDirectory() as tmp,
-            patch(f"{self._KE}.HOME", Path(tmp)),
+            patched_home(f"{self._KE}.HOME"),
             patch(f"{self._KE}.run_cmd", return_value=(0, "", "")),
             patch(f"{self._KE}.backup_file", side_effect=lambda p, ts, rel: backed.append(rel)),
             patch(f"{self._KE}._get_kwrite", return_value="kwriteconfig6"),
@@ -402,8 +432,7 @@ class TestSnapshotKdeState(unittest.TestCase):
         `outputs` maps KDE config key names (e.g. "ColorScheme") to the value
         that _kread should return for that key.
         """
-        with tempfile.TemporaryDirectory() as tmp:
-            home = Path(tmp)
+        with patched_home(f"{self._SNAP}.HOME") as home:
             if kvconfig is not None:
                 kv = home / ".config" / "Kvantum" / "kvantum.kvconfig"
                 kv.parent.mkdir(parents=True, exist_ok=True)
@@ -413,7 +442,6 @@ class TestSnapshotKdeState(unittest.TestCase):
                 src.parent.mkdir(parents=True, exist_ok=True)
                 src.write_text(appletsrc, encoding="utf-8")
             with (
-                patch(f"{self._SNAP}.HOME", home),
                 # _kread is imported into core.snapshots; patch there so calls
                 # return values from `outputs` keyed by the KDE key name.
                 patch(f"{self._SNAP}._kread",
@@ -454,7 +482,7 @@ class TestMaterializeCursor(unittest.TestCase):
     def _run(self, design, dry_run=False, prev_cursor="breeze_cursors"):
         calls = []
         with (
-            patch(f"{self._KE}.HOME", Path("/tmp/fake-home")),
+            patched_home(f"{self._KE}.HOME"),
             # _kread is now used for the "previous cursor" lookup; patch it here.
             patch(f"{self._KE}._kread", return_value=prev_cursor),
             patch(f"{self._KE}.run_cmd",
@@ -541,6 +569,34 @@ class TestMaterializePlasmaTheme(unittest.TestCase):
         self.assertFalse(any("kdeglobals" in lbl for lbl in backup_labels),
                          f"plasma_theme must NOT backup kdeglobals; got: {backup_labels}")
 
+    def test_custom_theme_writes_expected_desktoptheme_files(self):
+        design = {
+            "name": "test-theme",
+            "palette": _MINIMAL_PALETTE,
+            "plasma_theme": "Test-Theme",
+        }
+        with patched_home(f"{self._KE}.HOME") as home:
+            with (
+                patch(f"{self._KE}.run_cmd", return_value=(0, "", "")),
+                patch(f"{self._KE}.backup_file", return_value=None),
+                patch(f"{self._KE}._get_kwrite", return_value="kwriteconfig6"),
+                patch(f"{self._KE}.cmd_exists", return_value=False),
+            ):
+                changes = ricer.materialize_plasma_theme(design, backup_ts="ts")
+            root = home / ".local" / "share" / "plasma" / "desktoptheme" / "Test-Theme"
+            for rel in (
+                "metadata.desktop",
+                "metadata.json",
+                "colors",
+                "widgets/panel-background.svg",
+                "widgets/background.svg",
+                "dialogs/background.svg",
+            ):
+                self.assertTrue((root / rel).exists(), f"missing generated Plasma theme file: {rel}")
+            written = [c for c in changes if c.get("action") == "write"]
+            self.assertTrue(written)
+            self.assertIn("theme_dir", written[0])
+
 
 class TestMaterializeKonsole(unittest.TestCase):
 
@@ -549,10 +605,8 @@ class TestMaterializeKonsole(unittest.TestCase):
 
     def _run(self, dry_run=False):
         """Return (changes, colorscheme_contents) — contents read before tmpdir is deleted."""
-        with tempfile.TemporaryDirectory() as tmp:
-            home = Path(tmp)
+        with patched_home(f"{self._TERM}.HOME") as home:
             with (
-                patch(f"{self._TERM}.HOME", home),
                 patch(f"{self._TERM}.run_cmd", return_value=(0, "", "")),
                 patch(f"{self._TERM}.backup_file", return_value=None),
                 patch(f"{self._TERM}._get_kwrite", return_value="kwriteconfig6"),
@@ -597,11 +651,9 @@ class TestMaterializeKonsole(unittest.TestCase):
         """Konsole materializer must create a fresh hermes-<slug>.profile,
         leave the user's existing default profile untouched, and always
         rewrite konsolerc DefaultProfile to point at the new themed profile."""
-        with tempfile.TemporaryDirectory() as tmp:
-            home = Path(tmp)
+        with patched_home(f"{self._TERM}.HOME") as home:
             calls = []
             with (
-                patch(f"{self._TERM}.HOME", home),
                 patch(f"{self._TERM}.run_cmd", side_effect=lambda cmd, **kw: calls.append(list(cmd)) or (0, "", "")),
                 patch(f"{self._TERM}.backup_file", return_value=None),
                 patch(f"{self._TERM}._get_kwrite", return_value="kwriteconfig6"),
@@ -631,8 +683,7 @@ class TestMaterializeKitty(unittest.TestCase):
     _TERM = "materializers.terminals"
 
     def test_existing_inline_palette_is_removed_from_main_config(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            home = Path(tmp)
+        with patched_home(f"{self._TERM}.HOME") as home:
             kitty_dir = home / ".config" / "kitty"
             kitty_dir.mkdir(parents=True)
             main = kitty_dir / "kitty.conf"
@@ -645,8 +696,7 @@ class TestMaterializeKitty(unittest.TestCase):
                 encoding="utf-8",
             )
 
-            with patch(f"{self._TERM}.HOME", home), \
-                 patch(f"{self._TERM}.backup_file", return_value=None):
+            with patch(f"{self._TERM}.backup_file", return_value=None):
                 changes = ricer.materialize_kitty(_MINIMAL_DESIGN, backup_ts="ts")
 
             content = main.read_text(encoding="utf-8")
@@ -658,8 +708,7 @@ class TestMaterializeKitty(unittest.TestCase):
             self.assertGreaterEqual(inject["removed_palette_lines"], 3)
 
     def test_custom_chrome_strategy_hides_native_kitty_decorations(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            home = Path(tmp)
+        with patched_home(f"{self._TERM}.HOME") as home:
             kitty_dir = home / ".config" / "kitty"
             kitty_dir.mkdir(parents=True)
             main = kitty_dir / "kitty.conf"
@@ -672,8 +721,7 @@ class TestMaterializeKitty(unittest.TestCase):
                 },
             }
 
-            with patch(f"{self._TERM}.HOME", home), \
-                 patch(f"{self._TERM}.backup_file", return_value=None):
+            with patch(f"{self._TERM}.backup_file", return_value=None):
                 ricer.materialize_kitty(design, backup_ts="ts")
 
             content = main.read_text(encoding="utf-8")

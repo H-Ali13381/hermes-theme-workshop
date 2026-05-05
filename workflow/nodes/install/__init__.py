@@ -9,6 +9,7 @@ except ImportError:  # LangGraph not installed (e.g. during unit tests)
     interrupt = None  # type: ignore[assignment]
 
 from ...log_setup import get_logger
+from ...session import append_step, append_item
 from ...state import RiceSessionState
 from .resolver import resolve_packages, install_packages, can_sudo_noninteractive
 
@@ -16,12 +17,14 @@ from .resolver import resolve_packages, install_packages, can_sudo_noninteractiv
 def install_node(state: RiceSessionState) -> dict:
     """Derive required packages, show list, install after confirmation."""
     log = get_logger("install", state)
-    design   = state.get("design", {})
-    profile  = state.get("device_profile", {})
+    design      = state.get("design", {})
+    profile     = state.get("device_profile", {})
+    session_dir = state.get("session_dir", "")
     packages = resolve_packages(design, profile)
 
     if not packages:
         log.info("no extra packages needed")
+        append_step(session_dir, 5, "no extra packages needed")
         return {"packages": [], "current_step": 5}
 
     pkg_list_text = "\n".join(f"  - {p}" for p in packages)
@@ -41,10 +44,12 @@ def install_node(state: RiceSessionState) -> dict:
 
     if decision_str == "skip":
         log.info("package installation skipped")
+        append_step(session_dir, 5, f"skipped ({len(packages)} package(s) not installed)")
         return {"packages": packages, "current_step": 5}
 
     if decision_str != "install":
         log.warning("unrecognised response '%s' — skipping installation", decision_str)
+        append_step(session_dir, 5, f"unrecognised response {decision_str!r} — skipped")
         return {"packages": packages, "current_step": 5}
 
     # Acquire sudo password — 3-tier escalation
@@ -69,6 +74,12 @@ def install_node(state: RiceSessionState) -> dict:
         log.warning("some packages failed: %s", errors)
 
     log.info("installation complete")
+    note = f"installed {len(packages)} package(s)"
+    if errors:
+        note += f"; {len(errors)} failed"
+        for err in errors:
+            append_item(session_dir, f"install error: {err}")
+    append_step(session_dir, 5, note)
     result: dict = {"packages": packages, "current_step": 5}
     if errors:
         result["errors"] = errors

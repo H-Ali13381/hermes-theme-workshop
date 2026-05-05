@@ -26,12 +26,36 @@ def _preset_names() -> list[str]:
     raise AssertionError("PRESETS dict not found in scripts/presets.py")
 
 
+_DEV_SECTION_HEADERS = ("tests", "test", "dev", "development")
+
+
+def _runtime_requirements() -> set[str]:
+    """Parse requirements.txt, skipping packages under dev-only section headers.
+
+    Section headers are ``# <name>`` comment lines; e.g. ``# tests`` marks every
+    subsequent package as test-only until the next non-test header or blank-line
+    reset.  This mirrors how the file is hand-organised so dev-only deps like
+    ``pytest`` aren't required to appear in ``manifest.json``'s runtime list.
+    """
+    runtime: set[str] = set()
+    section_is_runtime = True
+    for raw in (ROOT / "requirements.txt").read_text(encoding="utf-8").splitlines():
+        stripped = raw.strip()
+        if not stripped:
+            section_is_runtime = True
+            continue
+        if stripped.startswith("#"):
+            label = stripped.lstrip("#").strip().lower()
+            section_is_runtime = label not in _DEV_SECTION_HEADERS
+            continue
+        if not section_is_runtime:
+            continue
+        runtime.add(stripped.split("==", 1)[0].split(">=", 1)[0].lower())
+    return runtime
+
+
 def test_manifest_runtime_packages_cover_script_requirements() -> None:
-    requirements = {
-        line.strip().split("==", 1)[0].split(">=", 1)[0].lower()
-        for line in (ROOT / "requirements.txt").read_text(encoding="utf-8").splitlines()
-        if line.strip() and not line.strip().startswith("#")
-    }
+    requirements = _runtime_requirements()
     manifest = json.loads((ROOT / "manifest.json").read_text(encoding="utf-8"))
     manifest_packages = {
         pkg.split("==", 1)[0].split(">=", 1)[0].lower()

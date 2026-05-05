@@ -9,6 +9,11 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
+try:
+    from tests.kde_test_helpers import patched_home
+except ModuleNotFoundError:
+    from kde_test_helpers import patched_home
+
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "scripts"))  # make 'core' importable when run in isolation
 # Undo logic now lives in scripts/ricer_undo.py (extracted from ricer.py).
@@ -42,6 +47,7 @@ def _run_undo(changes, *, cmd_exists_fn=lambda n: False, run_cmd_fn=None,
         manifest_path = Path(tmp) / "manifest.json"
         _write_manifest(manifest_path, changes, dry_run=dry_run)
         with (
+            patched_home(ricer_undo, home=Path(tmp)),
             patch.object(ricer_undo, "CURRENT_DIR", Path(tmp)),
             patch.object(ricer_undo, "run_cmd",
                          side_effect=run_cmd_fn or default_run),
@@ -238,6 +244,175 @@ class TestUndoKde(unittest.TestCase):
         result, _, _ = self._undo([], dry_run=True)
         self.assertEqual(result["status"], "skipped")
         self.assertIn("dry-run", result["message"].lower())
+
+    def test_disable_plasma_panel_autohide_uses_qdbus_script(self):
+        calls = []
+
+        def _run(cmd, **kw):
+            calls.append(list(cmd))
+            return (0, "panel 78: hiding autohide -> none\npanel 78: height 12 -> 44\npanel 78: minimumLength 1536 -> 2560\npanel 78: maximumLength 1536 -> 2560\npanel 78: length 1536 -> 2560\n", "")
+
+        restored, failed, skipped = [], [], []
+        with (
+            patch.object(ricer_undo, "cmd_exists", side_effect=lambda n: n == "qdbus6"),
+            patch.object(ricer_undo, "run_cmd", side_effect=_run),
+        ):
+            ricer_undo._disable_plasma_panel_autohide(restored, failed, skipped)
+
+        self.assertFalse(failed)
+        self.assertFalse(skipped)
+        self.assertEqual(restored[0]["app"], "plasma_panel")
+        self.assertEqual(restored[0]["action"], "forced_visible")
+        self.assertIn("hiding autohide -> none", restored[0]["note"])
+        self.assertIn("height 12 -> 44", restored[0]["note"])
+        self.assertIn("minimumLength 1536 -> 2560", restored[0]["note"])
+        self.assertIn("maximumLength 1536 -> 2560", restored[0]["note"])
+        self.assertIn("length 1536 -> 2560", restored[0]["note"])
+        self.assertEqual(calls[0][:4], [
+            "qdbus6", "org.kde.plasmashell", "/PlasmaShell",
+            "org.kde.PlasmaShell.evaluateScript",
+        ])
+        self.assertIn('panel.hiding = "none"', calls[0][4])
+        self.assertIn('panel.height = 44', calls[0][4])
+        self.assertIn('beforeHeight < 32', calls[0][4])
+        self.assertIn('screenGeometry(panel.screen)', calls[0][4])
+        self.assertIn('panel.minimumLength = targetWidth', calls[0][4])
+        self.assertIn('panel.maximumLength = targetWidth', calls[0][4])
+        self.assertIn('panel.length = targetWidth', calls[0][4])
+        self.assertIn('panel.offset = 0', calls[0][4])
+
+    def test_disable_plasma_panel_autohide_skips_without_qdbus(self):
+        restored, failed, skipped = [], [], []
+        with patch.object(ricer_undo, "cmd_exists", return_value=False):
+            ricer_undo._disable_plasma_panel_autohide(restored, failed, skipped)
+        self.assertFalse(restored)
+        self.assertFalse(failed)
+        self.assertEqual(skipped[0]["app"], "plasma_panel")
+
+    def test_session_rollback_restores_exact_wallpaper_from_matching_baseline(self):
+        """Session rollback must prefer the immutable baseline wallpaper.
+
+        Manifest wallpaper records can be missing, already-undone, or point at a
+        generated/theme wallpaper.  The deterministic source of truth is the
+        baseline JSON for the active design session.
+        """
+        calls = []
+
+        def _run(cmd, **kw):
+            calls.append(list(cmd))
+            return (0, "", "")
+
+        with tempfile.TemporaryDirectory() as tmp:
+            current = Path(tmp) / "current"
+            current.mkdir()
+            _write_manifest(current / "manifest.json", [], dry_run=False)
+            sessions = Path(tmp) / ".config" / "rice-sessions"
+            snapshot_wallpaper = Path(tmp) / "snapshot" / "NextDark.png"
+            snapshot_wallpaper.parent.mkdir()
+            snapshot_wallpaper.write_text("png", encoding="utf-8")
+            target_session = sessions / "rice-20260503-1016-90bf95"
+            target_session.mkdir(parents=True)
+            (target_session / "design.json").write_text(
+                json.dumps({"name": "test"}), encoding="utf-8")
+            (target_session / "baseline_20260503_102601.json").write_text(
+                json.dumps({
+                    "kde": {"wallpaper": {"image_path": snapshot_wallpaper.as_uri()}}
+                }), encoding="utf-8")
+            stale_session = sessions / "rice-20260502-stale"
+            stale_session.mkdir()
+            (stale_session / "design.json").write_text(
+                json.dumps({"name": "other-theme"}), encoding="utf-8")
+            (stale_session / "baseline_20260502_010101.json").write_text(
+                json.dumps({
+                    "kde": {"wallpaper": {"image_path": "file:///wrong/Kokkini.png"}}
+                }), encoding="utf-8")
+
+            with (
+                patch.object(ricer_undo, "CURRENT_DIR", current),
+                patched_home(ricer_undo, home=Path(tmp)),
+                patch.object(ricer_undo, "cmd_exists", side_effect=lambda n: n == "plasma-apply-wallpaperimage"),
+                patch.object(ricer_undo, "run_cmd", side_effect=_run),
+            ):
+                result = ricer_undo.undo_session()
+
+        self.assertEqual(result["status"], "success")
+        apply_calls = [c for c in calls if c and c[0] == "plasma-apply-wallpaperimage"]
+        self.assertEqual(apply_calls, [["plasma-apply-wallpaperimage", str(snapshot_wallpaper)]])
+        baseline_entries = result.get("baseline_restore", [])
+        self.assertTrue(baseline_entries)
+        self.assertEqual(baseline_entries[0]["action"], "restored_baseline_wallpaper")
+        self.assertEqual(baseline_entries[0]["path"], str(snapshot_wallpaper))
+
+    def test_all_history_session_rollback_still_restores_active_baseline_wallpaper(self):
+        calls = []
+
+        def _run(cmd, **kw):
+            calls.append(list(cmd))
+            return (0, "", "")
+
+        with tempfile.TemporaryDirectory() as tmp:
+            current = Path(tmp) / "current"
+            current.mkdir()
+            _write_manifest(current / "manifest.json", [], dry_run=False)
+            snapshot_wallpaper = Path(tmp) / "snapshot" / "NextDark.png"
+            snapshot_wallpaper.parent.mkdir()
+            snapshot_wallpaper.write_text("png", encoding="utf-8")
+            session_dir = Path(tmp) / ".config" / "rice-sessions" / "rice-20260503-1016-90bf95"
+            session_dir.mkdir(parents=True)
+            (session_dir / "design.json").write_text(json.dumps({"name": "test"}), encoding="utf-8")
+            (session_dir / "baseline_20260503_102601.json").write_text(
+                json.dumps({"kde": {"wallpaper": {"image_path": snapshot_wallpaper.as_uri()}}}),
+                encoding="utf-8")
+
+            with (
+                patch.object(ricer_undo, "CURRENT_DIR", current),
+                patched_home(ricer_undo, home=Path(tmp)),
+                patch.object(ricer_undo, "cmd_exists", side_effect=lambda n: n == "plasma-apply-wallpaperimage"),
+                patch.object(ricer_undo, "run_cmd", side_effect=_run),
+            ):
+                result = ricer_undo.undo_session(all_history=True)
+
+        self.assertEqual(result["scope"], "all_history")
+        apply_calls = [c for c in calls if c and c[0] == "plasma-apply-wallpaperimage"]
+        self.assertEqual(apply_calls, [["plasma-apply-wallpaperimage", str(snapshot_wallpaper)]])
+
+    def test_session_rollback_fails_when_baseline_wallpaper_file_missing(self):
+        calls = []
+
+        def _run(cmd, **kw):
+            calls.append(list(cmd))
+            return (0, "", "")
+
+        with tempfile.TemporaryDirectory() as tmp:
+            current = Path(tmp) / "current"
+            current.mkdir()
+            _write_manifest(current / "manifest.json", [], dry_run=False)
+            sessions = Path(tmp) / ".config" / "rice-sessions"
+            target_session = sessions / "rice-20260503-1016-90bf95"
+            target_session.mkdir(parents=True)
+            missing_wallpaper = Path(tmp) / "snapshot" / "missing.png"
+            (target_session / "design.json").write_text(
+                json.dumps({"name": "test"}), encoding="utf-8")
+            (target_session / "baseline_20260503_102601.json").write_text(
+                json.dumps({
+                    "kde": {"wallpaper": {"image_path": missing_wallpaper.as_uri()}}
+                }), encoding="utf-8")
+
+            with (
+                patch.object(ricer_undo, "CURRENT_DIR", current),
+                patched_home(ricer_undo, home=Path(tmp)),
+                patch.object(ricer_undo, "cmd_exists", side_effect=lambda n: n == "plasma-apply-wallpaperimage"),
+                patch.object(ricer_undo, "run_cmd", side_effect=_run),
+            ):
+                result = ricer_undo.undo_session()
+
+        self.assertEqual(result["status"], "partial")
+        self.assertFalse(calls, "missing baseline file must not call plasma-apply-wallpaperimage")
+        baseline_entries = result.get("baseline_restore", [])
+        self.assertTrue(baseline_entries)
+        self.assertEqual(baseline_entries[0]["action"], "baseline_restore")
+        self.assertEqual(baseline_entries[0]["path"], str(missing_wallpaper))
+        self.assertIn("does not exist", baseline_entries[0]["error"])
 
 
 class TestUndoGsettings(unittest.TestCase):
@@ -574,7 +749,7 @@ class TestUndoLnf(unittest.TestCase):
                 patch.object(ricer_undo, "cmd_exists",
                              side_effect=lambda n: n == "plasma-apply-lookandfeel"),
                 patch.object(ricer_undo, "_get_kwrite", return_value=None),
-                patch.object(ricer_undo, "HOME", Path(tmp)),
+                patched_home(ricer_undo, home=Path(tmp)),
             ):
                 result = ricer_undo.undo()
 
@@ -635,7 +810,7 @@ class TestUndoLnf(unittest.TestCase):
                 patch.object(ricer_undo, "cmd_exists",
                              side_effect=lambda n: n == "plasma-apply-lookandfeel"),
                 patch.object(ricer_undo, "_get_kwrite", return_value=None),
-                patch.object(ricer_undo, "HOME", Path(tmp)),
+                patched_home(ricer_undo, home=Path(tmp)),
             ):
                 result = ricer_undo.undo()
 

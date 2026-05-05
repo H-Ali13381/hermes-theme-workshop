@@ -8,3 +8,4 @@ __pycache__/
 *.swo
 *.bak
 .env
+tests/_llm_smoke_logs/

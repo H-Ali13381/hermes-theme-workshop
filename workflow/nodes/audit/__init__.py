@@ -1,13 +1,11 @@
 """Step 1 — Silent machine audit. No LLM. Returns device_profile."""
 from __future__ import annotations
 
-import os
-
-from ...config import UNSUPPORTED_DESKTOP_MESSAGE
+from ...config import UNSUPPORTED_DESKTOP_MESSAGE, resolve_env_secret
 from ...log_setup import get_logger
 from ...state import RiceSessionState
 from .detectors import (
-    detect_wm, detect_session_type, detect_chassis, detect_screens, detect_gpu,
+    detect_wm, detect_session_type, detect_chassis, detect_screens, detect_screen_geometries, detect_gpu,
     detect_apps, detect_touchpad, get_current_wallpaper, build_element_queue,
     desktop_recipe_for_wm,
 )
@@ -22,12 +20,13 @@ def audit_node(state: RiceSessionState) -> dict:
     session_type = detect_session_type()
     recipe       = desktop_recipe_for_wm(wm)
     chassis      = detect_chassis()
-    screens      = detect_screens()
+    screen_geometries = detect_screen_geometries()
+    screens      = len(screen_geometries) if screen_geometries else detect_screens()
     gpu          = detect_gpu()
     apps         = detect_apps()
     touchpad     = detect_touchpad()
     wallpaper    = get_current_wallpaper()
-    fal_available = bool(os.environ.get("FAL_KEY", "").strip())
+    fal_available = bool(resolve_env_secret("FAL_KEY"))
 
     profile = {
         "wm": wm,
@@ -35,6 +34,7 @@ def audit_node(state: RiceSessionState) -> dict:
         "desktop_recipe": recipe,
         "chassis": chassis,
         "screens": screens,
+        "screen_geometries": screen_geometries,
         "gpu": gpu,
         "has_touchpad": touchpad,
         "apps": apps,

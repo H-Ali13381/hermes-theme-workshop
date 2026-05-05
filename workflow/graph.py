@@ -12,12 +12,12 @@ from langgraph.checkpoint.sqlite import SqliteSaver
 
 from .state import RiceSessionState
 from .nodes import (
-    audit_node, explore_node, refine_node, plan_node,
+    audit_node, explore_node, visualize_node, refine_node, plan_node,
     baseline_node, install_node, implement_node, cleanup_node, handoff_node,
     craft_node,
 )
 from .routing import (
-    after_audit, after_explore, after_refine, after_plan,
+    after_audit, after_explore, after_visualize, after_refine, after_plan,
     after_install, after_implement, after_craft,
 )
 
@@ -30,10 +30,13 @@ def build_graph(checkpointer: SqliteSaver):
     builder.add_node("audit",     audit_node)
 
     # ── Step 2 — Creative direction (loop until stance confirmed) ────────────
-    builder.add_node("explore",   explore_node)
+    builder.add_node("explore",    explore_node)
+
+    # ── Step 2.5 — AI full-desktop concept preview (FAL + multimodal) ────────
+    builder.add_node("visualize",  visualize_node)
 
     # ── Step 3 — Design JSON (loop until schema valid) ───────────────────────
-    builder.add_node("refine",    refine_node)
+    builder.add_node("refine",     refine_node)
 
     # ── Step 4 — HTML mockup (loop until file ready) ─────────────────────────
     builder.add_node("plan",      plan_node)
@@ -58,9 +61,10 @@ def build_graph(checkpointer: SqliteSaver):
 
     # ── Edges & conditional routing (logic lives in routing.py) ─────────────
     builder.add_edge(START, "audit")
-    builder.add_conditional_edges("audit",     after_audit)
-    builder.add_conditional_edges("explore",   after_explore)
-    builder.add_conditional_edges("refine",    after_refine)
+    builder.add_conditional_edges("audit",      after_audit)
+    builder.add_conditional_edges("explore",    after_explore)
+    builder.add_conditional_edges("visualize",  after_visualize)
+    builder.add_conditional_edges("refine",     after_refine)
     builder.add_conditional_edges("plan",      after_plan)
     builder.add_edge("baseline", "install")
     builder.add_conditional_edges("install",   after_install)

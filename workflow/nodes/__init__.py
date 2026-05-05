@@ -9,9 +9,10 @@ access rather than eagerly at import time.
 from __future__ import annotations
 
 _NODE_MAP: dict[str, tuple[str, str]] = {
-    "audit_node":     ("workflow.nodes.audit",     "audit_node"),
-    "explore_node":   ("workflow.nodes.explore",   "explore_node"),
-    "refine_node":    ("workflow.nodes.refine",    "refine_node"),
+    "audit_node":      ("workflow.nodes.audit",      "audit_node"),
+    "explore_node":    ("workflow.nodes.explore",    "explore_node"),
+    "visualize_node":  ("workflow.nodes.visualize",  "visualize_node"),
+    "refine_node":     ("workflow.nodes.refine",     "refine_node"),
     "plan_node":      ("workflow.nodes.plan",      "plan_node"),
     "baseline_node":  ("workflow.nodes.baseline",  "baseline_node"),
     "install_node":   ("workflow.nodes.install",   "install_node"),

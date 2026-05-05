@@ -5,7 +5,7 @@ import json
 import unittest
 from unittest.mock import patch
 
-from langchain_core.messages import AIMessage, HumanMessage
+from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 
 from workflow.config import PALETTE_SLOTS
 from workflow.nodes.refine import DESIGN_SENTINEL, refine_node, _queue_design_elements
@@ -91,6 +91,103 @@ class RefinePromptHandoffTests(unittest.TestCase):
         self.assertEqual(update["design"]["name"], "Shadow Signal")
         self.assertIn("widgets:eww", update["element_queue"])
 
+    def test_refine_seeds_approved_desktop_concept_ui_guidance(self):
+        """Approved Step 2.5 visual_context must shape UI/chrome, not palette only."""
+        fake = _FakeLLM()
+
+        visual_context = {
+            "style_description": "A full desktop RPG menu with emberlit thorn frames.",
+            "atmosphere": "campfire glow against black stone",
+            "extracted_palette": {"background": "#100c09", "accent": "#d06a2f"},
+            "ui_recommendations": (
+                "Use ornate thorn window borders, widget menus, a carved launcher, "
+                "and a framed terminal rather than stock KDE toolbars."
+            ),
+            "composition_notes": "A top ritual toolbar replaces the stock panel.",
+            "visual_element_plan": [
+                {
+                    "id": "top_ritual_toolbar",
+                    "source_visual_description": "thin thorn-metal strip across the top edge",
+                    "desktop_element": "panel/widgets",
+                    "implementation_tool": "widgets:quickshell",
+                    "fallback_tool": "widgets:eww",
+                    "config_targets": ["~/.config/quickshell"],
+                    "validation_probe": "KDE panel hidden and Quickshell toolbar visible",
+                    "acceptable_deviation": "exact glyph labels may differ",
+                }
+            ],
+            "validation_checklist": ["non-default toolbar replaces or hides stock KDE panel"],
+        }
+
+        with patch("workflow.nodes.refine.get_llm", return_value=fake), \
+             patch("workflow.nodes.refine.judge_design_creativity", return_value=(True, [])):
+            refine_node({
+                "messages": [HumanMessage(content="explore chatter")],
+                "design": {"stance": "Garden+Blade+Ghost", "name_hypothesis": "cindershrine-reliquary"},
+                "visual_context": visual_context,
+                "device_profile": {"desktop_recipe": "kde"},
+                "loop_counts": {},
+                "element_queue": ["terminal:kitty", "gtk_theme"],
+            })
+
+        joined = "\n".join(getattr(m, "content", "") for m in fake.messages)
+        self.assertIn("AI desktop concept analysis", joined)
+        self.assertIn("user-approved full-desktop preview image", joined)
+        self.assertIn("ornate thorn window borders", joined)
+        self.assertIn("widget menus", joined)
+        self.assertIn("preserve the UI/chrome cues", joined)
+        self.assertIn("visual_element_plan", joined)
+        self.assertIn("widgets:quickshell", joined)
+        self.assertIn("validation_checklist", joined)
+        self.assertIn("concrete tool/materializer", joined)
+
+    def test_refine_system_prompt_requires_visual_execution_contract(self):
+        from workflow.nodes.refine import build_system_prompt
+
+        prompt = build_system_prompt("kde")
+        self.assertIn("visual_element_plan", prompt)
+        self.assertIn("implementation_tool", prompt)
+        self.assertIn("validation_probe", prompt)
+        self.assertIn("validation_checklist", prompt)
+
+    def test_refine_preserves_plan_feedback_on_backward_jump(self):
+        """Plan dispatch resets refine count to 0; refine must NOT reseed and
+        drop the dispatched feedback + revision-seed messages."""
+        fake = _FakeLLM()
+
+        # Simulated state right after plan_node dispatched label=refine: the
+        # original conversation (system + direction + first design) has been
+        # appended with the marked feedback HumanMessage and a revision seed.
+        prior_messages = [
+            SystemMessage(content="design system prompt"),
+            HumanMessage(content="Creative direction established: ..."),
+            AIMessage(content=f"<<DESIGN_READY>>\n```json\n{{}}\n```"),
+            HumanMessage(content="[PLAN_FEEDBACK] no teal, sharp angular geometry"),
+            HumanMessage(content=(
+                "The user reviewed the rendered preview and rejected it.\n\n"
+                "User feedback:\nno teal, sharp angular geometry\n\n"
+                "Please revise the design.json to address this feedback."
+            )),
+        ]
+
+        with patch("workflow.nodes.refine.get_llm", return_value=fake), \
+             patch("workflow.nodes.refine.judge_design_creativity", return_value=(True, [])):
+            refine_node({
+                "messages": prior_messages,
+                "design": {"stance": "Ghost", "name_hypothesis": "shadow-signal"},
+                "device_profile": {"desktop_recipe": "kde"},
+                "loop_counts": {"refine": 0, "plan": 0},
+                "element_queue": [],
+            })
+
+        # The LLM must have seen the dispatched feedback, not just system+direction.
+        sent = [getattr(m, "content", "") for m in fake.messages]
+        joined = "\n".join(sent)
+        self.assertIn("no teal, sharp angular geometry", joined)
+        self.assertIn("revise the design.json", joined)
+        # And the original system prompt is still at the head.
+        self.assertTrue(isinstance(fake.messages[0], SystemMessage))
+
     def test_refine_self_heals_after_malformed_first_response(self):
         """First LLM call lacks the sentinel; the retry pass succeeds without
         falling through to interrupt."""
@@ -150,10 +247,19 @@ class WidgetFrameworkSelectionTests(unittest.TestCase):
         queue = _queue_design_elements([], self._DESIGN_GENERIC, {"wm": "kde", "session_type": ""})
         self.assertIn("widgets:eww", queue)
 
-    def test_explicit_eww_target_overrides_default_on_hyprland(self):
+    def test_eww_target_normalized_to_quickshell_on_wayland_without_required_flag(self):
         design = {
             "widget_layout": [{"name": "clock"}],
             "chrome_strategy": {"method": "eww_frame", "implementation_targets": ["widgets:eww"]},
+        }
+        queue = _queue_design_elements([], design, {"wm": "hyprland", "session_type": "wayland"})
+        self.assertIn("widgets:quickshell", queue)
+        self.assertNotIn("widgets:eww", queue)
+
+    def test_eww_required_flag_allows_fallback_override(self):
+        design = {
+            "widget_layout": [{"name": "clock"}],
+            "chrome_strategy": {"method": "eww_frame", "implementation_targets": ["widgets:eww"], "eww_required": True},
         }
         queue = _queue_design_elements([], design, {"wm": "hyprland", "session_type": "wayland"})
         self.assertIn("widgets:eww", queue)
@@ -172,6 +278,28 @@ class WidgetFrameworkSelectionTests(unittest.TestCase):
         design = {"chrome_strategy": {"method": "kvantum_only", "implementation_targets": []}}
         queue = _queue_design_elements(["terminal:kitty"], design, {"wm": "hyprland", "session_type": "wayland"})
         self.assertEqual(queue, ["terminal:kitty"])
+
+    def test_visual_element_plan_tools_are_added_to_queue(self):
+        design = {
+            "visual_element_plan": [
+                {
+                    "implementation_tool": "widgets:quickshell",
+                    "fallback_tool": "widgets:eww",
+                    "validation_probe": "top toolbar visible",
+                },
+                {
+                    "implementation_tool": "terminal:kitty",
+                    "fallback_tool": "",
+                    "validation_probe": "kitty theme loaded",
+                },
+                {"implementation_tool": "unsupported-freeform-tool"},
+            ],
+            "chrome_strategy": {"method": "kvantum_only", "implementation_targets": []},
+        }
+        queue = _queue_design_elements([], design, {"wm": "kde", "session_type": "wayland"})
+        self.assertIn("widgets:quickshell", queue)
+        self.assertIn("terminal:kitty", queue)
+        self.assertNotIn("unsupported-freeform-tool", queue)
 
     def test_existing_widget_element_not_duplicated(self):
         queue = _queue_design_elements(

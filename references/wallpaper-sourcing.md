@@ -1,7 +1,16 @@
 # Wallpaper Sourcing for Ricing Sessions
 
+This file is only for the separate case where the user explicitly wants an actual
+wallpaper candidate. Do not use it as the default answer to "real image references".
+For reference-grounded ricing, game/menu screenshots and artwork should inform the
+chrome, borders, menus, widgets, icon language, materials, and atmosphere; they are not
+wallpapers unless the user explicitly selects one as wallpaper.
+
 When the user wants a game/media-themed wallpaper that matches the session palette,
-use this workflow to find, evaluate, and present candidates.
+or when they reject a generated/procedural wallpaper as ugly or off-theme, use this
+workflow to find, evaluate, and present candidates. A complaint that the wallpaper is
+bad is an explicit signal to switch to real wallpaper sourcing; do not improvise another
+local procedural placeholder unless the user asks for generative/local art.
 
 ## Sources (in order of reliability)
 
@@ -37,10 +46,30 @@ use this workflow to find, evaluate, and present candidates.
 5. **Download full res** — Once user picks, download the full-resolution version
 6. **Save to session** — Copy to `~/.config/rice-sessions/<thread-id>/wallpaper.<ext>`
 
+## Quality Gate
+
+Before applying a wallpaper, verify it against the design brief instead of settling for
+"dark + orange":
+
+- The image should establish the world/ambience first, not look like a generated UI mockup
+  or a quick procedural sketch.
+- For this user's dark RPG taste, prefer real game/fantasy landscape wallpapers with
+  ruined chapels, ash/soot, bonfire/campfire glow, dead branches, worn stone, or
+  Soulsborne/Diablo ambience. Avoid bright fantasy posters, logos, anime splash art,
+  pixel art, neon sci-fi, and obvious watermarks.
+- Use `vision_analyze` or equivalent visual inspection on thumbnails before download.
+  If the candidate would score below 8/10 for the theme, keep searching.
+- Apply only after saving the full-resolution file locally, then verify KDE points at
+  the local file and capture a screenshot.
+
 ## Pitfalls
 
-- Alpha Coders `big.php?i=<id>` returns an HTML page, NOT the image directly.
-  Use `https://images.alphacoders.com/<id>/<id>.jpg` for direct download.
+- Do not respond to "the wallpaper is ugly" by generating a new procedural placeholder.
+  Switch to image search and ranked candidates unless the user explicitly asks for
+  generated/local art.
+- Do not use the Step 2.5 full-desktop concept preview as wallpaper; it includes mock UI
+  and is not a clean background.
+
 - Some wallpapers have game logos/watermarks — `vision_analyze` can detect these.
 - Webp format is fine for thumbnails but save full res as JPG/PNG for KDE compatibility.
 - The workflow's `plan_node` cannot embed local images into `plan.html` — the wallpaper

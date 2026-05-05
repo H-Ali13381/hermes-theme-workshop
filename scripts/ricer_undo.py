@@ -21,6 +21,7 @@ import time
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Callable
+from urllib.parse import unquote, urlparse
 
 # ── bootstrap: honour sys.path set up by ricer.py (already done at import) ──
 # core imports are relative to scripts/ which is already on sys.path
@@ -78,6 +79,103 @@ def _restart_plasmashell(restored: list, failed: list, skipped: list) -> None:
         failed.append({"app": "plasmashell",
                        "action": "restart",
                        "error": str(e)})
+
+
+# ---------------------------------------------------------------------------
+# KDE PANEL VISIBILITY
+# ---------------------------------------------------------------------------
+
+_PANEL_AUTOHIDE_RESET_SCRIPT = r"""
+var changed = [];
+for (var i = 0; i < panelIds.length; ++i) {
+    var panel = panelById(panelIds[i]);
+    if (!panel) {
+        continue;
+    }
+    var beforeHiding = String(panel.hiding);
+    if (beforeHiding !== "none") {
+        panel.hiding = "none";
+        changed.push("panel " + panel.id + ": hiding " + beforeHiding + " -> none");
+    }
+
+    // A custom EWW/Quickshell toolbar may leave the stock Plasma panel as an
+    // ultra-thin visible strip after rollback.  Visibility alone is not enough:
+    // normalize obviously broken heights while preserving normal user sizes.
+    var beforeHeight = Number(panel.height || 0);
+    if (beforeHeight > 0 && beforeHeight < 32) {
+        panel.height = 44;
+        changed.push("panel " + panel.id + ": height " + beforeHeight + " -> 44");
+    }
+
+    // Multi-monitor KDE sessions can also restore panels with stale length
+    // constraints from a different screen, especially after custom toolbar
+    // replacement or fractional-scale layouts.  That creates visible-vs-clickable
+    // drift: the button artwork appears in one place while the actual hitbox is
+    // vertically/horizontally offset.  Use Plasma's own screenGeometry(panel.screen)
+    // because kscreen/KWin screen indexes can disagree with the Plasma scripting
+    // API that owns these panel objects.
+    if (typeof screenGeometry === "function") {
+        var geom = screenGeometry(panel.screen);
+        var targetWidth = Number(geom && geom.width || 0);
+        if (targetWidth > 0 && panel.formFactor === "horizontal") {
+            var beforeMin = Number(panel.minimumLength || 0);
+            var beforeMax = Number(panel.maximumLength || 0);
+            var beforeLen = Number(panel.length || 0);
+            if (beforeMin !== targetWidth) {
+                panel.minimumLength = targetWidth;
+                changed.push("panel " + panel.id + ": minimumLength " + beforeMin + " -> " + targetWidth);
+            }
+            if (beforeMax !== targetWidth) {
+                panel.maximumLength = targetWidth;
+                changed.push("panel " + panel.id + ": maximumLength " + beforeMax + " -> " + targetWidth);
+            }
+            if (beforeLen !== targetWidth) {
+                panel.length = targetWidth;
+                changed.push("panel " + panel.id + ": length " + beforeLen + " -> " + targetWidth);
+            }
+            panel.offset = 0;
+            panel.alignment = "center";
+        }
+    }
+}
+changed.join("\n");
+"""
+
+
+def _disable_plasma_panel_autohide(restored: list, failed: list, skipped: list) -> None:
+    """Force restored KDE panels back to visible/non-autohide after rollback.
+
+    Some rice implementations hide the stock Plasma panel while a custom EWW or
+    Quickshell toolbar is active.  If undo removes that custom toolbar but leaves
+    the live Plasma panel in autohide mode, the rollback appears to have deleted
+    the user's toolbar.  Use Plasma's own scripting API after plasmashell has
+    restarted so the setting is applied to the live panel objects and persisted
+    by Plasma itself.
+    """
+    qdbus = "qdbus6" if cmd_exists("qdbus6") else ("qdbus" if cmd_exists("qdbus") else None)
+    if not qdbus:
+        skipped.append({"app": "plasma_panel",
+                        "note": "qdbus not found — cannot force panels visible"})
+        return
+
+    rc, out, err = run_cmd([
+        qdbus,
+        "org.kde.plasmashell",
+        "/PlasmaShell",
+        "org.kde.PlasmaShell.evaluateScript",
+        _PANEL_AUTOHIDE_RESET_SCRIPT,
+    ], timeout=8)
+    if rc == 0:
+        note = "disabled Plasma panel auto-hide after rollback"
+        if out.strip():
+            note = out.strip()
+        restored.append({"app": "plasma_panel",
+                         "action": "forced_visible",
+                         "note": note})
+    else:
+        failed.append({"app": "plasma_panel",
+                       "action": "force_visible",
+                       "error": err or out or f"exit code {rc}"})
 
 
 # ---------------------------------------------------------------------------
@@ -784,6 +882,103 @@ def _active_theme_name() -> str | None:
     return data.get("design_system", {}).get("name")
 
 
+def _json_file(path: Path) -> dict | None:
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return None
+
+
+def _local_path_from_kde_image(value: str) -> str:
+    """Return a local filesystem path from a KDE wallpaper Image value."""
+    if value.startswith("file://"):
+        parsed = urlparse(value)
+        return unquote(parsed.path)
+    return value
+
+
+def _latest_baseline_for_theme(theme: str | None) -> Path | None:
+    """Find the newest immutable workflow baseline for the active design theme."""
+    if not theme:
+        return None
+    sessions_dir = HOME / ".config" / "rice-sessions"
+    if not sessions_dir.exists():
+        return None
+
+    matches: list[Path] = []
+    for session_dir in sorted(sessions_dir.glob("rice-*"), key=lambda p: p.name, reverse=True):
+        design = _json_file(session_dir / "design.json")
+        if not design or design.get("name") != theme:
+            continue
+        matches.extend(sorted(session_dir.glob("baseline_*.json"), key=lambda p: p.name, reverse=True))
+    return matches[0] if matches else None
+
+
+def _baseline_wallpaper_image_path(baseline_path: Path | None) -> str | None:
+    if not baseline_path:
+        return None
+    baseline = _json_file(baseline_path)
+    if not baseline:
+        return None
+    value = (baseline.get("kde", {})
+             .get("wallpaper", {})
+             .get("image_path"))
+    if not isinstance(value, str) or not value.strip():
+        return None
+    return value.strip()
+
+
+def _restore_kde_wallpaper_from_baseline(theme: str | None,
+                                         restored: list,
+                                         failed: list,
+                                         skipped: list) -> None:
+    """Apply the exact KDE wallpaper recorded by the workflow baseline snapshot.
+
+    Manifest-owned wallpaper undo records are not sufficient for deterministic
+    session rollback: the manifest may be missing the wallpaper change, already
+    undone, or may restore a generated/theme wallpaper instead of the immutable
+    pre-implementation snapshot.  The baseline JSON is the source of truth.
+    """
+    baseline_path = _latest_baseline_for_theme(theme)
+    image_value = _baseline_wallpaper_image_path(baseline_path)
+    if not image_value:
+        skipped.append({"app": "wallpaper",
+                        "action": "baseline_restore",
+                        "note": "no matching baseline kde.wallpaper.image_path found",
+                        "theme": theme})
+        return
+
+    local_path = _local_path_from_kde_image(image_value)
+    if not cmd_exists("plasma-apply-wallpaperimage"):
+        skipped.append({"app": "wallpaper",
+                        "action": "baseline_restore",
+                        "path": local_path,
+                        "baseline": str(baseline_path),
+                        "note": "plasma-apply-wallpaperimage not found"})
+        return
+    if not Path(local_path).exists():
+        failed.append({"app": "wallpaper",
+                       "action": "baseline_restore",
+                       "path": local_path,
+                       "baseline": str(baseline_path),
+                       "error": "baseline wallpaper file does not exist"})
+        return
+
+    rc, out, err = run_cmd(["plasma-apply-wallpaperimage", local_path], timeout=10)
+    if rc == 0:
+        restored.append({"app": "wallpaper",
+                         "action": "restored_baseline_wallpaper",
+                         "path": local_path,
+                         "image_path": image_value,
+                         "baseline": str(baseline_path)})
+    else:
+        failed.append({"app": "wallpaper",
+                       "action": "baseline_restore",
+                       "path": local_path,
+                       "baseline": str(baseline_path),
+                       "error": err or out or f"exit code {rc}"})
+
+
 def undo_session(all_history: bool = False,
                  delete_artifacts: bool = True) -> dict:
     """Roll back every manifest of the current session, newest→oldest.
@@ -800,7 +995,8 @@ def undo_session(all_history: bool = False,
 
     ``delete_artifacts`` is forwarded to :func:`undo` for every manifest.
     """
-    theme = None if all_history else _active_theme_name()
+    baseline_theme = _active_theme_name()
+    theme = None if all_history else baseline_theme
     manifests = _collect_session_manifests(theme)
     if not manifests:
         return {"status": "error",
@@ -837,10 +1033,15 @@ def undo_session(all_history: bool = False,
     restart_restored: list = []
     restart_failed:   list = []
     restart_skipped:  list = []
+    baseline_restored: list = []
+    baseline_failed:   list = []
+    baseline_skipped:  list = []
     if kde_touched or cmd_exists("plasmashell"):
         _restart_plasmashell(restart_restored, restart_failed, restart_skipped)
-    total_restored += len(restart_restored)
-    total_failed   += len(restart_failed)
+        _disable_plasma_panel_autohide(restart_restored, restart_failed, restart_skipped)
+    _restore_kde_wallpaper_from_baseline(baseline_theme, baseline_restored, baseline_failed, baseline_skipped)
+    total_restored += len(restart_restored) + len(baseline_restored)
+    total_failed   += len(restart_failed) + len(baseline_failed)
 
     return {
         "status":               "success" if total_failed == 0 else "partial",
@@ -852,6 +1053,7 @@ def undo_session(all_history: bool = False,
         "total_failed":         total_failed,
         "per_manifest":         per_manifest,
         "plasmashell_restart":  restart_restored + restart_failed + restart_skipped,
+        "baseline_restore":     baseline_restored + baseline_failed + baseline_skipped,
     }
 
 

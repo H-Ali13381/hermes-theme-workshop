@@ -103,7 +103,23 @@ KDE Plasma has its own notification system (plasmashell). No external daemon (du
 KDE Plasma color inheritance is not enough. The workflow requires `originality_strategy` and `chrome_strategy`; optional `panel_layout` and `widget_layout` are used only when they serve the user vision. If the preview shows rounded windows, custom terminal frames, ornamental borders, or non-stock panel chrome, the final output must implement them through EWW frames, terminal config, Kvantum, or KDE decoration/color settings. Do not call a palette-only panel "done."
 
 ### Wallpaper
-Use `plasma-apply-wallpaperimage <path>` to set wallpaper on all desktops. This is NOT in the element_queue and must be done manually after the workflow finishes (the cleanup node handles it when a `wallpaper_path` is present in the design).
+Use `plasma-apply-wallpaperimage <path>` to set wallpaper on all desktops. This is NOT in the element_queue. The cleanup node handles it when the design exposes a wallpaper target as top-level `wallpaper_path` / `wallpaper`, nested `chrome_strategy.wallpaper_path` / `wallpaper`, a `chrome_strategy.implementation_targets` entry such as `wallpaper:local_artifact:/path/to/theme-wallpaper.png`, or a `visual_element_plan` item whose `desktop_element` is `wallpaper` and whose `config_targets` point at a wallpaper directory/file. If that local file is missing and the session has an approved `visualize_image_url`, cleanup downloads the approved overview to the target path before applying it. If cleanup reports `wallpaper-apply` skipped, then perform the manual `plasma-apply-wallpaperimage <path>` fallback and update this reference/test coverage for the new failure mode.
+
+Observed failure mode: designs may express wallpaper only through `visual_element_plan` (`desktop_element: wallpaper`, `config_targets: ["~/.local/share/wallpapers/<slug>/"]`) and omit `wallpaper_path`. Cleanup must infer `<target-dir>/wallpaper.png` from that contract instead of leaving the KDE default wallpaper active.
+
+### Quickshell runtime validation
+KDE Wayland widget chrome should prefer Quickshell. Generated QML must be tested against the installed runtime, not only file existence. Current Quickshell runtimes may not provide an `IconImage` QML type; generated tray/launcher components should use `Text` glyphs or a supported QtQuick `Image` source unless the runtime proves `IconImage` exists. Verify with:
+
+```bash
+# There is no `quickshell reload` subcommand on the current runtime.
+# After editing shell.qml, restart explicitly:
+quickshell kill || true
+quickshell --path ~/.config/quickshell/shell.qml --daemonize --no-color --log-times -v
+quickshell list
+quickshell log --no-color | tail -80
+```
+
+Promised shell chrome must use `PanelWindow`, not `FloatingWindow`. On KDE/Wayland a `FloatingWindow` can appear as a normal decorated app-style surface with a titlebar, causing preview/plan drift when the preview showed integrated toolbar/widget chrome. For bars, launcher strips, quest/notification cards, and corner inventory widgets, use `PanelWindow`. Current installed Quickshell does **not** expose the `WlrLayershell` attached object used in some upstream examples; adding `WlrLayershell.layer: WlrLayer.Overlay` fails with `Non-existent attached object`. Verify side/corner widgets by screenshot, and if `exclusionMode: Ignore` makes them invisible behind app/desktop layers, use `exclusionMode: ExclusionMode.Normal` or reshape the surface into a visible anchored panel. Static craft validation rejects generated QML that combines a Quickshell widget promise with `FloatingWindow`.
 
 ### Color scheme naming
 The workflow's implement node may write the color scheme file under a different name than what `plasma-apply-colorscheme` searches for. Check `~/.local/share/color-schemes/` for the actual filename and verify with:

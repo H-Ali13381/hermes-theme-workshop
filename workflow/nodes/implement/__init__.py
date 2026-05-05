@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import time
 
 try:
     from langgraph.types import interrupt
@@ -10,7 +11,7 @@ except ImportError:  # LangGraph not installed (e.g. during unit tests)
 
 from ...config import SCORE_PASS_THRESHOLD, MAX_IMPLEMENT_RETRIES
 from ...log_setup import get_logger
-from ...session import append_item
+from ...session import append_item, append_step
 from ...state import RiceSessionState
 from .spec   import write_spec
 from .apply  import apply_element
@@ -30,19 +31,25 @@ def implement_node(state: RiceSessionState) -> dict:
     retry_counts  = dict(state.get("impl_retry_counts") or {})
     log = get_logger("implement", state)
 
+    started = time.monotonic()
     log.info("implementing element: %s", element)
+    append_step(session_dir, 6)
 
     # 1 — Spec
+    t = time.monotonic()
     spec = write_spec(element, design)
+    log.info("spec ready (%.2fs)", time.monotonic() - t)
     log.debug("spec: %s", json.dumps(spec))
     append_item(session_dir, f"{element} spec: {json.dumps(spec)}")
 
     # 2 — Apply
+    t = time.monotonic()
     apply_result = apply_element(element, design, session_dir)
+    apply_elapsed = time.monotonic() - t
     if apply_result["success"]:
-        log.info("apply ok")
+        log.info("apply ok (%.2fs)", apply_elapsed)
     else:
-        log.warning("apply failed: %s", apply_result.get("error", "?"))
+        log.warning("apply failed (%.2fs): %s", apply_elapsed, apply_result.get("error", "?"))
 
     if not apply_result["success"]:
         record = {"element": element, "spec": spec, "verdict": "SKIP",
@@ -55,13 +62,16 @@ def implement_node(state: RiceSessionState) -> dict:
         }
 
     # 3 — Verify
+    t = time.monotonic()
     verify_result = verify_element(element, spec, design)
+    log.info("verify done (%.2fs)", time.monotonic() - t)
     log.debug("verify: %s", verify_result)
 
     # 4 — Score
+    t = time.monotonic()
     scorecard = score_element(element, spec, design, verify_result)
     total = scorecard["total"]
-    log.info("score: %d/10 (%s)", total, format_scorecard(scorecard))
+    log.info("score: %d/10 (%s) (%.2fs)", total, format_scorecard(scorecard), time.monotonic() - t)
 
     # 5 — Gate
     verdict = "verified"
@@ -104,6 +114,6 @@ def implement_node(state: RiceSessionState) -> dict:
 
     record = {"element": element, "spec": spec, "scorecard": scorecard, "verdict": verdict}
     append_item(session_dir, f"{element}: {verdict} score={total}/10")
-    log.info("verdict: %s", verdict)
+    log.info("verdict: %s (total %.2fs)", verdict, time.monotonic() - started)
     retry_counts.pop(element, None)
     return {"element_queue": remaining, "impl_log": [record], "impl_retry_counts": retry_counts}

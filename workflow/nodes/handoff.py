@@ -27,6 +27,7 @@ Structure:
 
 ## What Changed
 Table: Element | Files Modified | Verdict | Score
+Include both deterministic implementation records and craft/agentic widget records.
 
 ## How to Rollback
 `ricer undo` — restores all files to pre-session state
@@ -36,6 +37,8 @@ List any new keybindings added or changed during the session.
 
 ## Known Deviations
 List any elements that scored below 8/10 or were skipped, with reason.
+Do not list a craft/widget element as missing if it appears in the implementation log
+with a crafted/verified verdict and score >= 8.
 
 Be concise and practical. This is a reference document the user will keep.
 """
@@ -47,14 +50,17 @@ def handoff_node(state: RiceSessionState) -> dict:
     log.info("generating handoff documentation")
 
     design = state.get("design", {})
-    impl_log = state.get("impl_log", [])
+    impl_log = list(state.get("impl_log", []) or [])
+    craft_log = list(state.get("craft_log", []) or [])
+    combined_log = craft_log + impl_log
     session_dir = state.get("session_dir", "")
 
     # Generate markdown via LLM
     llm = get_llm(0.1)
     payload = {
         "design": design,
-        "implementation_log": impl_log,
+        "implementation_log": combined_log,
+        "craft_log": craft_log,
         "cleanup_actions": state.get("cleanup_actions", []),
         "effective_state": state.get("effective_state", {}),
         "capability_report": state.get("capability_report", {}),
@@ -66,7 +72,7 @@ def handoff_node(state: RiceSessionState) -> dict:
         HumanMessage(content=f"Session data:\n```json\n{json.dumps(payload, indent=2)}\n```"),
     ])
 
-    md_content = (response.content or "").strip()
+    md_content = _scrub_false_craft_deviations((response.content or "").strip(), craft_log)
     html_content = _md_to_html(md_content, design)
 
     # Write files
@@ -94,6 +100,29 @@ def handoff_node(state: RiceSessionState) -> dict:
 
     log.info("session complete")
     return {"current_step": 8}
+
+
+def _scrub_false_craft_deviations(md: str, craft_log: list[dict]) -> str:
+    """Remove LLM-written missing-widget deviations contradicted by craft_log."""
+    crafted_widgets = {
+        str(record.get("element", ""))
+        for record in craft_log
+        if str(record.get("element", "")).startswith("widgets:")
+        and "skip" not in str(record.get("verdict", "")).lower()
+        and int(record.get("score") or 0) >= 8
+    }
+    if not crafted_widgets:
+        return md
+
+    cleaned_lines = []
+    for line in md.splitlines():
+        lower = line.lower()
+        if "eww" in lower and "not implemented" in lower and "widgets:eww" in crafted_widgets:
+            continue
+        if "widget" in lower and "not implemented" in lower and crafted_widgets:
+            continue
+        cleaned_lines.append(line)
+    return "\n".join(cleaned_lines).strip()
 
 
 def _md_to_html(md: str, design: dict) -> str:
